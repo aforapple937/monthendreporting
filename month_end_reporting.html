@@ -1913,7 +1913,7 @@ function resetState() {
 }
 
 const reqCols = {
-  rdl:     ['UNIQUE_ID_NO','LEGAL_ENTITY','AC_MGR_UNIT_CODE','GL_AC_ID','CURCY_CODE','LEVEL_3','SEC_CLS_CD','SRC_PROD_TYPE_CD','V_CUSTOMER_PARENT_GROUP_NAME','V_FINANCING_CODE','F_SHORT_TERM_IND','F_SHORT_TERM_INCEP_IND','RCY_ECL_CHARGE_FY','RCY_INT_UNWIND_CHARGE_FY','RCY_ECL_WRITEBACK_FY','RCY_INT_UNWIND_WRITEBACK_FY','RCY_ECL_WRITE_OFF_FY','RCY_INT_UNWIND_WRITE_OFF_FY','LCY_EIR_ADJ_AMT','RCY_ECL_OPENING_BAL','RCY_INT_UNWIND_OPENING_FY','PROC_DTE','CIF_NO','CIF_NAME','LCY_ECL_CLOSING_FY','LCY_EAD_AMT','LCY_ECL_CHARGE_FTM','LCY_ECL_WRITEBACK_FTM','RATING','STAGE_CLASSIFICATION'],
+  rdl:     ['UNIQUE_ID_NO','LEGAL_ENTITY','AC_MGR_UNIT_CODE','GL_AC_ID','CURCY_CODE','LEVEL_3','SEC_CLS_CD','SRC_PROD_TYPE_CD','V_CUSTOMER_PARENT_GROUP_NAME','V_FINANCING_CODE','F_SHORT_TERM_IND','F_SHORT_TERM_INCEP_IND','RCY_ECL_CHARGE_FY','RCY_INT_UNWIND_CHARGE_FY','RCY_ECL_WRITEBACK_FY','RCY_INT_UNWIND_WRITEBACK_FY','RCY_ECL_WRITE_OFF_FY','RCY_INT_UNWIND_WRITE_OFF_FY','LCY_EIR_ADJ_AMT','RCY_ECL_OPENING_BAL','RCY_INT_UNWIND_OPENING_FY','PROC_DTE','CIF_NO','CIF_NAME','MKT_SUB_SEG_DESC','LCY_ECL_CLOSING_FY','LCY_EAD_AMT','LCY_ECL_CHARGE_FTM','LCY_ECL_WRITEBACK_FTM','RATING','STAGE_CLASSIFICATION'],
   mapping: ['LEVEL_3','SEC_CLS_CD','F_SHORT_TERM_IND','F_SHORT_TERM_INCEP_IND','ECL_PNL_CHARGE','ECL_CHARGE','UWI_PNL_CHARGE','UWI_CHARGE','ECL_WRITEBACK','ECL_PNL_WRITEBACK','UWI_WRITEBACK','UWI_PNL_WRITEBACK','ECL_WRITEOFF','ECL_PNL_WRITEOFF','UWI_PNL_WRITEOFF','UWI_WRITEOFF','EIR_BS','EIR_PNL','ECL_OPENING','UWI_OPENING','FVOCI_BS','FVOCI_OCI'],
   tb:      ['ACCOUNTS','ACCOUNT_NAME','CURRENCY','YTD_NET_ENTERED','YTD_NET_ACCOUNTED','EFFECTIVE_DATE','PTD_NET_ENTERED'],
   dq_prod: ['PROC_DTE','LEGAL_ENTITY_CODE','LEDGER_BALANCE_AMT','CNT','PRD_CODE'],
@@ -2904,12 +2904,13 @@ const majMovState = {
 };
 
 const MM_COLS = [
-  { id: 'CIF_NO',      label: 'CIF NO',        type: 'text' },
-  { id: 'CIF_NAME',    label: 'CIF NAME',      type: 'text' },
-  { id: 'ENTITY',      label: 'ENTITY',        type: 'select' },
-  { id: 'CURR_ECL',    label: 'CURRENT ECL',   type: 'number' },
-  { id: 'PREV_ECL',    label: 'PREVIOUS ECL',  type: 'number' },
-  { id: 'ECL_PNL_FTM', label: 'ECL P&L FTM',   type: 'number' }
+  { id: 'CIF_NO',           label: 'CIF NO',             type: 'text' },
+  { id: 'CIF_NAME',         label: 'CIF NAME',           type: 'text' },
+  { id: 'ENTITY',           label: 'ENTITY',             type: 'select' },
+  { id: 'MKT_SUB_SEG_DESC', label: 'MKT SUB SEG DESC',   type: 'text' },
+  { id: 'CURR_ECL',         label: 'CURRENT ECL',        type: 'number' },
+  { id: 'PREV_ECL',         label: 'PREVIOUS ECL',       type: 'number' },
+  { id: 'ECL_PNL_FTM',      label: 'ECL P&L FTM',        type: 'number' }
 ];
 
 /** Get months where BOTH current and previous month RDL are available */
@@ -3026,15 +3027,17 @@ async function runMajorMovement() {
     const cif = String(r.CIF_NO||'').trim();
     const cifName = String(r.CIF_NAME||'').trim();
     const ent = String(r.LEGAL_ENTITY||'').trim();
+    const seg = String(r.MKT_SUB_SEG_DESC||'').trim();
     if (!cif) return;
     const k = `${cif}||${ent}`;
     const ecl = parseFloat(r.LCY_ECL_CLOSING_FY || 0);
     const pnl = parseFloat(r.LCY_ECL_CHARGE_FTM || 0) + parseFloat(r.LCY_ECL_WRITEBACK_FTM || 0);
     const ead = parseFloat(r.LCY_EAD_AMT || 0);
-    if (!cifMap.has(k)) cifMap.set(k, { CIF_NO: cif, CIF_NAME: cifName, ENTITY: ent, CURR_ECL: 0, PREV_ECL: 0, ECL_PNL_FTM: 0, CURR_EAD: 0, PREV_EAD: 0 });
+    if (!cifMap.has(k)) cifMap.set(k, { CIF_NO: cif, CIF_NAME: cifName, ENTITY: ent, MKT_SUB_SEG_DESC: seg, CURR_ECL: 0, PREV_ECL: 0, ECL_PNL_FTM: 0, CURR_EAD: 0, PREV_EAD: 0 });
     const agg = cifMap.get(k);
     agg.CURR_ECL += ecl; agg.ECL_PNL_FTM += pnl; agg.CURR_EAD += ead;
     if (!agg.CIF_NAME && cifName) agg.CIF_NAME = cifName;
+    if (!agg.MKT_SUB_SEG_DESC && seg) agg.MKT_SUB_SEG_DESC = seg;
     const rating = String(r.RATING||'').trim(), stage = String(r.STAGE_CLASSIFICATION||'').trim();
     const bk = `${rating}||${stage}`;
     if (!currBreakdown.has(k)) currBreakdown.set(k, new Map());
@@ -3285,6 +3288,21 @@ function buildMajMovPresTab() {
   // Grand total for an entity: sum of ECL_PNL_FTM across ALL rows for that entity
   const grandTotalForEntity = (entityCode) => allResults.filter(r => r.ENTITY === entityCode).reduce((s,r) => s + (r.ECL_PNL_FTM||0), 0);
 
+  // Split the "other" (non-visible) MSL rows by MKT_SUB_SEG_DESC into three buckets
+  const mslOtherBreakdown = (visibleKeys) => {
+    let sme = 0, ind = 0, rest = 0;
+    allResults.forEach(r => {
+      if (r.ENTITY !== '003') return;
+      if (visibleKeys.has(`${r.CIF_NO}||${r.ENTITY}`)) return;
+      const seg = String(r.MKT_SUB_SEG_DESC||'').trim().toUpperCase();
+      const v = r.ECL_PNL_FTM || 0;
+      if (seg === 'CFS-SME') sme += v;
+      else if (seg === 'CFS-IND') ind += v;
+      else rest += v;
+    });
+    return { sme, ind, rest };
+  };
+
   // Shared colgroup so MBS & MSL column widths are aligned. Extra narrow first column for the remove button.
   const colgroup = `<colgroup>
     <col style="width:32px">
@@ -3359,33 +3377,78 @@ function buildMajMovPresTab() {
     // Subtotal = sum of DISPLAYED values of visible borrowers' ECL P&L FTM (for Million view: sum of rounded millions — so Subtotal + Other = Grand exactly)
     const subtotalDisp = rows.reduce((s,r) => s + toDisplay(r.ECL_PNL_FTM||0), 0);
     const subtotalDispRounded = parseFloat(subtotalDisp.toFixed(2));
-    // "Other" is the balancing figure so that Subtotal + Other = Grand Total at display precision
-    const otherDisp = parseFloat((grandTotalDisp - subtotalDispRounded).toFixed(2));
     const fmtDisp = (d) => (d < 0 ? '-' : '') + fmtN2(Math.abs(d));
-    const subtotalColor = Math.abs(subtotalDispRounded) > 0 ? (subtotalDispRounded < 0 ? 'color:var(--green)' : 'color:var(--red)') : '';
-    const otherColor = Math.abs(otherDisp) > 0 ? (otherDisp < 0 ? 'color:var(--green)' : 'color:var(--red)') : '';
-    const grandColor = Math.abs(grandTotalDisp) > 0 ? (grandTotalDisp < 0 ? 'color:var(--green)' : 'color:var(--red)') : '';
+    const colorFor = (d) => Math.abs(d) > 0 ? (d < 0 ? 'color:var(--green)' : 'color:var(--red)') : '';
+    const subtotalColor = colorFor(subtotalDispRounded);
+    const grandColor = colorFor(grandTotalDisp);
 
-    // Subtotal / Other / Grand Total footer rows
-    const footerHtml = `
-      <tr style="border-top:2px solid var(--border);background:var(--paper2);">
-        <td></td>
-        <td colspan="4" style="padding:6px 10px;font-weight:600;font-size:11px">Subtotal (above borrowers)</td>
-        <td class="mono-val" style="padding:6px 10px;text-align:right;font-weight:700;${subtotalColor}">${fmtDisp(subtotalDispRounded)}</td>
-        <td colspan="6"></td>
-      </tr>
-      <tr style="background:var(--paper);">
-        <td></td>
-        <td colspan="4" style="padding:6px 10px;font-size:11px;color:var(--ink2)">Movement from other borrowers${isMillion?' <span style="font-size:9px;color:var(--ink4);font-style:italic">(balancing)</span>':''}</td>
-        <td class="mono-val" style="padding:6px 10px;text-align:right;font-weight:500;${otherColor}">${fmtDisp(otherDisp)}</td>
-        <td colspan="6"></td>
-      </tr>
-      <tr style="border-top:2px solid var(--ink);background:var(--paper2);">
-        <td></td>
-        <td colspan="4" style="padding:7px 10px;font-weight:700;font-size:11px">Grand Total</td>
-        <td class="mono-val" style="padding:7px 10px;text-align:right;font-weight:700;${grandColor}">${fmtDisp(grandTotalDisp)}</td>
-        <td colspan="6"></td>
-      </tr>`;
+    let footerHtml;
+    if (entityCode === '003') {
+      // MSL: split "other" into 3 rows by MKT_SUB_SEG_DESC
+      const visibleKeys = new Set(rows.map(r => `${r.CIF_NO}||${r.ENTITY}`));
+      const { sme, ind, rest } = mslOtherBreakdown(visibleKeys);
+      const smeDisp = toDisplay(sme);
+      const indDisp = toDisplay(ind);
+      // "Other non-retail" is the balancing figure in Million view; in Whole view use computed value
+      const restDisp = isMillion
+        ? parseFloat((grandTotalDisp - subtotalDispRounded - smeDisp - indDisp).toFixed(2))
+        : toDisplay(rest);
+      const smeColor = colorFor(smeDisp), indColor = colorFor(indDisp), restColor = colorFor(restDisp);
+      footerHtml = `
+        <tr style="border-top:2px solid var(--border);background:var(--paper2);">
+          <td></td>
+          <td colspan="4" style="padding:6px 10px;font-weight:600;font-size:11px">Subtotal (above borrowers)</td>
+          <td class="mono-val" style="padding:6px 10px;text-align:right;font-weight:700;${subtotalColor}">${fmtDisp(subtotalDispRounded)}</td>
+          <td colspan="6"></td>
+        </tr>
+        <tr style="background:var(--paper);">
+          <td></td>
+          <td colspan="4" style="padding:6px 10px;font-size:11px;color:var(--ink2)">Movement from RSME borrowers</td>
+          <td class="mono-val" style="padding:6px 10px;text-align:right;font-weight:500;${smeColor}">${fmtDisp(smeDisp)}</td>
+          <td colspan="6"></td>
+        </tr>
+        <tr style="background:var(--paper);">
+          <td></td>
+          <td colspan="4" style="padding:6px 10px;font-size:11px;color:var(--ink2)">Movement from individual borrowers</td>
+          <td class="mono-val" style="padding:6px 10px;text-align:right;font-weight:500;${indColor}">${fmtDisp(indDisp)}</td>
+          <td colspan="6"></td>
+        </tr>
+        <tr style="background:var(--paper);">
+          <td></td>
+          <td colspan="4" style="padding:6px 10px;font-size:11px;color:var(--ink2)">Movement from other non-retail borrowers${isMillion?' <span style="font-size:9px;color:var(--ink4);font-style:italic">(balancing)</span>':''}</td>
+          <td class="mono-val" style="padding:6px 10px;text-align:right;font-weight:500;${restColor}">${fmtDisp(restDisp)}</td>
+          <td colspan="6"></td>
+        </tr>
+        <tr style="border-top:2px solid var(--ink);background:var(--paper2);">
+          <td></td>
+          <td colspan="4" style="padding:7px 10px;font-weight:700;font-size:11px">Grand Total</td>
+          <td class="mono-val" style="padding:7px 10px;text-align:right;font-weight:700;${grandColor}">${fmtDisp(grandTotalDisp)}</td>
+          <td colspan="6"></td>
+        </tr>`;
+    } else {
+      // MBS: single "other" balancing row
+      const otherDisp = parseFloat((grandTotalDisp - subtotalDispRounded).toFixed(2));
+      const otherColor = colorFor(otherDisp);
+      footerHtml = `
+        <tr style="border-top:2px solid var(--border);background:var(--paper2);">
+          <td></td>
+          <td colspan="4" style="padding:6px 10px;font-weight:600;font-size:11px">Subtotal (above borrowers)</td>
+          <td class="mono-val" style="padding:6px 10px;text-align:right;font-weight:700;${subtotalColor}">${fmtDisp(subtotalDispRounded)}</td>
+          <td colspan="6"></td>
+        </tr>
+        <tr style="background:var(--paper);">
+          <td></td>
+          <td colspan="4" style="padding:6px 10px;font-size:11px;color:var(--ink2)">Movement from other borrowers${isMillion?' <span style="font-size:9px;color:var(--ink4);font-style:italic">(balancing)</span>':''}</td>
+          <td class="mono-val" style="padding:6px 10px;text-align:right;font-weight:500;${otherColor}">${fmtDisp(otherDisp)}</td>
+          <td colspan="6"></td>
+        </tr>
+        <tr style="border-top:2px solid var(--ink);background:var(--paper2);">
+          <td></td>
+          <td colspan="4" style="padding:7px 10px;font-weight:700;font-size:11px">Grand Total</td>
+          <td class="mono-val" style="padding:7px 10px;text-align:right;font-weight:700;${grandColor}">${fmtDisp(grandTotalDisp)}</td>
+          <td colspan="6"></td>
+        </tr>`;
+    }
 
     return `<div style="padding:12px 20px 6px;font-size:12px;font-weight:700;color:var(--ink);">${title}</div>
       <table class="data-table" style="font-size:11px;table-layout:fixed;width:100%;">
@@ -3495,9 +3558,32 @@ function exportMajMov() {
       // Balancing math matches what the UI shows
       const subtotalDisp = parseFloat(rows.reduce((s,r) => s + toDisplay(r.ECL_PNL_FTM||0), 0).toFixed(2));
       const grandTotalDisp = toDisplay(grandTotalForEntity(entityCode));
-      const otherDisp = parseFloat((grandTotalDisp - subtotalDisp).toFixed(2));
       out.push({ 'CIF NO': '', 'CIF NAME': 'Subtotal (above borrowers)', 'ECL P&L FTM': subtotalDisp });
-      out.push({ 'CIF NO': '', 'CIF NAME': isMillion ? 'Movement from other borrowers (balancing)' : 'Movement from other borrowers', 'ECL P&L FTM': otherDisp });
+      if (entityCode === '003') {
+        // MSL: split "other" into 3 rows by MKT_SUB_SEG_DESC
+        const visibleKeys = new Set(rows.map(r => `${r.CIF_NO}||${r.ENTITY}`));
+        let smeRaw = 0, indRaw = 0, restRaw = 0;
+        results.forEach(r => {
+          if (r.ENTITY !== '003') return;
+          if (visibleKeys.has(`${r.CIF_NO}||${r.ENTITY}`)) return;
+          const seg = String(r.MKT_SUB_SEG_DESC||'').trim().toUpperCase();
+          const v = r.ECL_PNL_FTM || 0;
+          if (seg === 'CFS-SME') smeRaw += v;
+          else if (seg === 'CFS-IND') indRaw += v;
+          else restRaw += v;
+        });
+        const smeDisp = toDisplay(smeRaw);
+        const indDisp = toDisplay(indRaw);
+        const restDisp = isMillion
+          ? parseFloat((grandTotalDisp - subtotalDisp - smeDisp - indDisp).toFixed(2))
+          : toDisplay(restRaw);
+        out.push({ 'CIF NO': '', 'CIF NAME': 'Movement from RSME borrowers', 'ECL P&L FTM': smeDisp });
+        out.push({ 'CIF NO': '', 'CIF NAME': 'Movement from individual borrowers', 'ECL P&L FTM': indDisp });
+        out.push({ 'CIF NO': '', 'CIF NAME': isMillion ? 'Movement from other non-retail borrowers (balancing)' : 'Movement from other non-retail borrowers', 'ECL P&L FTM': restDisp });
+      } else {
+        const otherDisp = parseFloat((grandTotalDisp - subtotalDisp).toFixed(2));
+        out.push({ 'CIF NO': '', 'CIF NAME': isMillion ? 'Movement from other borrowers (balancing)' : 'Movement from other borrowers', 'ECL P&L FTM': otherDisp });
+      }
       out.push({ 'CIF NO': '', 'CIF NAME': 'Grand Total', 'ECL P&L FTM': grandTotalDisp });
       return out;
     };
@@ -3520,6 +3606,7 @@ function exportMajMov() {
     });
     const dataRows = filtered.map(r => ({
       'CIF NO': r.CIF_NO, 'CIF NAME': r.CIF_NAME, 'ENTITY': r.ENTITY,
+      'MKT SUB SEG DESC': r.MKT_SUB_SEG_DESC || '',
       'CURRENT ECL': r.CURR_ECL, 'PREVIOUS ECL': r.PREV_ECL,
       'ECL P&L FTM': r.ECL_PNL_FTM
     }));
@@ -4040,10 +4127,10 @@ const FILE_INFO = {
   rdl: {
     title: 'RDL / DWH Data',
     naming: { rule: 'N/A', detail: 'No specific filename required — file is identified by the presence of all required header columns.', hasConvention: false },
-    fields: ['PROC_DTE','UNIQUE_ID_NO','CIF_NO','CIF_NAME','LEGAL_ENTITY','CURCY_CODE','SRC_PROD_TYPE_CD','AC_MGR_UNIT_CODE','GL_AC_ID','SEC_CLS_CD','LEVEL_3','V_CUSTOMER_PARENT_GROUP_NAME','V_FINANCING_CODE','F_SHORT_TERM_IND','F_SHORT_TERM_INCEP_IND','STAGE_CLASSIFICATION','RATING','LCY_EAD_AMT','LCY_ECL_CLOSING_FY','LCY_ECL_CHARGE_FTM','LCY_ECL_WRITEBACK_FTM','RCY_ECL_OPENING_BAL','RCY_ECL_CHARGE_FY','RCY_ECL_WRITEBACK_FY','RCY_ECL_WRITE_OFF_FY','RCY_INT_UNWIND_OPENING_FY','RCY_INT_UNWIND_CHARGE_FY','RCY_INT_UNWIND_WRITEBACK_FY','RCY_INT_UNWIND_WRITE_OFF_FY','LCY_EIR_ADJ_AMT'],
+    fields: ['PROC_DTE','UNIQUE_ID_NO','CIF_NO','CIF_NAME','MKT_SUB_SEG_DESC','LEGAL_ENTITY','CURCY_CODE','SRC_PROD_TYPE_CD','AC_MGR_UNIT_CODE','GL_AC_ID','SEC_CLS_CD','LEVEL_3','V_CUSTOMER_PARENT_GROUP_NAME','V_FINANCING_CODE','F_SHORT_TERM_IND','F_SHORT_TERM_INCEP_IND','STAGE_CLASSIFICATION','RATING','LCY_EAD_AMT','LCY_ECL_CLOSING_FY','LCY_ECL_CHARGE_FTM','LCY_ECL_WRITEBACK_FTM','RCY_ECL_OPENING_BAL','RCY_ECL_CHARGE_FY','RCY_ECL_WRITEBACK_FY','RCY_ECL_WRITE_OFF_FY','RCY_INT_UNWIND_OPENING_FY','RCY_INT_UNWIND_CHARGE_FY','RCY_INT_UNWIND_WRITEBACK_FY','RCY_INT_UNWIND_WRITE_OFF_FY','LCY_EIR_ADJ_AMT'],
     pipelineCols: {
       'Posting Validation': ['UNIQUE_ID_NO','LEGAL_ENTITY','AC_MGR_UNIT_CODE','GL_AC_ID','CURCY_CODE','LEVEL_3','SEC_CLS_CD','SRC_PROD_TYPE_CD','V_CUSTOMER_PARENT_GROUP_NAME','V_FINANCING_CODE','F_SHORT_TERM_IND','F_SHORT_TERM_INCEP_IND','RCY_ECL_CHARGE_FY','RCY_INT_UNWIND_CHARGE_FY','RCY_ECL_WRITEBACK_FY','RCY_INT_UNWIND_WRITEBACK_FY','RCY_ECL_WRITE_OFF_FY','RCY_INT_UNWIND_WRITE_OFF_FY','LCY_EIR_ADJ_AMT','PROC_DTE'],
-      'Major Movement': ['CIF_NO','CIF_NAME','LEGAL_ENTITY','LCY_ECL_CLOSING_FY','LCY_EAD_AMT','LCY_ECL_CHARGE_FTM','LCY_ECL_WRITEBACK_FTM','RATING','STAGE_CLASSIFICATION','UNIQUE_ID_NO','PROC_DTE'],
+      'Major Movement': ['CIF_NO','CIF_NAME','MKT_SUB_SEG_DESC','LEGAL_ENTITY','LCY_ECL_CLOSING_FY','LCY_EAD_AMT','LCY_ECL_CHARGE_FTM','LCY_ECL_WRITEBACK_FTM','RATING','STAGE_CLASSIFICATION','UNIQUE_ID_NO','PROC_DTE'],
       'TB Reconciliation': ['UNIQUE_ID_NO','LEGAL_ENTITY','AC_MGR_UNIT_CODE','GL_AC_ID','CURCY_CODE','LEVEL_3','SEC_CLS_CD','SRC_PROD_TYPE_CD','V_CUSTOMER_PARENT_GROUP_NAME','V_FINANCING_CODE','F_SHORT_TERM_IND','F_SHORT_TERM_INCEP_IND','RCY_ECL_CHARGE_FY','RCY_INT_UNWIND_CHARGE_FY','RCY_ECL_WRITEBACK_FY','RCY_INT_UNWIND_WRITEBACK_FY','RCY_ECL_WRITE_OFF_FY','RCY_INT_UNWIND_WRITE_OFF_FY','LCY_EIR_ADJ_AMT','RCY_ECL_OPENING_BAL','RCY_INT_UNWIND_OPENING_FY','PROC_DTE'],
       'Account Query': ['UNIQUE_ID_NO','LEGAL_ENTITY','AC_MGR_UNIT_CODE','GL_AC_ID','CURCY_CODE','LEVEL_3','SEC_CLS_CD','SRC_PROD_TYPE_CD','V_CUSTOMER_PARENT_GROUP_NAME','V_FINANCING_CODE','F_SHORT_TERM_IND','F_SHORT_TERM_INCEP_IND','RCY_ECL_CHARGE_FY','RCY_INT_UNWIND_CHARGE_FY','RCY_ECL_WRITEBACK_FY','RCY_INT_UNWIND_WRITEBACK_FY','RCY_ECL_WRITE_OFF_FY','RCY_INT_UNWIND_WRITE_OFF_FY','LCY_EIR_ADJ_AMT'],
       'CCY Change': ['UNIQUE_ID_NO','AC_MGR_UNIT_CODE','GL_AC_ID','LEVEL_3','SEC_CLS_CD','F_SHORT_TERM_IND','F_SHORT_TERM_INCEP_IND','V_CUSTOMER_PARENT_GROUP_NAME','V_FINANCING_CODE','RCY_ECL_OPENING_BAL','RCY_INT_UNWIND_OPENING_FY']
