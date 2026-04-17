@@ -2344,6 +2344,7 @@ function handleGlobalShortcut(e) {
   else if (keyLower === 'e' && SHORTCUT_HANDLERS.exportData[v]) { e.preventDefault(); SHORTCUT_HANDLERS.exportData[v](); }
   else if (keyLower === 's' && v === 'moa') { e.preventDefault(); exportMoaJson(); }
   else if (keyLower === 'n' && v === 'moa') { e.preventDefault(); openMoaModal(null); }
+  else if (keyLower === 'x' && v === 'moa' && moaState.dashView === 'type') { e.preventDefault(); moaToggleAllBreakdowns(); }
   else if ((key === '[' || key === ']') && SHORTCUT_HANDLERS.cycleTab[v]) { e.preventDefault(); SHORTCUT_HANDLERS.cycleTab[v](key === ']' ? 1 : -1); }
   else if (keyLower === 'm' && SHORTCUT_HANDLERS.toggleUnit[v]) { e.preventDefault(); SHORTCUT_HANDLERS.toggleUnit[v](); }
 }
@@ -5289,6 +5290,23 @@ function buildMoaDashHtml(entries, visMonths, groupKeys, groupMap) {
 }
 
 function moaDashToggle(el) { var rowId = el.getAttribute('data-rowid'), isOpen = el.getAttribute('data-open') === '1'; document.querySelectorAll('.moa-detail-row').forEach(function(r) { if ((r.getAttribute('data-group')||'').split(' ').indexOf(rowId) >= 0) r.style.display = isOpen ? 'none' : ''; }); el.setAttribute('data-open', isOpen ? '0' : '1'); var typeName = el.textContent.replace(/^[^\s]+\s/, ''); el.innerHTML = (isOpen ? '&#9658; ' : '&#9660; ') + typeName; }
+
+function moaGetToggleTargets() { return document.querySelectorAll('#view-moa [data-rowid][data-open]'); }
+function applyMoaExpandState() {
+  var shouldCollapse = !!moaState.allCollapsed;
+  moaGetToggleTargets().forEach(function(el) {
+    var isOpen = el.getAttribute('data-open') === '1';
+    if (shouldCollapse && isOpen) moaDashToggle(el);
+    else if (!shouldCollapse && !isOpen) moaDashToggle(el);
+  });
+  var btn = document.getElementById('moa-expand-all-btn');
+  if (btn) btn.textContent = shouldCollapse ? 'Expand All' : 'Collapse All';
+}
+function moaToggleAllBreakdowns() {
+  if (moaState.dashView !== 'type') return;
+  moaState.allCollapsed = !moaState.allCollapsed;
+  applyMoaExpandState();
+}
 function closeMoaActionModal() { var el = document.getElementById('moa-entry-action-modal'); if (el) el.remove(); }
 function openMoaEntryModal(idx) { openMoaModal(idx); }
 
@@ -5400,9 +5418,12 @@ function renderMoa() {
   var saveBtnStyle = moaState.dirty ? 'background:var(--red);color:#fff;border-color:var(--red);' : '';
   var saveBtnLabel = moaState.dirty ? 'Save *' : 'Save';
   var toolbarRow1 = '<div class="table-toolbar" style="border-bottom:none;padding-bottom:6px;"><button class="btn btn-primary btn-gold" onclick="openMoaModal(null)" title="New MOA (N)">+ New MOA</button><button class="btn btn-sm" onclick="openMoaDuplicateModal()">Roll-forward MOA</button><button class="btn btn-sm" style="' + saveBtnStyle + '" onclick="exportMoaJson()" title="' + (moaState.dirty?'Unsaved changes — click to save (S)':'No unsaved changes — click to save (S)') + '">' + saveBtnLabel + '</button><div style="margin-left:auto;">' + journalExportBtn + '</div></div>';
-  var toolbarRow2 = '<div class="table-toolbar" style="border-top:none;padding-top:6px;">' + viewDropdownBtn + journalBtn + '</div>';
+  var expandBtnLabel = moaState.allCollapsed ? 'Expand All' : 'Collapse All';
+  var expandAllBtn = view === 'type' ? '<button class="btn btn-sm" id="moa-expand-all-btn" style="margin-left:4px;" onclick="moaToggleAllBreakdowns()" title="Expand/Collapse all breakdowns (X)">' + expandBtnLabel + '</button>' : '';
+  var toolbarRow2 = '<div class="table-toolbar" style="border-top:none;padding-top:6px;">' + viewDropdownBtn + journalBtn + expandAllBtn + '</div>';
 
   container.innerHTML = '<div class="results-view" style="display:flex;flex-direction:column;overflow:hidden;">' + kpiHtml + toolbarRow1 + toolbarRow2 + '<div style="flex:1;overflow:auto;padding:12px 20px;">' + (view !== 'journal' ? incompleteHtml : '') + mainHtml + '</div></div>';
+  if (view === 'type' && moaState.allCollapsed) applyMoaExpandState();
   updateNavStatus('moa');
 }
 
