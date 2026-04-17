@@ -2316,6 +2316,10 @@ const SHORTCUT_HANDLERS = {
     mtmfvoci:  (dir) => { const order = ['listing','journal','wair']; const i = order.indexOf(_mtmTab); const ni = (i + dir + order.length) % order.length; _mtmTab = order[ni]; renderMtmResults(document.getElementById('view-mtmfvoci')); },
     majmov:    (dir) => { const order = ['presentation','data']; const i = order.indexOf(majMovState.tab); const ni = (i + dir + order.length) % order.length; majMovState.tab = order[ni]; renderMajMovResults(document.getElementById('view-majmov')); },
     moa:       (dir) => { const order = ['type','rcMgt','rcTb','journal']; const i = order.indexOf(moaState.dashView); const ni = (i + dir + order.length) % order.length; moaSetView(order[ni]); }
+  },
+  // M = toggle million/whole units (Major Movement presentation view)
+  toggleUnit: {
+    majmov:    () => { majMovState.unit = (majMovState.unit === 'million') ? 'whole' : 'million'; renderMajMovResults(document.getElementById('view-majmov')); }
   }
 };
 
@@ -2341,6 +2345,7 @@ function handleGlobalShortcut(e) {
   else if (keyLower === 's' && v === 'moa') { e.preventDefault(); exportMoaJson(); }
   else if (keyLower === 'n' && v === 'moa') { e.preventDefault(); openMoaModal(null); }
   else if ((key === '[' || key === ']') && SHORTCUT_HANDLERS.cycleTab[v]) { e.preventDefault(); SHORTCUT_HANDLERS.cycleTab[v](key === ']' ? 1 : -1); }
+  else if (keyLower === 'm' && SHORTCUT_HANDLERS.toggleUnit[v]) { e.preventDefault(); SHORTCUT_HANDLERS.toggleUnit[v](); }
 }
 
 document.addEventListener('keydown', handleGlobalShortcut);
@@ -3120,7 +3125,7 @@ function renderMajMovResults(container) {
   const unitToggleHtml = isPres ? `<div class="table-toolbar" style="border-top:none;padding-top:4px;">
     <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--ink3);">
       <span>Units:</span>
-      <div style="display:inline-flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+      <div style="display:inline-flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;" title="Toggle with M">
         <button style="border:none;padding:4px 12px;font-size:11px;font-family:var(--sans);cursor:pointer;background:${isWhole?'var(--ink)':'#fff'};color:${isWhole?'#fff':'var(--ink2)'};" onclick="majMovState.unit='whole';renderMajMovResults(document.getElementById('view-majmov'))">Whole Number</button>
         <button style="border:none;border-left:1px solid var(--border);padding:4px 12px;font-size:11px;font-family:var(--sans);cursor:pointer;background:${isMillion?'var(--ink)':'#fff'};color:${isMillion?'#fff':'var(--ink2)'};" onclick="majMovState.unit='million';renderMajMovResults(document.getElementById('view-majmov'))">Million</button>
       </div>
