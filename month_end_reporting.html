@@ -5243,6 +5243,11 @@ function moaToggleCompareMonth(m) {
   renderMoa();
 }
 
+function moaClearCompare() {
+  moaState.compareMonths = [];
+  renderMoa();
+}
+
 function moaActiveCompare(visMonths) {
   var cm = (moaState.compareMonths || []).filter(function(m){ return visMonths.indexOf(m) >= 0; });
   return cm.length === 2 ? cm.slice().sort() : [];
@@ -5256,12 +5261,16 @@ function moaCompareThHtml(m, extraStyle) {
   return '<th style="' + base + '" onclick="moaToggleCompareMonth(\'' + m + '\')" title="' + title + '">' + m + '</th>';
 }
 
+function moaMovementThHtml(cmp) {
+  return '<th style="text-align:right;white-space:nowrap;background:var(--gold);color:var(--ink);cursor:pointer;user-select:none;" onclick="moaClearCompare()" title="Click to clear comparison">Movement (' + cmp[1] + ' &minus; ' + cmp[0] + ')</th>';
+}
+
 function moaMovementTd(later, earlier, opts) {
   opts = opts || {};
   var d = (later || 0) - (earlier || 0);
   var baseStyle = 'text-align:right;background:var(--paper2);' + (opts.style || '');
   if (Math.abs(d) < 0.005) return '<td class="mono-val" style="' + baseStyle + '">&mdash;</td>';
-  var color = d > 0 ? 'color:var(--red);' : 'color:var(--green);';
+  var color = d > 0 ? 'color:var(--red) !important;' : 'color:var(--green) !important;';
   var weight = opts.bold ? 'font-weight:700;' : 'font-weight:600;';
   var sign = d > 0 ? '+' : '';
   return '<td class="mono-val" style="' + baseStyle + weight + color + '">' + sign + fmtN2(d) + '</td>';
@@ -5279,7 +5288,7 @@ function buildMoaDashHtml(entries, visMonths, groupKeys, groupMap) {
   }
   var thMonths = visMonths.map(function(m){ return moaCompareThHtml(m); }).join('');
   var cmp = moaActiveCompare(visMonths), cmpOn = cmp.length === 2;
-  var moveTh = cmpOn ? '<th style="text-align:right;white-space:nowrap;background:var(--gold);color:var(--ink);">Movement (' + cmp[1] + ' &minus; ' + cmp[0] + ')</th>' : '';
+  var moveTh = cmpOn ? moaMovementThHtml(cmp) : '';
   var entities = [], entitySeen = {};
   groupKeys.forEach(function(gk){ var e=gk.split('||')[0]; if(!entitySeen[e]){entitySeen[e]=1;entities.push(e);} });
   var allBodyRows = '';
@@ -5391,7 +5400,7 @@ function buildMoaRcHtml(entries, visMonths, rcField) {
   if (!rowKeys.length) return '<div style="padding:20px;font-size:11px;color:var(--ink3);">No RC allocations found in entries.</div>';
   var thMonths = visMonths.map(function(m){ return moaCompareThHtml(m); }).join('');
   var cmp = moaActiveCompare(visMonths), cmpOn = cmp.length === 2;
-  var moveTh = cmpOn ? '<th style="text-align:right;white-space:nowrap;background:var(--gold);color:var(--ink);">Movement (' + cmp[1] + ' &minus; ' + cmp[0] + ')</th>' : '';
+  var moveTh = cmpOn ? moaMovementThHtml(cmp) : '';
   function moaDeltaStyle(mi, cur, prev) { if (mi === 0 || prev === undefined) return ''; var d = cur - prev; if (Math.abs(d) < 0.005) return ''; return d > 0 ? 'color:var(--red);font-weight:600;' : 'color:var(--green);font-weight:600;'; }
   var bodyRows = rowKeys.map(function(gk) {
     var row = rowMap.get(gk); var rcDisplay = rcField === 'rcTb' ? moaRcLabel(row.rc) : (row.rc||'&mdash;');
