@@ -2315,7 +2315,7 @@ const SHORTCUT_HANDLERS = {
     ccychange: (dir) => { const order = ['patch','journal']; const i = order.indexOf(_ccyTab); const ni = (i + dir + order.length) % order.length; _ccyTab = order[ni]; renderCcyResults(document.getElementById('view-ccychange')); },
     mtmfvoci:  (dir) => { const order = ['listing','journal','wair']; const i = order.indexOf(_mtmTab); const ni = (i + dir + order.length) % order.length; _mtmTab = order[ni]; renderMtmResults(document.getElementById('view-mtmfvoci')); },
     majmov:    (dir) => { const order = ['presentation','data']; const i = order.indexOf(majMovState.tab); const ni = (i + dir + order.length) % order.length; majMovState.tab = order[ni]; renderMajMovResults(document.getElementById('view-majmov')); },
-    moa:       (dir) => { const order = ['type','rcMgt','rcTb','journal']; const i = order.indexOf(moaState.dashView); const ni = (i + dir + order.length) % order.length; moaSetView(order[ni]); }
+    moa:       (dir) => { const order = ['type','journal']; let i = order.indexOf(moaState.dashView); if (i < 0) i = 0; const ni = (i + dir + order.length) % order.length; moaSetView(order[ni]); }
   },
   // M = toggle million/whole units (Major Movement presentation view)
   toggleUnit: {
