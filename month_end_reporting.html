@@ -3164,7 +3164,9 @@ function buildMajMovDataTab() {
   const rowsHtml = pageRows.map(r => {
     const cifKey = `${r.CIF_NO}||${r.ENTITY}`;
     const inPres = mmIsInPresentation(cifKey);
-    const toggleCell = `<td style="text-align:center;padding:4px 2px;"><span onclick="mmTogglePresFromData('${cifKey}')" title="${inPres?'Remove from presentation':'Add to presentation'}" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:3px;background:${inPres?'var(--paper2)':'transparent'};color:${inPres?'var(--ink2)':'var(--gold)'};cursor:pointer;font-size:13px;font-weight:600;line-height:1;border:1px solid ${inPres?'var(--border)':'var(--gold)'};" onmouseover="this.style.background='${inPres?'var(--red-bg)':'var(--gold)'}';this.style.color='${inPres?'var(--red)':'#fff'}'" onmouseout="this.style.background='${inPres?'var(--paper2)':'transparent'}';this.style.color='${inPres?'var(--ink2)':'var(--gold)'}'">${inPres?'✓':'+'}</span></td>`;
+    const toggleCell = inPres
+      ? `<td style="text-align:center;padding:4px 2px;"><span title="In presentation" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:3px;background:var(--paper2);color:var(--ink2);font-size:13px;font-weight:600;line-height:1;border:1px solid var(--border);">✓</span></td>`
+      : `<td style="text-align:center;padding:4px 2px;"><span onclick="mmTogglePresFromData('${cifKey}')" title="Add to presentation" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:3px;background:transparent;color:var(--gold);cursor:pointer;font-size:13px;font-weight:600;line-height:1;border:1px solid var(--gold);" onmouseover="this.style.background='var(--gold)';this.style.color='#fff'" onmouseout="this.style.background='transparent';this.style.color='var(--gold)'">+</span></td>`;
     return `<tr>${toggleCell}${MM_COLS.map(c => {
       if (c.type === 'number') {
         const v = r[c.id];
