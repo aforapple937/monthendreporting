@@ -1932,7 +1932,7 @@ const BK_PER_PAGE = 100;
 const loanReconState = { tbMapping: null, fifo: null, results: null, files: { tbMapping: false, fifo: false } };
 const ccyState = { data: null, loaded: false, results: null };
 const mtmState = { fvoci: null, fvociLoaded: false, disb: null, disbLoaded: false, prevFvoci: null, prevFvociLoaded: false, results: null };
-const moaState = { entries: [], dashView: 'type', journalMonth: '', journalRows: [] };
+const moaState = { entries: [], dashView: 'type', journalMonth: '', journalRows: [], compareMonths: [] };
 const preTbState = { results: null, effectiveDate: null };
 const dqState = { DS: [], AD: [], LA: '', LB: '', CF: 'all', TH: 0.10, sort: 'psi', allExpanded: false };
 const DQ_PRODS = ['LN','CC','OD','GUARANTEE','INVMT','RATING'];
@@ -5235,6 +5235,38 @@ function moaGetMissingFields(e) {
 
 function moaSetView(v) { moaState.dashView = v; renderMoa(); }
 
+function moaToggleCompareMonth(m) {
+  if (!moaState.compareMonths) moaState.compareMonths = [];
+  var arr = moaState.compareMonths, i = arr.indexOf(m);
+  if (i >= 0) arr.splice(i, 1);
+  else { if (arr.length >= 2) arr.shift(); arr.push(m); }
+  renderMoa();
+}
+
+function moaActiveCompare(visMonths) {
+  var cm = (moaState.compareMonths || []).filter(function(m){ return visMonths.indexOf(m) >= 0; });
+  return cm.length === 2 ? cm.slice().sort() : [];
+}
+
+function moaCompareThHtml(m, extraStyle) {
+  var cm = moaState.compareMonths || [], selIdx = cm.indexOf(m);
+  var base = 'text-align:right;white-space:nowrap;cursor:pointer;user-select:none;' + (extraStyle || '');
+  if (selIdx >= 0) base += 'background:var(--gold);color:var(--ink);';
+  var title = selIdx >= 0 ? 'Selected for comparison — click to unselect' : 'Click to compare (pick up to 2 months)';
+  return '<th style="' + base + '" onclick="moaToggleCompareMonth(\'' + m + '\')" title="' + title + '">' + m + '</th>';
+}
+
+function moaMovementTd(later, earlier, opts) {
+  opts = opts || {};
+  var d = (later || 0) - (earlier || 0);
+  var baseStyle = 'text-align:right;background:var(--paper2);' + (opts.style || '');
+  if (Math.abs(d) < 0.005) return '<td class="mono-val" style="' + baseStyle + '">&mdash;</td>';
+  var color = d > 0 ? 'color:var(--red);' : 'color:var(--green);';
+  var weight = opts.bold ? 'font-weight:700;' : 'font-weight:600;';
+  var sign = d > 0 ? '+' : '';
+  return '<td class="mono-val" style="' + baseStyle + weight + color + '">' + sign + fmtN2(d) + '</td>';
+}
+
 function buildMoaDashHtml(entries, visMonths, groupKeys, groupMap) {
   if (!visMonths.length) return '<div style="padding:20px;font-size:11px;color:var(--ink3);">No entries yet. Click + New MOA to add an entry.</div>';
   var latestMonth = visMonths[visMonths.length - 1];
@@ -5245,7 +5277,9 @@ function buildMoaDashHtml(entries, visMonths, groupKeys, groupMap) {
     if (Math.abs(d) < 0.005) return '';
     return d > 0 ? 'color:var(--red);font-weight:600;' : 'color:var(--green);font-weight:600;';
   }
-  var thMonths = visMonths.map(function(m){ return '<th style="text-align:right;white-space:nowrap">' + m + '</th>'; }).join('');
+  var thMonths = visMonths.map(function(m){ return moaCompareThHtml(m); }).join('');
+  var cmp = moaActiveCompare(visMonths), cmpOn = cmp.length === 2;
+  var moveTh = cmpOn ? '<th style="text-align:right;white-space:nowrap;background:var(--gold);color:var(--ink);">Movement (' + cmp[1] + ' &minus; ' + cmp[0] + ')</th>' : '';
   var entities = [], entitySeen = {};
   groupKeys.forEach(function(gk){ var e=gk.split('||')[0]; if(!entitySeen[e]){entitySeen[e]=1;entities.push(e);} });
   var allBodyRows = '';
@@ -5255,38 +5289,42 @@ function buildMoaDashHtml(entries, visMonths, groupKeys, groupMap) {
     entityGks.forEach(function(gk) {
       var parts = gk.split('||'), type = parts[1], grpEntries = groupMap.get(gk);
       var rowId = 'moadash_' + gk.replace(/[^a-z0-9]/gi,'_');
-      var prevSum = undefined;
+      var prevSum = undefined, cmpSums = {};
       var cells = visMonths.map(function(m, mi) {
         var monthEntries = grpEntries.filter(function(e){ return e.month===m; });
         var sum = monthEntries.reduce(function(s,e){ return s+(parseFloat(e.amount)||0); }, 0);
         var deltaStyle = moaDeltaStyle(mi, sum, prevSum);
         prevSum = sum;
+        if (cmpOn && cmp.indexOf(m) >= 0) cmpSums[m] = sum;
         if (sum === 0) return '<td class="mono-val" style="text-align:right">&mdash;</td>';
         if (type === 'Sector') { var idx = entries.indexOf(monthEntries[0]); return '<td class="mono-val" style="text-align:right;cursor:pointer;' + deltaStyle + '" onclick="openMoaEntryModal(' + idx + ')" title="Click to edit">' + fmtN2(sum) + '</td>'; }
         return '<td class="mono-val" style="text-align:right;' + deltaStyle + '">' + fmtN2(sum) + '</td>';
       }).join('');
+      var moveCell = cmpOn ? moaMovementTd(cmpSums[cmp[1]], cmpSums[cmp[0]]) : '';
       var detailRows = '', hasDetail = type === 'Borrower' || type === 'Model';
       if (type === 'Borrower') {
         var groupBuckets = new Map();
         grpEntries.forEach(function(e) { var subKey = (e.cif||'') + '||' + (e.borrower||''); var g = e.group || ('__solo__' + subKey); if (!groupBuckets.has(g)) groupBuckets.set(g, new Map()); var bucket = groupBuckets.get(g); if (!bucket.has(subKey)) { var prefix = e.group ? e.group + ' &middot; ' : ''; bucket.set(subKey, { label: prefix + (e.cif||'&mdash;') + ' &middot; ' + (e.borrower||'&mdash;'), byMonth: {} }); } bucket.get(subKey).byMonth[e.month] = e; });
         var groupList = []; groupBuckets.forEach(function(bucket, g) { var groupLatest = 0; bucket.forEach(function(sub){ groupLatest += parseFloat((sub.byMonth[latestMonth]||{}).amount||0); }); var cifList = []; bucket.forEach(function(sub){ cifList.push({sub:sub, latestAmt: parseFloat((sub.byMonth[latestMonth]||{}).amount||0)}); }); cifList.sort(function(a,b){ return b.latestAmt - a.latestAmt; }); groupList.push({cifList:cifList, groupLatest:groupLatest}); });
         groupList.sort(function(a,b){ return b.groupLatest - a.groupLatest; });
-        groupList.forEach(function(gl) { gl.cifList.forEach(function(c) { var prevAmt = undefined; var cols2 = visMonths.map(function(m, mi){ var e = c.sub.byMonth[m]; if (!e) { prevAmt = 0; return '<td></td>'; } var idx2 = entries.indexOf(e); var amt = parseFloat(e.amount)||0; var ds = moaDeltaStyle(mi, amt, prevAmt); prevAmt = amt; return '<td class="mono-val" style="text-align:right;font-size:11px;padding:4px 8px;cursor:pointer;' + ds + '" onclick="openMoaEntryModal(' + idx2 + ')" title="Click to edit">' + fmtN2(amt) + '</td>'; }).join(''); detailRows += '<tr class="moa-detail-row" data-group="' + rowId + '" style="background:var(--paper);"><td colspan="2" style="padding:4px 8px 4px 28px;font-size:11px;color:var(--ink3);">' + c.sub.label + '</td>' + cols2 + '</tr>'; }); });
+        groupList.forEach(function(gl) { gl.cifList.forEach(function(c) { var prevAmt = undefined, subCmp = {}; var cols2 = visMonths.map(function(m, mi){ var e = c.sub.byMonth[m]; var amt = e ? (parseFloat(e.amount)||0) : 0; if (cmpOn && cmp.indexOf(m) >= 0) subCmp[m] = amt; if (!e) { prevAmt = 0; return '<td></td>'; } var idx2 = entries.indexOf(e); var ds = moaDeltaStyle(mi, amt, prevAmt); prevAmt = amt; return '<td class="mono-val" style="text-align:right;font-size:11px;padding:4px 8px;cursor:pointer;' + ds + '" onclick="openMoaEntryModal(' + idx2 + ')" title="Click to edit">' + fmtN2(amt) + '</td>'; }).join(''); var subMove = cmpOn ? moaMovementTd(subCmp[cmp[1]], subCmp[cmp[0]], {style:'font-size:11px;padding:4px 8px;'}) : ''; detailRows += '<tr class="moa-detail-row" data-group="' + rowId + '" style="background:var(--paper);"><td colspan="2" style="padding:4px 8px 4px 28px;font-size:11px;color:var(--ink3);">' + c.sub.label + '</td>' + cols2 + subMove + '</tr>'; }); });
       } else if (type === 'Model') {
         var modelMap = new Map(); grpEntries.forEach(function(e) { var sk = e.modelDesc||'&mdash;'; if (!modelMap.has(sk)) modelMap.set(sk, {label: sk, byMonth: {}}); modelMap.get(sk).byMonth[e.month] = e; });
         var modelList = []; modelMap.forEach(function(sub){ modelList.push({sub:sub, latestAmt: parseFloat((sub.byMonth[latestMonth]||{}).amount||0)}); }); modelList.sort(function(a,b){ return b.latestAmt - a.latestAmt; });
-        modelList.forEach(function(ml) { var prevAmt = undefined; var cols2 = visMonths.map(function(m, mi){ var e = ml.sub.byMonth[m]; if (!e) { prevAmt = 0; return '<td></td>'; } var idx2 = entries.indexOf(e); var amt = parseFloat(e.amount)||0; var ds = moaDeltaStyle(mi, amt, prevAmt); prevAmt = amt; return '<td class="mono-val" style="text-align:right;font-size:11px;padding:4px 8px;cursor:pointer;' + ds + '" onclick="openMoaEntryModal(' + idx2 + ')" title="Click to edit">' + fmtN2(amt) + '</td>'; }).join(''); detailRows += '<tr class="moa-detail-row" data-group="' + rowId + '" style="background:var(--paper);"><td colspan="2" style="padding:4px 8px 4px 28px;font-size:11px;color:var(--ink3);">' + ml.sub.label + '</td>' + cols2 + '</tr>'; });
+        modelList.forEach(function(ml) { var prevAmt = undefined, subCmp = {}; var cols2 = visMonths.map(function(m, mi){ var e = ml.sub.byMonth[m]; var amt = e ? (parseFloat(e.amount)||0) : 0; if (cmpOn && cmp.indexOf(m) >= 0) subCmp[m] = amt; if (!e) { prevAmt = 0; return '<td></td>'; } var idx2 = entries.indexOf(e); var ds = moaDeltaStyle(mi, amt, prevAmt); prevAmt = amt; return '<td class="mono-val" style="text-align:right;font-size:11px;padding:4px 8px;cursor:pointer;' + ds + '" onclick="openMoaEntryModal(' + idx2 + ')" title="Click to edit">' + fmtN2(amt) + '</td>'; }).join(''); var subMove = cmpOn ? moaMovementTd(subCmp[cmp[1]], subCmp[cmp[0]], {style:'font-size:11px;padding:4px 8px;'}) : ''; detailRows += '<tr class="moa-detail-row" data-group="' + rowId + '" style="background:var(--paper);"><td colspan="2" style="padding:4px 8px 4px 28px;font-size:11px;color:var(--ink3);">' + ml.sub.label + '</td>' + cols2 + subMove + '</tr>'; });
       }
       var typeCell = hasDetail ? '<span data-rowid="' + rowId + '" data-open="1" style="cursor:pointer;user-select:none" onclick="moaDashToggle(this)">&#9660; ' + type + '</span>' : type;
-      allBodyRows += '<tr style="border-bottom:1px solid var(--border);"><td style="padding:8px 10px;font-weight:600;font-size:12px">' + entity + '</td><td style="padding:8px 10px;font-size:12px">' + typeCell + '</td>' + cells + '</tr>' + detailRows;
+      allBodyRows += '<tr style="border-bottom:1px solid var(--border);"><td style="padding:8px 10px;font-weight:600;font-size:12px">' + entity + '</td><td style="padding:8px 10px;font-size:12px">' + typeCell + '</td>' + cells + moveCell + '</tr>' + detailRows;
     });
-    var prevSubTotal = undefined;
-    var subCells = visMonths.map(function(m, mi){ var s = entityEntries.filter(function(e){ return e.month===m; }).reduce(function(acc,e){ return acc+(parseFloat(e.amount)||0); },0); var ds = moaDeltaStyle(mi, s, prevSubTotal); prevSubTotal = s; return '<td class="mono-val" style="text-align:right;font-weight:700;background:var(--paper2);' + ds + '">' + (s?fmtN2(s):'&mdash;') + '</td>'; }).join('');
-    allBodyRows += '<tr style="border-top:2px solid var(--border);"><td style="padding:7px 10px;font-weight:700;font-size:12px;background:var(--paper2)">' + entity + ' Total</td><td style="background:var(--paper2)"></td>' + subCells + '</tr>';
+    var prevSubTotal = undefined, subTotCmp = {};
+    var subCells = visMonths.map(function(m, mi){ var s = entityEntries.filter(function(e){ return e.month===m; }).reduce(function(acc,e){ return acc+(parseFloat(e.amount)||0); },0); if (cmpOn && cmp.indexOf(m) >= 0) subTotCmp[m] = s; var ds = moaDeltaStyle(mi, s, prevSubTotal); prevSubTotal = s; return '<td class="mono-val" style="text-align:right;font-weight:700;background:var(--paper2);' + ds + '">' + (s?fmtN2(s):'&mdash;') + '</td>'; }).join('');
+    var subTotMove = cmpOn ? moaMovementTd(subTotCmp[cmp[1]], subTotCmp[cmp[0]], {bold:true}) : '';
+    allBodyRows += '<tr style="border-top:2px solid var(--border);"><td style="padding:7px 10px;font-weight:700;font-size:12px;background:var(--paper2)">' + entity + ' Total</td><td style="background:var(--paper2)"></td>' + subCells + subTotMove + '</tr>';
   });
-  var prevGrand = undefined;
-  var grandCells = visMonths.map(function(m, mi){ var s = entries.filter(function(e){ return e.month===m; }).reduce(function(acc,e){ return acc+(parseFloat(e.amount)||0); },0); var d = (mi===0 || prevGrand===undefined) ? 0 : s - prevGrand; prevGrand = s; var cStyle = Math.abs(d)<0.005 ? '' : (d>0 ? 'color:var(--red) !important;' : 'color:var(--green) !important;'); return '<td class="mono-val" style="text-align:right;font-weight:700;' + cStyle + '">' + (s?fmtN2(s):'&mdash;') + '</td>'; }).join('');
-  return '<div class="table-wrap" style="overflow:auto;max-height:calc(100vh - 260px);"><table class="data-table" style="font-size:12px;"><thead style="position:sticky;top:0;z-index:2;background:var(--ink);"><tr><th>Entity</th><th>Type</th>' + thMonths + '</tr></thead><tbody>' + allBodyRows + '</tbody><tfoot class="moa-tfoot"><tr><td style="padding:8px 10px;font-weight:700;font-size:12px">Grand Total</td><td></td>' + grandCells + '</tr></tfoot></table></div>';
+  var prevGrand = undefined, grandCmp = {};
+  var grandCells = visMonths.map(function(m, mi){ var s = entries.filter(function(e){ return e.month===m; }).reduce(function(acc,e){ return acc+(parseFloat(e.amount)||0); },0); if (cmpOn && cmp.indexOf(m) >= 0) grandCmp[m] = s; var d = (mi===0 || prevGrand===undefined) ? 0 : s - prevGrand; prevGrand = s; var cStyle = Math.abs(d)<0.005 ? '' : (d>0 ? 'color:var(--red) !important;' : 'color:var(--green) !important;'); return '<td class="mono-val" style="text-align:right;font-weight:700;' + cStyle + '">' + (s?fmtN2(s):'&mdash;') + '</td>'; }).join('');
+  var grandMove = cmpOn ? moaMovementTd(grandCmp[cmp[1]], grandCmp[cmp[0]], {bold:true}) : '';
+  return '<div class="table-wrap" style="overflow:auto;max-height:calc(100vh - 260px);"><table class="data-table" style="font-size:12px;"><thead style="position:sticky;top:0;z-index:2;background:var(--ink);"><tr><th>Entity</th><th>Type</th>' + thMonths + moveTh + '</tr></thead><tbody>' + allBodyRows + '</tbody><tfoot class="moa-tfoot"><tr><td style="padding:8px 10px;font-weight:700;font-size:12px">Grand Total</td><td></td>' + grandCells + grandMove + '</tr></tfoot></table></div>';
 }
 
 function moaDashToggle(el) { var rowId = el.getAttribute('data-rowid'), isOpen = el.getAttribute('data-open') === '1'; document.querySelectorAll('.moa-detail-row').forEach(function(r) { if ((r.getAttribute('data-group')||'').split(' ').indexOf(rowId) >= 0) r.style.display = isOpen ? 'none' : ''; }); el.setAttribute('data-open', isOpen ? '0' : '1'); var typeName = el.textContent.replace(/^[^\s]+\s/, ''); el.innerHTML = (isOpen ? '&#9658; ' : '&#9660; ') + typeName; }
@@ -5351,23 +5389,27 @@ function buildMoaRcHtml(entries, visMonths, rcField) {
   entries.forEach(function(e) { (e.rcSplits||[]).forEach(function(split) { var rc = split[rcField] || ''; var gk = (e.entity||'') + '||' + rc; if (!rowMap.has(gk)) { rowMap.set(gk, {entity:e.entity||'', rc:rc, byMonth:{}}); rowKeys.push(gk); } var row = rowMap.get(gk); if (!row.byMonth[e.month]) row.byMonth[e.month] = []; row.byMonth[e.month].push({ei:entries.indexOf(e), entry:e, allocAmt: parseFloat(split.amount)||0}); }); });
   rowKeys.sort(function(a,b){ var ap=a.split('||'), bp=b.split('||'); if(ap[0]!==bp[0]) return ap[0]==='MBB-SG'?-1:1; return (ap[1]||'').localeCompare(bp[1]||''); });
   if (!rowKeys.length) return '<div style="padding:20px;font-size:11px;color:var(--ink3);">No RC allocations found in entries.</div>';
-  var thMonths = visMonths.map(function(m){ return '<th style="text-align:right;white-space:nowrap">' + m + '</th>'; }).join('');
+  var thMonths = visMonths.map(function(m){ return moaCompareThHtml(m); }).join('');
+  var cmp = moaActiveCompare(visMonths), cmpOn = cmp.length === 2;
+  var moveTh = cmpOn ? '<th style="text-align:right;white-space:nowrap;background:var(--gold);color:var(--ink);">Movement (' + cmp[1] + ' &minus; ' + cmp[0] + ')</th>' : '';
   function moaDeltaStyle(mi, cur, prev) { if (mi === 0 || prev === undefined) return ''; var d = cur - prev; if (Math.abs(d) < 0.005) return ''; return d > 0 ? 'color:var(--red);font-weight:600;' : 'color:var(--green);font-weight:600;'; }
   var bodyRows = rowKeys.map(function(gk) {
     var row = rowMap.get(gk); var rcDisplay = rcField === 'rcTb' ? moaRcLabel(row.rc) : (row.rc||'&mdash;');
-    var prevSum = undefined;
+    var prevSum = undefined, rowCmp = {};
     var cells = visMonths.map(function(m, mi) {
       var items = row.byMonth[m];
-      if (!items || !items.length) { prevSum = 0; return '<td class="mono-val" style="text-align:right">&mdash;</td>'; }
+      if (!items || !items.length) { prevSum = 0; if (cmpOn && cmp.indexOf(m) >= 0) rowCmp[m] = 0; return '<td class="mono-val" style="text-align:right">&mdash;</td>'; }
       var sum = items.reduce(function(s,x){ return s+x.allocAmt; }, 0);
+      if (cmpOn && cmp.indexOf(m) >= 0) rowCmp[m] = sum;
       var ds = moaDeltaStyle(mi, sum, prevSum);
       prevSum = sum;
       var dataStr = encodeURIComponent(JSON.stringify(items.map(function(x){ var desc = x.entry.type==='Borrower' ? (x.entry.cif||'') + ' - ' + (x.entry.borrower||'') : x.entry.type==='Model' ? (x.entry.modelDesc||'') : 'Sector'; return {desc:desc, amt:x.allocAmt, ei:x.ei}; })));
       return '<td class="mono-val" style="text-align:right;cursor:pointer;' + ds + '" onclick="openMoaRcBreakdown(this)" data-items="' + dataStr + '" title="Click for breakdown">' + fmtN2(sum) + '</td>';
     }).join('');
-    return '<tr style="border-bottom:1px solid var(--border);"><td style="padding:8px 10px;font-weight:600;font-size:12px">' + row.entity + '</td><td style="padding:8px 10px;font-family:var(--mono);font-size:12px">' + rcDisplay + '</td>' + cells + '</tr>';
+    var moveCell = cmpOn ? moaMovementTd(rowCmp[cmp[1]], rowCmp[cmp[0]]) : '';
+    return '<tr style="border-bottom:1px solid var(--border);"><td style="padding:8px 10px;font-weight:600;font-size:12px">' + row.entity + '</td><td style="padding:8px 10px;font-family:var(--mono);font-size:12px">' + rcDisplay + '</td>' + cells + moveCell + '</tr>';
   }).join('');
-  return '<div class="table-wrap" style="overflow:auto;max-height:calc(100vh - 260px);"><table class="data-table" style="font-size:12px;"><thead style="position:sticky;top:0;z-index:2;background:var(--ink);"><tr><th>Entity</th><th>RC</th>' + thMonths + '</tr></thead><tbody>' + bodyRows + '</tbody></table></div>';
+  return '<div class="table-wrap" style="overflow:auto;max-height:calc(100vh - 260px);"><table class="data-table" style="font-size:12px;"><thead style="position:sticky;top:0;z-index:2;background:var(--ink);"><tr><th>Entity</th><th>RC</th>' + thMonths + moveTh + '</tr></thead><tbody>' + bodyRows + '</tbody></table></div>';
 }
 
 function openMoaRcBreakdown(cell) {
