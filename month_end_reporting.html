@@ -3291,16 +3291,25 @@ function buildMajMovPresTab() {
   // Split the "other" (non-visible) MSL rows by MKT_SUB_SEG_DESC into three buckets
   const mslOtherBreakdown = (visibleKeys) => {
     let sme = 0, ind = 0, rest = 0;
+    let smeMaxAbs = 0, indMaxAbs = 0;
     allResults.forEach(r => {
       if (r.ENTITY !== '003') return;
       if (visibleKeys.has(`${r.CIF_NO}||${r.ENTITY}`)) return;
       const seg = String(r.MKT_SUB_SEG_DESC||'').trim().toUpperCase();
       const v = r.ECL_PNL_FTM || 0;
-      if (seg === 'CFS-SME') sme += v;
-      else if (seg === 'CFS-IND') ind += v;
+      const av = Math.abs(v);
+      if (seg === 'CFS-SME') { sme += v; if (av > smeMaxAbs) smeMaxAbs = av; }
+      else if (seg === 'CFS-IND') { ind += v; if (av > indMaxAbs) indMaxAbs = av; }
       else rest += v;
     });
-    return { sme, ind, rest };
+    return { sme, ind, rest, smeMaxAbs, indMaxAbs };
+  };
+
+  // Ceiling (not round) so "individually below S$XXXk" holds even when max is 135k etc.
+  const fmtIndividuallyBelow = (maxAbs) => {
+    if (!maxAbs || maxAbs <= 0) return '';
+    const thresholdK = Math.ceil(maxAbs / 100000) * 100;
+    return `Individually below S$${thresholdK}k`;
   };
 
   // Shared colgroup so MBS & MSL column widths are aligned. Extra narrow first column for the remove button.
@@ -3386,7 +3395,7 @@ function buildMajMovPresTab() {
     if (entityCode === '003') {
       // MSL: split "other" into 3 rows by MKT_SUB_SEG_DESC
       const visibleKeys = new Set(rows.map(r => `${r.CIF_NO}||${r.ENTITY}`));
-      const { sme, ind, rest } = mslOtherBreakdown(visibleKeys);
+      const { sme, ind, rest, smeMaxAbs, indMaxAbs } = mslOtherBreakdown(visibleKeys);
       const smeDisp = toDisplay(sme);
       const indDisp = toDisplay(ind);
       // "Other non-retail" is the balancing figure in Million view; in Whole view use computed value
@@ -3394,6 +3403,9 @@ function buildMajMovPresTab() {
         ? parseFloat((grandTotalDisp - subtotalDispRounded - smeDisp - indDisp).toFixed(2))
         : toDisplay(rest);
       const smeColor = colorFor(smeDisp), indColor = colorFor(indDisp), restColor = colorFor(restDisp);
+      const smeRemark = fmtIndividuallyBelow(smeMaxAbs);
+      const indRemark = fmtIndividuallyBelow(indMaxAbs);
+      const remarkCell = (text) => `<td style="padding:6px 10px;font-size:10px;color:var(--ink3);font-style:italic;white-space:nowrap">${text || ''}</td>`;
       footerHtml = `
         <tr style="border-top:2px solid var(--border);background:var(--paper2);">
           <td></td>
@@ -3405,13 +3417,15 @@ function buildMajMovPresTab() {
           <td></td>
           <td colspan="4" style="padding:6px 10px;font-size:11px;color:var(--ink2)">Movement from RSME borrowers</td>
           <td class="mono-val" style="padding:6px 10px;text-align:right;font-weight:500;${smeColor}">${fmtDisp(smeDisp)}</td>
-          <td colspan="6"></td>
+          ${remarkCell(smeRemark)}
+          <td colspan="5"></td>
         </tr>
         <tr style="background:var(--paper);">
           <td></td>
           <td colspan="4" style="padding:6px 10px;font-size:11px;color:var(--ink2)">Movement from individual borrowers</td>
           <td class="mono-val" style="padding:6px 10px;text-align:right;font-weight:500;${indColor}">${fmtDisp(indDisp)}</td>
-          <td colspan="6"></td>
+          ${remarkCell(indRemark)}
+          <td colspan="5"></td>
         </tr>
         <tr style="background:var(--paper);">
           <td></td>
@@ -3563,13 +3577,15 @@ function exportMajMov() {
         // MSL: split "other" into 3 rows by MKT_SUB_SEG_DESC
         const visibleKeys = new Set(rows.map(r => `${r.CIF_NO}||${r.ENTITY}`));
         let smeRaw = 0, indRaw = 0, restRaw = 0;
+        let smeMaxAbs = 0, indMaxAbs = 0;
         results.forEach(r => {
           if (r.ENTITY !== '003') return;
           if (visibleKeys.has(`${r.CIF_NO}||${r.ENTITY}`)) return;
           const seg = String(r.MKT_SUB_SEG_DESC||'').trim().toUpperCase();
           const v = r.ECL_PNL_FTM || 0;
-          if (seg === 'CFS-SME') smeRaw += v;
-          else if (seg === 'CFS-IND') indRaw += v;
+          const av = Math.abs(v);
+          if (seg === 'CFS-SME') { smeRaw += v; if (av > smeMaxAbs) smeMaxAbs = av; }
+          else if (seg === 'CFS-IND') { indRaw += v; if (av > indMaxAbs) indMaxAbs = av; }
           else restRaw += v;
         });
         const smeDisp = toDisplay(smeRaw);
@@ -3577,8 +3593,9 @@ function exportMajMov() {
         const restDisp = isMillion
           ? parseFloat((grandTotalDisp - subtotalDisp - smeDisp - indDisp).toFixed(2))
           : toDisplay(restRaw);
-        out.push({ 'CIF NO': '', 'CIF NAME': 'Movement from RSME borrowers', 'ECL P&L FTM': smeDisp });
-        out.push({ 'CIF NO': '', 'CIF NAME': 'Movement from individual borrowers', 'ECL P&L FTM': indDisp });
+        const fmtIndBelow = (maxAbs) => (!maxAbs || maxAbs <= 0) ? '' : `Individually below S$${Math.ceil(maxAbs / 100000) * 100}k`;
+        out.push({ 'CIF NO': '', 'CIF NAME': 'Movement from RSME borrowers', 'ECL P&L FTM': smeDisp, 'REMARK': fmtIndBelow(smeMaxAbs) });
+        out.push({ 'CIF NO': '', 'CIF NAME': 'Movement from individual borrowers', 'ECL P&L FTM': indDisp, 'REMARK': fmtIndBelow(indMaxAbs) });
         out.push({ 'CIF NO': '', 'CIF NAME': isMillion ? 'Movement from other non-retail borrowers (balancing)' : 'Movement from other non-retail borrowers', 'ECL P&L FTM': restDisp });
       } else {
         const otherDisp = parseFloat((grandTotalDisp - subtotalDisp).toFixed(2));
@@ -3973,8 +3990,16 @@ function renderQueryUpload(container) {
 }
 
 function renderQuerySearch(container) {
+  const queryRdl = S.rdl_post.length ? S.rdl_post : S.rdl_pre;
+  const rdlRow = queryRdl.find(r => r.PROC_DTE);
+  const rdlDate = rdlRow ? parseSasDate(rdlRow.PROC_DTE) : null;
+  const reportingMonth = fmtMMMyyyy(rdlDate);
+  const kpiHtml = reportingMonth
+    ? `<div class="kpi-strip"><div class="kpi-card"><div class="kpi-label">Reporting Month</div><div class="kpi-value">${reportingMonth}</div></div></div>`
+    : '';
   container.innerHTML = `
     <div class="results-view" style="display:flex;flex-direction:column;overflow:hidden;">
+      ${kpiHtml}
       <div class="table-toolbar">
         <label style="font-size:12px;font-weight:600;white-space:nowrap;color:var(--ink);">Account No.</label>
         <input type="text" id="acc-input" placeholder="e.g. 0012345678"
@@ -3982,7 +4007,7 @@ function renderQuerySearch(container) {
           onkeydown="if(event.key==='Enter') runQuery()">
         <button class="btn btn-primary" onclick="runQuery()">Search</button>
         <div style="margin-left:auto;">
-          
+
         </div>
       </div>
       <div id="query-result-area" style="flex:1;overflow:auto;padding:12px 20px;display:flex;flex-direction:column;gap:12px;">
