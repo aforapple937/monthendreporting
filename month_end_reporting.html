@@ -5417,10 +5417,10 @@ function renderMoa() {
 
   var saveBtnStyle = moaState.dirty ? 'background:var(--red);color:#fff;border-color:var(--red);' : '';
   var saveBtnLabel = moaState.dirty ? 'Save *' : 'Save';
-  var toolbarRow1 = '<div class="table-toolbar" style="border-bottom:none;padding-bottom:6px;"><button class="btn btn-primary btn-gold" onclick="openMoaModal(null)" title="New MOA (N)">+ New MOA</button><button class="btn btn-sm" onclick="openMoaDuplicateModal()">Roll-forward MOA</button><button class="btn btn-sm" style="' + saveBtnStyle + '" onclick="exportMoaJson()" title="' + (moaState.dirty?'Unsaved changes — click to save (S)':'No unsaved changes — click to save (S)') + '">' + saveBtnLabel + '</button><div style="margin-left:auto;">' + journalExportBtn + '</div></div>';
   var expandBtnLabel = moaState.allCollapsed ? 'Expand All' : 'Collapse All';
-  var expandAllBtn = view === 'type' ? '<button class="btn btn-sm" id="moa-expand-all-btn" style="margin-left:4px;" onclick="moaToggleAllBreakdowns()" title="Expand/Collapse all breakdowns (X)">' + expandBtnLabel + '</button>' : '';
-  var toolbarRow2 = '<div class="table-toolbar" style="border-top:none;padding-top:6px;">' + viewDropdownBtn + journalBtn + expandAllBtn + '</div>';
+  var expandAllBtn = view === 'type' ? '<button class="btn btn-sm" id="moa-expand-all-btn" onclick="moaToggleAllBreakdowns()" title="Expand/Collapse all breakdowns (X)">' + expandBtnLabel + '</button>' : '';
+  var toolbarRow1 = '<div class="table-toolbar" style="border-bottom:none;padding-bottom:6px;"><button class="btn btn-primary btn-gold" onclick="openMoaModal(null)" title="New MOA (N)">+ New MOA</button><button class="btn btn-sm" onclick="openMoaDuplicateModal()">Roll-forward MOA</button><button class="btn btn-sm" style="' + saveBtnStyle + '" onclick="exportMoaJson()" title="' + (moaState.dirty?'Unsaved changes — click to save (S)':'No unsaved changes — click to save (S)') + '">' + saveBtnLabel + '</button>' + expandAllBtn + '<div style="margin-left:auto;">' + journalExportBtn + '</div></div>';
+  var toolbarRow2 = '<div class="table-toolbar" style="border-top:none;padding-top:6px;">' + viewDropdownBtn + journalBtn + '</div>';
 
   container.innerHTML = '<div class="results-view" style="display:flex;flex-direction:column;overflow:hidden;">' + kpiHtml + toolbarRow1 + toolbarRow2 + '<div style="flex:1;overflow:auto;padding:12px 20px;">' + (view !== 'journal' ? incompleteHtml : '') + mainHtml + '</div></div>';
   if (view === 'type' && moaState.allCollapsed) applyMoaExpandState();
