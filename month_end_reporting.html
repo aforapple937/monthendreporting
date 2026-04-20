@@ -988,6 +988,61 @@
     background: #0A0A0A; color: #FFFFFF; border-color: #0A0A0A; font-weight: 500;
   }
   .fd-panel.fd-design .fd-foot button.primary:hover { background: #3A3A38; }
+
+  /* ============================================================
+     MANAGEMENT OVERLAY — design-handoff (reuses .ptb-v2 scope)
+     Mirrors /mbb/project/Dashboard.html top-panel design.
+     ============================================================ */
+  .ptb-v2 .ov-month-picker {
+    display: flex; gap: 2px;
+    border: 1px solid var(--d-line); border-radius: 8px;
+    padding: 3px; background: var(--d-bg);
+  }
+  .ptb-v2 .ov-month-picker.compact { padding: 2px; }
+  .ptb-v2 .ov-month-picker button {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 1px; min-width: 46px;
+    padding: 5px 8px; border: 0; border-radius: 5px;
+    background: transparent; color: var(--d-ink-3);
+    font: 500 11px/1.1 inherit; cursor: pointer;
+  }
+  .ptb-v2 .ov-month-picker button .mp-year {
+    font-size: 9.5px; color: var(--d-ink-4);
+    font-weight: 400; letter-spacing: 0.04em;
+  }
+  .ptb-v2 .ov-month-picker button:hover {
+    background: var(--d-line-2); color: var(--d-ink);
+  }
+  .ptb-v2 .ov-month-picker button.active {
+    background: var(--d-ink); color: var(--d-surface);
+  }
+  .ptb-v2 .ov-month-picker button.active .mp-year {
+    color: rgba(255,255,255,0.55);
+  }
+  .ptb-v2 .ov-month-picker button.compare-b {
+    background: #2d2d32; color: var(--d-surface);
+  }
+  .ptb-v2 .ov-month-picker button.compare-b .mp-year {
+    color: rgba(255,255,255,0.55);
+  }
+  .ptb-v2 .ov-compare-strip {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 12px; color: var(--d-ink-3);
+  }
+  .ptb-v2 .ov-strip-card {
+    background: var(--d-surface); border: 1px solid var(--d-line);
+    border-radius: var(--d-radius);
+    padding: 12px 16px; margin-bottom: 16px;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  .ptb-v2 .ov-secondary-toolbar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 16px; margin-bottom: 16px;
+    background: var(--d-surface); border: 1px solid var(--d-line);
+    border-radius: var(--d-radius);
+    flex-wrap: wrap;
+  }
+  .ptb-v2 .ov-secondary-toolbar .spacer { flex: 1; }
 </style>
 </head>
 <body>
@@ -2253,7 +2308,7 @@ const BK_PER_PAGE = 100;
 const loanReconState = { tbMapping: null, fifo: null, results: null, files: { tbMapping: false, fifo: false } };
 const ccyState = { data: null, loaded: false, results: null };
 const mtmState = { fvoci: null, fvociLoaded: false, disb: null, disbLoaded: false, prevFvoci: null, prevFvociLoaded: false, results: null };
-const moaState = { entries: [], dashView: 'type', journalMonth: '', journalRows: [], compareMonths: [] };
+const moaState = { entries: [], dashView: 'type', journalMonth: '', journalRows: [], compareMonths: [], mode: 'single', monthA: '', monthB: '' };
 const preTbState = { results: null, effectiveDate: null, statusFilter: 'all', filters: {}, page: 1 };
 const dqState = { DS: [], AD: [], LA: '', LB: '', CF: 'all', TH: 0.10, sort: 'psi', allExpanded: false };
 const DQ_PRODS = ['LN','CC','OD','GUARANTEE','INVMT','RATING'];
@@ -2598,14 +2653,12 @@ const RELOAD_HANDLERS = {
 };
 
 /** Populate the topbar reload button for a given view.
- *  Pre-Check TB has its own page-head Export button and routes Reload through
- *  the sidebar's Upload / Reload item, so we skip the topbar button there. */
+ *  The sidebar "Upload / Reload" item now handles reload for every pipeline,
+ *  so the topbar reload button is suppressed universally. */
 function setTopbarReload(viewName) {
   const actions = document.getElementById('topbar-actions');
   if (!actions) return;
-  const handler = RELOAD_HANDLERS[viewName];
-  if (!handler || viewName === 'pretb' || viewName === 'reversal' || viewName === 'recon' || viewName === 'tb') { actions.innerHTML = ''; return; }
-  actions.innerHTML = `<button class="btn btn-sm" onclick="RELOAD_HANDLERS['${viewName}']()" title="Reload files for this pipeline (R)" style="display:flex;align-items:center;gap:4px;"><span style="font-size:13px">↻</span>Reload files</button>`;
+  actions.innerHTML = '';
 }
 
 /** Per-view action handlers for keyboard shortcuts */
@@ -7105,46 +7158,129 @@ function renderMoa() {
   document.getElementById('topbar-subtitle').textContent = 'MOA Dashboard';
   var container = document.getElementById('view-moa'), entries = moaState.entries;
   var seen = {}, allMonths = []; entries.forEach(function(e){ if(e.month && !seen[e.month]){ seen[e.month]=1; allMonths.push(e.month); } }); allMonths.sort();
-  if (!moaState.dashFrom && allMonths.length > 0) { moaState.dashFrom = allMonths[Math.max(0, allMonths.length - 6)]; moaState.dashTo = allMonths[allMonths.length - 1]; }
-  // Clamp dashFrom/dashTo to available months if they no longer exist
-  if (allMonths.length) {
-    if (moaState.dashTo && allMonths.indexOf(moaState.dashTo) < 0) moaState.dashTo = allMonths[allMonths.length - 1];
-    if (moaState.dashFrom && allMonths.indexOf(moaState.dashFrom) < 0) moaState.dashFrom = allMonths[0];
+
+  // Default month selections
+  var latestMonth = allMonths.length ? allMonths[allMonths.length - 1] : null;
+  if (!moaState.mode) moaState.mode = 'single';
+  if (!moaState.monthA || (allMonths.length && allMonths.indexOf(moaState.monthA) < 0)) moaState.monthA = latestMonth || '';
+  if (moaState.mode === 'compare') {
+    if (!moaState.monthB || allMonths.indexOf(moaState.monthB) < 0 || moaState.monthB === moaState.monthA) {
+      moaState.monthB = allMonths.length > 1 ? allMonths[allMonths.length - 2] : (allMonths[0] || '');
+    }
   }
-  var visMonths = allMonths.filter(function(m){ return (!moaState.dashFrom || m >= moaState.dashFrom) && (!moaState.dashTo || m <= moaState.dashTo); });
+
+  // Derive visMonths and compareMonths from mode
+  var visMonths, compareMonths = [];
+  if (moaState.mode === 'compare' && moaState.monthA && moaState.monthB) {
+    var a = moaState.monthA, b = moaState.monthB;
+    var pair = [a, b].sort();
+    visMonths = pair;
+    compareMonths = pair.slice();
+    moaState.dashFrom = pair[0]; moaState.dashTo = pair[1];
+  } else {
+    visMonths = moaState.monthA ? [moaState.monthA] : [];
+    moaState.dashFrom = moaState.monthA; moaState.dashTo = moaState.monthA;
+  }
+  moaState.compareMonths = compareMonths;
+
   if (!moaState.dashView) moaState.dashView = 'type';
-  var view = moaState.dashView, aStyle = 'background:var(--ink);color:#fff;border-color:var(--ink)', iStyle = '';
+  var view = moaState.dashView;
   var incomplete = entries.map(function(e,i){ return {e:e,i:i,missing:moaGetMissingFields(e)}; }).filter(function(x){ return x.missing.length>0; });
   var incompleteHtml = '';
   if (incomplete.length) { var irows = incomplete.map(function(x){ return '<tr style="cursor:pointer" onclick="openMoaModal(' + x.i + ')" title="Click to edit"><td style="padding:5px 10px;font-size:11px">' + (x.e.entity||'—') + '</td><td style="padding:5px 10px;font-size:11px">' + (x.e.month||'—') + '</td><td style="padding:5px 10px;font-size:11px">' + (x.e.type||'—') + '</td><td style="padding:5px 10px;font-size:11px;color:var(--red)">' + x.missing.join(', ') + '</td></tr>'; }).join(''); incompleteHtml = '<div style="background:var(--red-bg);border:1px solid #f5c4c0;border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;"><div style="font-size:11px;font-weight:600;color:var(--red);margin-bottom:6px;">&#9888; ' + incomplete.length + ' entr' + (incomplete.length===1?'y':'ies') + ' with missing required fields — click to edit</div><div style="overflow:auto;max-height:120px;"><table class="data-table" style="font-size:11px;"><thead><tr><th>Entity</th><th>Month</th><th>Type</th><th>Missing Fields</th></tr></thead><tbody>' + irows + '</tbody></table></div></div>'; }
-
-  // Format month strings YYYY-MM as "MMM YYYY"
-  function fmtMoaMonth(m) { if (!m) return '—'; var parts = m.split('-'); if (parts.length !== 2) return m; var mi = parseInt(parts[1])-1; if (mi < 0 || mi > 11 || !MONTH_NAMES[mi]) return m; return MONTH_NAMES[mi] + ' ' + parts[0]; }
-  var latestMonth = allMonths.length ? allMonths[allMonths.length - 1] : null;
-  var fromLabel = fmtMoaMonth(moaState.dashFrom), toLabel = fmtMoaMonth(moaState.dashTo);
-  var kpiHtml = '<div class="kpi-strip"><div class="kpi-card kpi-clickable" onclick="openMoaRangePopup(this)"><div class="kpi-label">Reporting Month</div><div class="kpi-value">' + (latestMonth ? fmtMoaMonth(latestMonth) : '—') + '</div></div></div>';
 
   var mainHtml;
   if (view === 'type') { var groupKeys = [], groupMap = new Map(); entries.forEach(function(e) { var gk = (e.entity||'') + '||' + (e.type||''); if (!groupMap.has(gk)) { groupMap.set(gk, []); groupKeys.push(gk); } groupMap.get(gk).push(e); }); groupKeys.sort(function(a,b){ var ap=a.split('||'), bp=b.split('||'); if(ap[0]!==bp[0]) return ap[0]==='MBB-SG'?-1:1; return ap[1].localeCompare(bp[1]); }); mainHtml = buildMoaDashHtml(entries, visMonths, groupKeys, groupMap); }
   else if (view === 'journal') { moaState.journalMonth = moaState.dashTo; mainHtml = buildMoaJournalHtml(entries, allMonths); }
   else { mainHtml = buildMoaRcHtml(entries, visMonths, view === 'rcMgt' ? 'rcMgt' : 'rcTb'); }
 
-  var viewLabels = { type: 'By Type', rcMgt: 'By LOB', rcTb: 'By RC' };
-  var viewDropdownBtn = '<div style="position:relative;display:inline-block"><div style="display:inline-flex;border:1px solid ' + (view!=='journal'?'var(--ink)':'var(--border)') + ';border-radius:var(--radius);overflow:hidden;' + (view!=='journal'?'background:var(--ink);color:#fff;':'background:#fff;color:var(--ink);') + 'font-family:var(--sans);font-size:11px;cursor:pointer;"><span onclick="moaSetView(\'type\')" title="Switch to By Type" style="padding:5px 10px;">View: ' + (viewLabels[view]||'By Type') + '</span><span onclick="moaToggleViewDropdown(this.parentNode.parentNode)" title="Change view" style="padding:5px 8px;border-left:1px solid ' + (view!=='journal'?'rgba(255,255,255,0.2)':'var(--border)') + ';font-size:10px;">&#9660;</span></div><div id="moa-view-dropdown" style="display:none;position:absolute;top:100%;left:0;margin-top:4px;background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 4px 12px rgba(0,0,0,0.08);z-index:100;min-width:120px;">' + Object.keys(viewLabels).map(function(k){ return '<div style="padding:7px 12px;cursor:pointer;font-size:11px;' + (view===k?'background:var(--paper2);font-weight:600':'') + '" onmouseover="this.style.background=\'var(--paper2)\'" onmouseout="this.style.background=\'' + (view===k?'var(--paper2)':'transparent') + '\'" onclick="moaSetView(\'' + k + '\');document.getElementById(\'moa-view-dropdown\').style.display=\'none\'">' + viewLabels[k] + '</div>'; }).join('') + '</div></div>';
-  var journalBtn = '<button class="btn btn-sm" style="margin-left:4px;' + (view==='journal'?aStyle:iStyle) + '" onclick="moaSetView(\'journal\')">Journal Entries</button>';
-  var journalExportBtn = view === 'journal' ? '<button class="btn btn-sm" onclick="exportMoaJournalXlsx()">Export XLSX</button>' : '<button class="btn btn-sm" onclick="exportMoaXlsx()">Export XLSX</button>';
+  // ===== Top panel (design-file layout) =====
+  var pageHeadHtml = ''
+    + '<div class="ptb-page-head">'
+    +   '<div class="ptb-page-title"><h1>Management Overlay</h1></div>'
+    +   '<div class="ptb-page-actions">'
+    +     '<div class="ptb-seg" id="moa-mode-seg">'
+    +       '<button class="' + (moaState.mode==='single'?'active':'') + '" onclick="moaSetMode(\'single\')">Single month</button>'
+    +       '<button class="' + (moaState.mode==='compare'?'active':'') + '" onclick="moaSetMode(\'compare\')">Compare 2 months</button>'
+    +     '</div>'
+    +     '<button class="ptb-btn" onclick="openMoaDuplicateModal()" title="Roll-forward overlays from one month to another"><svg><use href="#i-refresh"/></svg>Roll-forward</button>'
+    +     '<button class="ptb-btn primary" onclick="openMoaModal(null)" title="New MOA (N)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>New overlay</button>'
+    +   '</div>'
+    + '</div>';
 
-  var saveBtnStyle = moaState.dirty ? 'background:var(--red);color:#fff;border-color:var(--red);' : '';
-  var saveBtnLabel = moaState.dirty ? 'Save *' : 'Save';
+  // ===== Month picker strip =====
+  function mpBtn(m, role) {
+    var parts = m.split('-'); var mi = parseInt(parts[1])-1;
+    var label = (MONTH_NAMES[mi] || m).slice(0,3);
+    var yr = parts[0];
+    var cls = '';
+    if (role === 'A' && m === moaState.monthA) cls = 'active';
+    else if (role === 'B' && m === moaState.monthB) cls = 'compare-b';
+    var fn = role === 'A' ? 'moaPickMonthA' : 'moaPickMonthB';
+    return '<button class="' + cls + '" onclick="' + fn + '(\'' + m + '\')"><span>' + label + '</span><span class="mp-year">' + yr + '</span></button>';
+  }
+  var mpA = allMonths.map(function(m){ return mpBtn(m, 'A'); }).join('');
+  var mpB = allMonths.map(function(m){ return mpBtn(m, 'B'); }).join('');
+  var compareStripHtml = moaState.mode === 'compare'
+    ? '<div class="ov-compare-strip"><span>→ Compare with</span><div class="ov-month-picker compact">' + mpB + '</div></div>'
+    : '';
+  var monthStripHtml = allMonths.length
+    ? '<div class="ov-strip-card"><div class="ov-month-picker">' + mpA + '</div><div style="flex:1"></div>' + compareStripHtml + '</div>'
+    : '';
+
+  // ===== Secondary toolbar (view modes + save/export/expand) =====
+  var viewBtn = function(k, label) {
+    var active = (view === k);
+    return '<button class="ptb-btn' + (active?' ptb-btn-active':'') + '" onclick="moaSetView(\'' + k + '\')">' + label + '</button>';
+  };
   var expandBtnLabel = moaState.allCollapsed ? 'Expand All' : 'Collapse All';
-  var expandAllBtn = view === 'type' ? '<button class="btn btn-sm" id="moa-expand-all-btn" onclick="moaToggleAllBreakdowns()" title="Expand/Collapse all breakdowns (X)">' + expandBtnLabel + '</button>' : '';
-  var toolbarRow1 = '<div class="table-toolbar" style="border-bottom:none;padding-bottom:6px;"><button class="btn btn-primary btn-gold" onclick="openMoaModal(null)" title="New MOA (N)">+ New MOA</button><button class="btn btn-sm" onclick="openMoaDuplicateModal()">Roll-forward MOA</button><button class="btn btn-sm" style="' + saveBtnStyle + '" onclick="exportMoaJson()" title="' + (moaState.dirty?'Unsaved changes — click to save (S)':'No unsaved changes — click to save (S)') + '">' + saveBtnLabel + '</button>' + expandAllBtn + '<div style="margin-left:auto;">' + journalExportBtn + '</div></div>';
-  var toolbarRow2 = '<div class="table-toolbar" style="border-top:none;padding-top:6px;">' + viewDropdownBtn + journalBtn + '</div>';
+  var expandAllBtn = view === 'type' ? '<button class="ptb-btn" id="moa-expand-all-btn" onclick="moaToggleAllBreakdowns()" title="Expand/Collapse all breakdowns (X)">' + expandBtnLabel + '</button>' : '';
+  var saveBtnStyle = moaState.dirty ? 'background:var(--d-neg);color:#fff;border-color:var(--d-neg);' : '';
+  var saveBtnLabel = moaState.dirty ? 'Save *' : 'Save';
+  var journalExportBtn = view === 'journal'
+    ? '<button class="ptb-btn" onclick="exportMoaJournalXlsx()"><svg><use href="#i-download"/></svg>Export XLSX</button>'
+    : '<button class="ptb-btn" onclick="exportMoaXlsx()"><svg><use href="#i-download"/></svg>Export XLSX</button>';
+  var secondaryToolbarHtml = ''
+    + '<div class="ov-secondary-toolbar">'
+    +   viewBtn('type', 'By Type')
+    +   viewBtn('rcMgt', 'By LOB')
+    +   viewBtn('rcTb', 'By RC')
+    +   viewBtn('journal', 'Journal Entries')
+    +   expandAllBtn
+    +   '<div class="spacer"></div>'
+    +   '<button class="ptb-btn" style="' + saveBtnStyle + '" onclick="exportMoaJson()" title="' + (moaState.dirty?'Unsaved changes — click to save (S)':'No unsaved changes — click to save (S)') + '">' + saveBtnLabel + '</button>'
+    +   journalExportBtn
+    + '</div>';
 
-  container.innerHTML = '<div class="results-view" style="display:flex;flex-direction:column;overflow:hidden;">' + kpiHtml + toolbarRow1 + toolbarRow2 + '<div style="flex:1;overflow:auto;padding:12px 20px;">' + (view !== 'journal' ? incompleteHtml : '') + mainHtml + '</div></div>';
+  container.innerHTML = '<div class="ptb-v2">'
+    + pageHeadHtml
+    + monthStripHtml
+    + secondaryToolbarHtml
+    + '<div style="flex:1;overflow:auto;">'
+    + (view !== 'journal' ? incompleteHtml : '')
+    + mainHtml
+    + '</div>'
+    + '</div>';
   if (view === 'type' && moaState.allCollapsed) applyMoaExpandState();
   updateNavStatus('moa');
 }
+
+function moaSetMode(mode) {
+  if (moaState.mode === mode) return;
+  moaState.mode = mode;
+  if (mode === 'compare') {
+    var entries = moaState.entries, seen = {}, allMonths = [];
+    entries.forEach(function(e){ if (e.month && !seen[e.month]) { seen[e.month] = 1; allMonths.push(e.month); } });
+    allMonths.sort();
+    if (!moaState.monthB || moaState.monthB === moaState.monthA || allMonths.indexOf(moaState.monthB) < 0) {
+      var idx = allMonths.indexOf(moaState.monthA);
+      moaState.monthB = idx > 0 ? allMonths[idx - 1] : (allMonths.length > 1 ? allMonths[allMonths.length - 2] : allMonths[0] || '');
+    }
+  }
+  renderMoa();
+}
+function moaPickMonthA(m) { moaState.monthA = m; if (moaState.mode === 'compare' && moaState.monthB === m) { var entries = moaState.entries, seen = {}, all = []; entries.forEach(function(e){ if(e.month&&!seen[e.month]){seen[e.month]=1;all.push(e.month);} }); all.sort(); var idx = all.indexOf(m); moaState.monthB = idx > 0 ? all[idx-1] : all[idx+1] || ''; } renderMoa(); }
+function moaPickMonthB(m) { if (m === moaState.monthA) return; moaState.monthB = m; renderMoa(); }
 
 /** Toggle the view-picker dropdown next to 'By Type / By LOB / By RC' */
 function moaToggleViewDropdown(btn) {
