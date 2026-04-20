@@ -640,6 +640,178 @@
   .fd-foot {
     padding: 6px 8px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 6px; flex-shrink: 0;
   }
+
+  /* ============================================================
+     PRE-CHECK TB — design-handoff enhancements (scoped to .ptb-v2)
+     ============================================================ */
+  .ptb-v2 { padding: 0; }
+  .ptb-page-head {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: 24px; padding: 20px 24px 16px;
+    background: #fff; border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .ptb-page-head h1 {
+    margin: 0 0 4px; font-size: 22px; letter-spacing: -0.02em; font-weight: 600;
+  }
+  .ptb-meta {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 12px; color: var(--ink3);
+  }
+  .ptb-meta b {
+    font-family: var(--mono); color: var(--ink2); font-weight: 500;
+  }
+  .ptb-page-actions { display: flex; align-items: center; gap: 8px; }
+  .ptb-export-btn {
+    background: var(--gold); color: var(--ink); border-color: var(--gold);
+    font-weight: 600; padding: 7px 14px; border-radius: 8px;
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid var(--gold);
+    font-size: 12px; cursor: pointer; font-family: var(--sans);
+  }
+  .ptb-export-btn:hover { background: var(--gold-dark); border-color: var(--gold-dark); }
+  .ptb-export-btn svg { width: 13px; height: 13px; }
+
+  .ptb-kpi-wrap {
+    padding: 16px 24px 0;
+    background: var(--paper);
+  }
+  .ptb-kpi-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .ptb-kpi-label {
+    font-size: 11px; color: var(--ink3);
+    text-transform: uppercase; letter-spacing: 0.1em; font-weight: 500;
+  }
+  .ptb-kpi-value {
+    display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap;
+    font-family: var(--mono); font-size: 22px; letter-spacing: -0.02em; font-weight: 600;
+  }
+  .ptb-kpi-value .dim {
+    color: var(--ink3); font-family: var(--sans); font-size: 13px; font-weight: 400;
+  }
+  .ptb-kpi-value .ptb-kpi-sep { color: var(--ink4); font-weight: 300; margin: 0 4px; }
+  .ptb-kpi-footline { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--ink3); }
+  .ptb-bar-track { flex: 1; height: 6px; background: var(--paper2); border-radius: 3px; overflow: hidden; }
+  .ptb-bar-fill { height: 100%; background: var(--gold); border-radius: 3px; transition: width 0.2s; }
+
+  .ptb-toolbar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 24px; background: var(--paper);
+    flex-shrink: 0;
+  }
+  .ptb-seg {
+    display: flex; background: #fff; border: 1px solid var(--border);
+    border-radius: 8px; padding: 3px;
+  }
+  .ptb-seg button {
+    border: 0; background: transparent; padding: 5px 12px; border-radius: 6px;
+    font-size: 12px; color: var(--ink3); cursor: pointer; font-weight: 500;
+    font-family: var(--sans);
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .ptb-seg button:hover { color: var(--ink); }
+  .ptb-seg button.active { background: var(--ink); color: var(--gold); }
+  .ptb-seg .ptb-seg-count { font-family: var(--mono); font-size: 11px; }
+  .ptb-seg button:not(.active) .ptb-seg-count.neutral { color: var(--ink4); }
+
+  /* STATUS CHIP (for the new Status column) */
+  .status-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 10.5px; font-weight: 500; letter-spacing: 0.02em;
+    padding: 3px 8px 3px 7px; border-radius: 999px;
+    background: var(--paper2); border: 1px solid var(--border);
+    color: var(--ink2); white-space: nowrap;
+  }
+  .status-chip .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+  .status-chip.break {
+    background: var(--red-bg);
+    border-color: #f5c4c0;
+    color: var(--red);
+  }
+  .status-chip.break .dot { background: var(--red); }
+  .status-chip.matched {
+    background: var(--green-bg);
+    border-color: #b7e0c8;
+    color: var(--green);
+  }
+  .status-chip.matched .dot { background: var(--green); }
+
+  /* DESIGN-STYLE FILTER POPOVER (used by Pre-Check TB column headers) */
+  .fd-panel.fd-design {
+    width: 260px; max-height: 380px; padding: 0;
+    border-radius: 8px; overflow: hidden;
+    box-shadow: 0 12px 32px -8px rgba(0,0,0,0.15), 0 2px 8px -2px rgba(0,0,0,0.08);
+  }
+  .fd-panel.fd-design .fd-head {
+    padding: 10px 12px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .fd-panel.fd-design .fd-head .fd-title {
+    font-size: 10.5px; font-weight: 500; color: var(--ink3);
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .fd-panel.fd-design .fd-head .fd-clear {
+    font-size: 11px; color: var(--ink3); cursor: pointer;
+    border: 0; background: none; padding: 2px 4px;
+    font-family: var(--sans);
+  }
+  .fd-panel.fd-design .fd-head .fd-clear:hover { color: var(--ink); }
+  .fd-panel.fd-design .fd-head .fd-clear:disabled { opacity: 0.35; cursor: default; }
+  .fd-panel.fd-design .fd-search {
+    padding: 8px 12px; border-bottom: 1px solid var(--border);
+  }
+  .fd-panel.fd-design .fd-search input {
+    width: 100%; border: 1px solid var(--border); border-radius: 5px;
+    padding: 6px 9px; font-size: 12px; font-family: var(--sans); outline: 0;
+    background: var(--paper);
+  }
+  .fd-panel.fd-design .fd-search input:focus { border-color: var(--ink3); }
+  .fd-panel.fd-design .fd-list {
+    max-height: 240px; overflow-y: auto; padding: 4px 0;
+  }
+  .fd-panel.fd-design .fd-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 12px; font-size: 12px; color: var(--ink2); cursor: pointer;
+  }
+  .fd-panel.fd-design .fd-item:hover { background: var(--paper2); }
+  .fd-panel.fd-design .fd-item input[type=checkbox] { margin: 0; cursor: pointer; accent-color: var(--gold); }
+  .fd-panel.fd-design .fd-item label {
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    cursor: pointer;
+  }
+  .fd-panel.fd-design .fd-item .fd-count {
+    font-family: var(--mono); font-size: 10.5px; color: var(--ink4);
+  }
+  .fd-panel.fd-design .fd-foot {
+    padding: 8px 12px; border-top: 1px solid var(--border);
+    display: flex; justify-content: space-between; gap: 8px;
+  }
+  .fd-panel.fd-design .fd-foot button {
+    font-size: 11px; padding: 5px 12px; border: 1px solid var(--border);
+    border-radius: 5px; background: var(--paper); cursor: pointer;
+    font-family: var(--sans); color: var(--ink2);
+  }
+  .fd-panel.fd-design .fd-foot button:hover { background: var(--paper2); }
+  .fd-panel.fd-design .fd-foot button.primary {
+    background: var(--ink); color: #fff; border-color: var(--ink); font-weight: 500;
+  }
+  .fd-panel.fd-design .fd-foot button.primary:hover { background: var(--ink2); }
+
+  /* PTB filterable column headers — slightly softer design-style treatment */
+  .ptb-v2 table.data-table thead th.th-filterable {
+    position: relative;
+  }
+  .ptb-v2 table.data-table thead th.th-filtered {
+    background: #6b5010 !important;
+  }
+  .ptb-v2 table.data-table tbody tr[data-status="break"] { background: var(--red-bg); }
+  .ptb-v2 table.data-table tbody tr[data-status="break"]:hover { background: #fbe7e5; }
+  .ptb-v2 table.data-table tbody tr[data-status="break"] td { color: var(--ink); }
 </style>
 </head>
 <body>
@@ -668,6 +840,7 @@
   <symbol id="i-calc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 12h2M12 12h2M16 12h0M8 16h2M12 16h2M16 16h0"/></symbol>
   <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
   <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20V8m0 0l-4 4m4-4l4 4M4 4h16"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16"/></symbol>
 </svg>
 
 <div id="app">
@@ -1434,6 +1607,108 @@ function fdOpen(triggerEl, allValues, currentFilter, onApply, counts) {
   }, 10);
 }
 
+/** Design-style filter popover. Renders with a titled header, dynamic counts,
+ *  search, and a Clear / Done footer — modelled after the design handoff. */
+function fdOpenDesign(triggerEl, allValues, currentFilter, colLabel, counts, onApply) {
+  fdClose();
+  const rect = triggerEl.getBoundingClientRect();
+  const panel = document.createElement('div');
+  panel.className = 'fd-panel fd-design';
+  let top = rect.bottom + 4, left = rect.left;
+  if (top + 380 > window.innerHeight) top = Math.max(4, rect.top - 382);
+  if (left + 260 > window.innerWidth) left = window.innerWidth - 264;
+  panel.style.top = top + 'px';
+  panel.style.left = left + 'px';
+
+  const cf = currentFilter || { text: '', selected: null };
+  let searchText = cf.text || '';
+  let workingSet = cf.selected ? new Set(cf.selected) : null;
+
+  const isChecked = v => workingSet === null || workingSet.has(v);
+  const hasSelection = () => workingSet !== null;
+
+  function renderList() {
+    const listEl = panel.querySelector('.fd-list');
+    if (!listEl) return;
+    const q = searchText.toLowerCase();
+    const filtered = q ? allValues.filter(v => v.toLowerCase().includes(q)) : allValues;
+    const showing = filtered.slice(0, 300);
+    listEl.innerHTML = showing.length === 0
+      ? `<div style="padding:16px 12px;font-size:12px;color:var(--ink4);font-style:italic;text-align:center;">No values</div>`
+      : showing.map(v => {
+          const checked = isChecked(v);
+          const count = counts && counts.has(v) ? counts.get(v) : 0;
+          const safeV = v.replace(/"/g,'&quot;');
+          return `<div class="fd-item" data-val="${safeV}">
+            <input type="checkbox" ${checked ? 'checked' : ''}>
+            <label title="${safeV}">${v || '(blank)'}</label>
+            <span class="fd-count">${count.toLocaleString()}</span>
+          </div>`;
+        }).join('') + (filtered.length > 300 ? `<div style="padding:6px 12px;font-size:10px;color:var(--ink3);">${filtered.length - 300} more — type to narrow</div>` : '');
+
+    listEl.querySelectorAll('.fd-item').forEach(item => {
+      const cb = item.querySelector('input[type=checkbox]');
+      const val = item.dataset.val;
+      item.onclick = (e) => {
+        if (e.target !== cb) { cb.checked = !cb.checked; }
+        if (cb.checked) {
+          if (workingSet !== null) workingSet.add(val);
+        } else {
+          if (workingSet === null) workingSet = new Set(allValues);
+          workingSet.delete(val);
+        }
+        updateClearButton();
+      };
+    });
+  }
+
+  function updateClearButton() {
+    const btn = panel.querySelector('.fd-clear');
+    if (!btn) return;
+    btn.disabled = !hasSelection();
+  }
+
+  panel.innerHTML = `
+    <div class="fd-head">
+      <span class="fd-title">Filter · ${colLabel}</span>
+      <button class="fd-clear" ${hasSelection()?'':'disabled'}>Clear</button>
+    </div>
+    <div class="fd-search"><input type="text" placeholder="Search values…" value="${searchText.replace(/"/g,'&quot;')}"></div>
+    <div class="fd-list"></div>
+    <div class="fd-foot">
+      <button class="fd-all">Select all</button>
+      <button class="primary fd-done">Done</button>
+    </div>`;
+
+  document.body.appendChild(panel);
+  _fdPanel = panel;
+  renderList();
+
+  const searchInput = panel.querySelector('.fd-search input');
+  searchInput.focus();
+  searchInput.oninput = () => { searchText = searchInput.value; renderList(); };
+
+  panel.querySelector('.fd-clear').onclick = () => { workingSet = null; renderList(); updateClearButton(); };
+  panel.querySelector('.fd-all').onclick = () => { workingSet = null; renderList(); updateClearButton(); };
+  const applyAction = () => {
+    if (workingSet && workingSet.size >= allValues.length) workingSet = null;
+    onApply({ text: searchText, selected: workingSet });
+    fdClose();
+  };
+  panel.querySelector('.fd-done').onclick = applyAction;
+
+  _fdKeyHandler = (e) => {
+    if (!_fdPanel) return;
+    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); applyAction(); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fdClose(); }
+  };
+  document.addEventListener('keydown', _fdKeyHandler, true);
+  setTimeout(() => {
+    _fdCloseHandler = (e) => { if (!panel.contains(e.target) && e.target !== triggerEl) fdClose(); };
+    document.addEventListener('mousedown', _fdCloseHandler);
+  }, 10);
+}
+
 /** Get display label for a filter trigger button */
 function fdTriggerLabel(filter, allCount) {
   if (!filter) return 'All';
@@ -1797,7 +2072,7 @@ const loanReconState = { tbMapping: null, fifo: null, results: null, files: { tb
 const ccyState = { data: null, loaded: false, results: null };
 const mtmState = { fvoci: null, fvociLoaded: false, disb: null, disbLoaded: false, prevFvoci: null, prevFvociLoaded: false, results: null };
 const moaState = { entries: [], dashView: 'type', journalMonth: '', journalRows: [], compareMonths: [] };
-const preTbState = { results: null, effectiveDate: null };
+const preTbState = { results: null, effectiveDate: null, statusFilter: 'all', filters: {} };
 const dqState = { DS: [], AD: [], LA: '', LB: '', CF: 'all', TH: 0.10, sort: 'psi', allExpanded: false };
 const DQ_PRODS = ['LN','CC','OD','GUARANTEE','INVMT','RATING'];
 const glteState = { template: null, validation: null, isFiltered: false, results: [] };
@@ -2126,7 +2401,7 @@ function showView(name) {
 
 /** Reload action handlers for each view — called when user clicks the reload button in topbar */
 const RELOAD_HANDLERS = {
-  pretb:     () => { preTbState.results = null; preTbState.filters = {}; preTbState.onlyEntries = false; blockAutoRun('pretb'); renderPreTb(); },
+  pretb:     () => { preTbState.results = null; preTbState.filters = {}; preTbState.statusFilter = 'all'; preTbState.onlyEntries = false; blockAutoRun('pretb'); renderPreTb(); },
   loanrecon: () => { loanReconState.results = null; blockAutoRun('loanrecon'); renderLoanRecon(); },
   dq:        () => { if (typeof dqReload === 'function') dqReload(); },
   ccychange: () => { ccyState.results = null; blockAutoRun('ccychange'); renderCcyChange(); },
@@ -4530,11 +4805,7 @@ function renderPreTbUpload(container) {
   ];
   container.innerHTML = `
     <div class="upload-view">
-      <div class="upload-intro"><div class="upload-intro-title">Pre-Check TB</div><div class="upload-intro-desc">This step checks whether any period-to-date (PTD) entries have already been posted to the provisioning GL accounts before the month-end batch is run. If any accounts show a non-zero PTD value, prior postings may need to be reversed before proceeding.<br><br>
-<b>Procedure:</b><br>
-1. The tool reads the EGL Mapping to collect all relevant GL account numbers from 16 columns: ECL_OPENING, ECL_CHARGE, ECL_WRITEBACK, ECL_WRITEOFF, ECL_PNL_CHARGE, ECL_PNL_WRITEBACK, UWI_OPENING, UWI_CHARGE, UWI_WRITEBACK, UWI_WRITEOFF, UWI_PNL_CHARGE, UWI_PNL_WRITEBACK, EIR_BS, EIR_PNL, FVOCI_BS and FVOCI_OCI.<br>
-2. It then scans both entities' trial balance files (MBS and MSL). Each account string is split by <b>-</b> and the GL number (third segment) is checked against the relevant set.<br>
-3. For each matching account, the <b>PTD_NET_ENTERED</b> value is examined. Any non-zero value indicates a journal entry has already been posted to that account in the current period. Accounts with a zero PTD value are marked as clean.</div></div>
+      <div class="upload-intro"><div class="upload-intro-title">Pre-Check TB</div></div>
       <div class="file-slots"><div class="slot-group-label">Required files</div>${slots.map(s => renderSlotCard(s)).join('')}</div>
       <div class="upload-footer">
         <button class="btn" onclick="triggerUpload()">Select files…</button>
@@ -4559,51 +4830,184 @@ function runPreTb() {
   renderPreTb();
 }
 
+const PTB_COLS = ['STATUS','ACCOUNTS','ACCOUNT_NAME','GL_NUMBER','CURRENCY','PTD'];
+const PTB_COL_LABELS = { STATUS:'Status', ACCOUNTS:'Account String', ACCOUNT_NAME:'Account Name', GL_NUMBER:'GL Number', CURRENCY:'Currency', PTD:'PTD Net Entered' };
+const PTB_STATUS_LABELS = { break:'Has Entry', matched:'Clean' };
+function ptbStatusOf(r) { return r.HAS_ENTRY ? 'break' : 'matched'; }
+function ptbRowField(r, col) {
+  switch (col) {
+    case 'STATUS': return PTB_STATUS_LABELS[ptbStatusOf(r)];
+    case 'ACCOUNTS': return r.ACCOUNTS || '';
+    case 'ACCOUNT_NAME': return r.ACCOUNT_NAME || '';
+    case 'GL_NUMBER': return r.GL_NUMBER || '';
+    case 'CURRENCY': return r.CURRENCY || '';
+    case 'PTD': return r.HAS_ENTRY ? fmtNum(Math.abs(r.PTD)) : '–';
+    default: return '';
+  }
+}
+
 function renderPreTbResults(container) {
   const results = preTbState.results || [];
   const withEntries = results.filter(r => r.HAS_ENTRY);
+  const cleanCount = results.length - withEntries.length;
   const effectiveDate = preTbState.effectiveDate || null;
-  const preTbOnlyEntries = preTbState.onlyEntries || false;
   if (!preTbState.filters) preTbState.filters = {};
-  const ptbCols = ['ACCOUNTS','ACCOUNT_NAME','GL_NUMBER','CURRENCY','PTD'];
-  const hasColFilter = ptbCols.some(k => fdIsActive(preTbState.filters[k]));
-  const totalRowsActive = !preTbOnlyEntries && !hasColFilter;
-  const kpiHtml = `<div class="kpi-strip">${effectiveDate ? `<div class="kpi-card"><div class="kpi-label">Effective Date</div><div class="kpi-value">${effectiveDate}</div></div>` : ''}<div class="kpi-card kpi-clickable ${totalRowsActive?'kpi-active':''}" onclick="preTbSetFilter(false)"><div class="kpi-label">Total Rows</div><div class="kpi-value">${results.length.toLocaleString()}</div></div><div class="kpi-card kpi-clickable ${preTbOnlyEntries?'kpi-active':''}" onclick="preTbSetFilter(true)"><div class="kpi-label">Breaks</div><div class="kpi-value ${withEntries.length?'red':'green'}">${withEntries.length.toLocaleString()}</div></div></div>`;
-  let display = preTbOnlyEntries ? withEntries : results;
-  // Apply filters using fdMatch
-  display = display.filter(r => {
-    for (const k of ptbCols) { const f = preTbState.filters[k]; if (fdIsActive(f) && !fdMatch(k==='PTD' ? fmtNum(Math.abs(r.PTD)) : r[k], f)) return false; }
+  if (!preTbState.statusFilter) preTbState.statusFilter = 'all';
+  const statusFilter = preTbState.statusFilter;
+
+  // Apply status seg first, then per-column filters
+  const afterStatus = statusFilter === 'all' ? results : results.filter(r => ptbStatusOf(r) === statusFilter);
+  const display = afterStatus.filter(r => {
+    for (const k of PTB_COLS) {
+      const f = preTbState.filters[k];
+      if (fdIsActive(f) && !fdMatch(ptbRowField(r, k), f)) return false;
+    }
     return true;
   });
-  const toolbarHtml = `<div class="table-toolbar"><div style="margin-left:auto"><button class="btn btn-sm" onclick="preTbExport()" title="Export (E)">Export XLSX</button></div></div>`;
-  const ptbColLabels = { ACCOUNTS:'Account String', ACCOUNT_NAME:'Account Name', GL_NUMBER:'GL Number', CURRENCY:'Currency', PTD:'PTD Net Entered' };
-  const thHtml = ptbCols.map(k => {
-    const cf = preTbState.filters[k]; const active = fdIsActive(cf);
-    return `<th class="th-filterable ${active?'th-filtered':''}" onclick="openPreTbFilter('${k}',this)">${ptbColLabels[k]}<span class="th-caret">▾</span></th>`;
+
+  const cleanPct = results.length ? (cleanCount / results.length * 100) : 0;
+  const pageHeadHtml = `
+    <div class="ptb-page-head">
+      <div class="ptb-page-title">
+        <h1>Pre-Check TB</h1>
+        <div class="ptb-meta">
+          ${effectiveDate ? `<span>Period <b>${effectiveDate}</b></span>` : ''}
+        </div>
+      </div>
+      <div class="ptb-page-actions">
+        <button class="ptb-export-btn" onclick="preTbExport()" title="Export (E)">
+          <svg><use href="#i-download"/></svg>Export
+        </button>
+      </div>
+    </div>`;
+
+  const kpiHtml = `
+    <div class="ptb-kpi-wrap">
+      <div class="ptb-kpi-card">
+        <div class="ptb-kpi-label">Reconciliation Status</div>
+        <div class="ptb-kpi-value">
+          <span style="color:var(--green)">${cleanCount.toLocaleString()}</span>
+          <span class="dim">clean</span>
+          <span class="ptb-kpi-sep">·</span>
+          <span style="color:${withEntries.length?'var(--red)':'var(--ink4)'}">${withEntries.length.toLocaleString()}</span>
+          <span class="dim">has entry</span>
+        </div>
+        <div class="ptb-kpi-footline">
+          <div class="ptb-bar-track"><div class="ptb-bar-fill" style="width:${cleanPct.toFixed(1)}%"></div></div>
+          <span class="mono">${cleanPct.toFixed(1)}%</span>
+        </div>
+      </div>
+    </div>`;
+
+  const segBtn = (f, label, count, tone) => {
+    const countStyle = tone === 'red' && count > 0 ? 'style="color:var(--red)"' : 'style="color:var(--ink4)"';
+    return `<button class="${statusFilter===f?'active':''}" onclick="preTbSetStatusFilter('${f}')">${label} <span class="ptb-seg-count" ${countStyle}>${count.toLocaleString()}</span></button>`;
+  };
+  const toolbarHtml = `
+    <div class="ptb-toolbar">
+      <div class="ptb-seg">
+        ${segBtn('all','All', results.length, 'dim')}
+        ${segBtn('break','Has Entry', withEntries.length, 'red')}
+        ${segBtn('matched','Clean', cleanCount, 'dim')}
+      </div>
+    </div>`;
+
+  const thHtml = PTB_COLS.map(k => {
+    const cf = preTbState.filters[k];
+    const active = fdIsActive(cf);
+    const align = k === 'PTD' ? ' style="text-align:right"' : '';
+    return `<th class="th-filterable ${active?'th-filtered':''}"${align} onclick="openPreTbFilter('${k}',this)">${PTB_COL_LABELS[k]}<span class="th-caret">▾</span></th>`;
   }).join('');
-  const rowsHtml = display.map(r => `<tr class="${r.HAS_ENTRY?'row-break':''}"><td style="font-family:var(--mono);font-size:11px">${r.ACCOUNTS}</td><td>${r.ACCOUNT_NAME||'—'}</td><td style="font-family:var(--mono)">${r.GL_NUMBER}</td><td>${r.CURRENCY}</td><td class="mono-val" style="text-align:right">${r.HAS_ENTRY ? (r.PTD<0?'-':'')+fmtNum(Math.abs(r.PTD)) : '–'}</td></tr>`).join('');
-  container.innerHTML = `<div class="results-view">${kpiHtml}${toolbarHtml}<div class="table-wrap"><table class="data-table"><thead><tr>${thHtml}</tr></thead><tbody>${rowsHtml}</tbody></table></div></div>`;
+
+  const rowsHtml = display.map(r => {
+    const st = ptbStatusOf(r);
+    const chip = st === 'break'
+      ? `<span class="status-chip break"><span class="dot"></span>Has Entry</span>`
+      : `<span class="status-chip matched"><span class="dot"></span>Clean</span>`;
+    const ptd = r.HAS_ENTRY ? (r.PTD<0?'-':'')+fmtNum(Math.abs(r.PTD)) : '–';
+    return `<tr data-status="${st}">
+      <td>${chip}</td>
+      <td style="font-family:var(--mono);font-size:11px">${r.ACCOUNTS}</td>
+      <td>${r.ACCOUNT_NAME||'—'}</td>
+      <td style="font-family:var(--mono)">${r.GL_NUMBER}</td>
+      <td>${r.CURRENCY}</td>
+      <td class="mono-val" style="text-align:right">${ptd}</td>
+    </tr>`;
+  }).join('');
+
+  container.innerHTML = `<div class="results-view ptb-v2">${pageHeadHtml}${kpiHtml}${toolbarHtml}<div class="table-wrap"><table class="data-table"><thead><tr>${thHtml}</tr></thead><tbody>${rowsHtml}</tbody></table></div></div>`;
 }
 
 function openPreTbFilter(key, triggerEl) {
-  const ptbCols = ['ACCOUNTS','ACCOUNT_NAME','GL_NUMBER','CURRENCY','PTD'];
-  const baseDisplay = preTbState.onlyEntries ? (preTbState.results||[]).filter(r=>r.HAS_ENTRY) : (preTbState.results||[]);
-  const otherFiltered = baseDisplay.filter(r => { for (const k of ptbCols) { if (k===key) continue; const f = preTbState.filters[k]; if (fdIsActive(f) && !fdMatch(k==='PTD'?fmtNum(Math.abs(r.PTD)):r[k],f)) return false; } return true; });
-  const allValues = [...new Set(otherFiltered.map(r => key==='PTD' ? fmtNum(Math.abs(r.PTD)) : String(r[key]||'')))].filter(Boolean).sort();
-  fdOpen(triggerEl, allValues, preTbState.filters[key] || null, (newFilter) => {
-    if (!preTbState.filters) preTbState.filters = {};
+  if (!preTbState.filters) preTbState.filters = {};
+  const results = preTbState.results || [];
+  const statusFilter = preTbState.statusFilter || 'all';
+  const baseDisplay = statusFilter === 'all' ? results : results.filter(r => ptbStatusOf(r) === statusFilter);
+  // Rows passing all OTHER column filters (for dynamic value counts)
+  const otherFiltered = baseDisplay.filter(r => {
+    for (const k of PTB_COLS) {
+      if (k === key) continue;
+      const f = preTbState.filters[k];
+      if (fdIsActive(f) && !fdMatch(ptbRowField(r, k), f)) return false;
+    }
+    return true;
+  });
+  const counts = new Map();
+  otherFiltered.forEach(r => {
+    const v = ptbRowField(r, key);
+    counts.set(v, (counts.get(v) || 0) + 1);
+  });
+  const allValues = [...counts.keys()].filter(v => v !== '' && v !== '–').sort();
+  fdOpenDesign(triggerEl, allValues, preTbState.filters[key] || null, PTB_COL_LABELS[key], counts, (newFilter) => {
     preTbState.filters[key] = fdIsActive(newFilter) ? newFilter : undefined;
     renderPreTbResults(document.getElementById('view-pretb'));
   });
 }
-function preTbSetFilter(onlyEntries) {
-  preTbState.onlyEntries = !!onlyEntries;
-  // Clicking Total Rows resets column filters too
-  if (!onlyEntries) preTbState.filters = {};
+
+function preTbSetStatusFilter(f) {
+  preTbState.statusFilter = f;
   renderPreTbResults(document.getElementById('view-pretb'));
 }
-function preTbToggleFilter() { preTbState.onlyEntries = !preTbState.onlyEntries; renderPreTbResults(document.getElementById('view-pretb')); }
-function preTbExport() { const results = preTbState.results || []; const display = preTbState.onlyEntries ? results.filter(r=>r.HAS_ENTRY) : results; const rows = display.map(r => ({ 'Account String': r.ACCOUNTS, 'Account Name': r.ACCOUNT_NAME, 'GL Number': r.GL_NUMBER, 'Currency': r.CURRENCY, 'PTD Net Entered': r.PTD })); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Pre-Check TB'); XLSX.writeFile(wb, 'pre_check_tb.xlsx'); }
+
+function preTbSetFilter(onlyEntries) {
+  // Backwards-compatible: F shortcut resets everything; old "onlyEntries" maps to 'break' seg
+  if (!onlyEntries) {
+    preTbState.statusFilter = 'all';
+    preTbState.filters = {};
+    preTbState.onlyEntries = false;
+  } else {
+    preTbState.statusFilter = 'break';
+    preTbState.onlyEntries = true;
+  }
+  renderPreTbResults(document.getElementById('view-pretb'));
+}
+function preTbToggleFilter() {
+  preTbState.statusFilter = preTbState.statusFilter === 'break' ? 'all' : 'break';
+  renderPreTbResults(document.getElementById('view-pretb'));
+}
+function preTbExport() {
+  const results = preTbState.results || [];
+  const statusFilter = preTbState.statusFilter || 'all';
+  const afterStatus = statusFilter === 'all' ? results : results.filter(r => ptbStatusOf(r) === statusFilter);
+  const display = afterStatus.filter(r => {
+    for (const k of PTB_COLS) {
+      const f = preTbState.filters[k];
+      if (fdIsActive(f) && !fdMatch(ptbRowField(r, k), f)) return false;
+    }
+    return true;
+  });
+  const rows = display.map(r => ({
+    'Status': PTB_STATUS_LABELS[ptbStatusOf(r)],
+    'Account String': r.ACCOUNTS,
+    'Account Name': r.ACCOUNT_NAME,
+    'GL Number': r.GL_NUMBER,
+    'Currency': r.CURRENCY,
+    'PTD Net Entered': r.PTD
+  }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Pre-Check TB');
+  XLSX.writeFile(wb, 'pre_check_tb.xlsx');
+}
 // ============================================================
 //  LOAN RECON
 // ============================================================
