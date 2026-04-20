@@ -711,6 +711,11 @@
     font-weight: 600;
   }
   .ptb-v2 .ptb-btn.primary:hover { background: #FFD633; border-color: #FFD633; }
+  .ptb-v2 .ptb-btn.ptb-btn-active {
+    background: var(--d-ink); color: var(--d-accent); border-color: var(--d-ink);
+    font-weight: 600;
+  }
+  .ptb-v2 .ptb-btn.ptb-btn-active:hover { background: var(--d-ink-2); border-color: var(--d-ink-2); }
   .ptb-v2 .ptb-btn svg { width: 13px; height: 13px; }
 
   /* Grid & KPI card */
@@ -829,64 +834,6 @@
   .ptb-v2 table.ptb-data thead th[data-col].filtered::before {
     content: ''; position: absolute; left: 0; right: 0; bottom: 0;
     height: 2px; background: var(--d-accent);
-  }
-
-  /* Totals row (TB Reconciliation) */
-  .ptb-v2 table.ptb-data tfoot tr.ptb-tfoot-row td {
-    background: var(--d-line-2);
-    border-top: 1px solid var(--d-line);
-    border-bottom: 0;
-    font-weight: 500;
-    height: var(--d-row-h);
-  }
-
-  /* Variance-summary modal (TB Reconciliation "Group by") */
-  .ptb-modal-bg {
-    position: fixed; inset: 0; z-index: 3000;
-    background: rgba(10, 10, 10, 0.38);
-    display: flex; align-items: center; justify-content: center;
-    padding: 24px;
-  }
-  .ptb-v2.ptb-modal-bg .ptb-modal {
-    background: var(--d-surface);
-    border: 1px solid var(--d-line);
-    border-radius: 12px;
-    width: 860px; max-width: 100%; max-height: 88vh;
-    display: flex; flex-direction: column;
-    box-shadow: 0 16px 48px -12px rgba(0,0,0,0.25), 0 4px 12px -4px rgba(0,0,0,0.1);
-    overflow: hidden;
-  }
-  .ptb-v2.ptb-modal-bg .ptb-modal-head {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 16px 20px; border-bottom: 1px solid var(--d-line);
-  }
-  .ptb-v2.ptb-modal-bg .ptb-modal-title {
-    font-size: 15px; font-weight: 600; color: var(--d-ink);
-    letter-spacing: -0.01em;
-  }
-  .ptb-v2.ptb-modal-bg .ptb-modal-sub {
-    font-size: 11px; color: var(--d-ink-3); margin-top: 3px;
-  }
-  .ptb-v2.ptb-modal-bg .ptb-modal-close {
-    border: 0; background: transparent; cursor: pointer;
-    color: var(--d-ink-3); font-size: 22px; line-height: 1;
-    padding: 4px 8px; border-radius: 6px;
-  }
-  .ptb-v2.ptb-modal-bg .ptb-modal-close:hover { background: var(--d-line-2); color: var(--d-ink); }
-  .ptb-v2.ptb-modal-bg .ptb-modal-body {
-    overflow: auto; flex: 1; padding: 18px 20px 20px;
-    display: flex; flex-direction: column; gap: 22px;
-  }
-  .ptb-v2.ptb-modal-bg .ptb-modal-section-title {
-    font-size: 11px; font-weight: 500; color: var(--d-ink-2);
-    text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px;
-  }
-  .ptb-v2.ptb-modal-bg .ptb-modal-section-count {
-    color: var(--d-ink-4); font-weight: 400; letter-spacing: 0; text-transform: none;
-    margin-left: 4px;
-  }
-  .ptb-v2.ptb-modal-bg .ptb-modal-section .ptb-data {
-    border: 1px solid var(--d-line); border-radius: 8px; overflow: hidden;
   }
 
   /* Break row tint */
@@ -2643,7 +2590,7 @@ const RELOAD_HANDLERS = {
   mtmfvoci:  () => { mtmState.results = null; blockAutoRun('mtmfvoci'); renderMtmFvoci(); },
   reversal:  () => { revState.statusFilter = 'all'; revState.filters = {}; revState.page = 1; reupload('reversal'); },
   recon:     () => { if (typeof reconState !== 'undefined') { reconState.statusFilter = 'all'; reconState.filters = {}; reconState.page = 1; } reupload('recon'); },
-  tb:        () => { if (typeof tbReconState !== 'undefined') { tbReconState.statusFilter = 'all'; tbReconState.filters = {}; tbReconState.page = 1; } reupload('tb'); },
+  tb:        () => { if (typeof tbReconState !== 'undefined') { tbReconState.statusFilter = 'all'; tbReconState.filters = {}; tbReconState.page = 1; tbReconState.groupMode = null; } reupload('tb'); },
   majmov:    () => { majMovState.results = null; majMovState.presentation = null; blockAutoRun('majmov'); renderMajorMovement(); },
   moa:       () => { if (typeof importMoaJson === 'function') importMoaJson(); },
   query:     () => renderQueryUpload(document.getElementById('view-query')),
@@ -3108,7 +3055,7 @@ function renderResultsPanel(name, container, cfg) {
         ${data.__reportingMonth ? `<div class="kpi-card"><div class="kpi-label">Reporting Month</div><div class="kpi-value">${data.__reportingMonth}</div></div>` : ''}
         <div class="kpi-card kpi-clickable ${stTotalRowsActive?'kpi-active':''}" onclick="stationSetFilter('${name}', false)"><div class="kpi-label">Total Rows</div><div class="kpi-value">${totalRows.toLocaleString()}</div></div>
         <div class="kpi-card kpi-clickable ${breaksActive?'kpi-active':''}" onclick="stationSetFilter('${name}', true)"><div class="kpi-label">Breaks</div><div class="kpi-value ${breakRows?'red':'green'}">${breakRows.toLocaleString()}${unmappedIndicator}</div></div>
-        ${netVariance !== null ? `<div class="kpi-card kpi-clickable" onclick="openTbVarianceSummaryModal()" title="Click to view variance summary"><div class="kpi-label">Net Variance</div><div class="kpi-value ${Math.abs(netVariance)>0?'red':'green'}">${fmtNum(netVariance)}</div></div>` : ''}
+        ${netVariance !== null ? `<div class="kpi-card"><div class="kpi-label">Net Variance</div><div class="kpi-value ${Math.abs(netVariance)>0?'red':'green'}">${fmtNum(netVariance)}</div></div>` : ''}
       </div>`;
   } else {
     // reversal or recon — KPI-as-filter
@@ -3185,89 +3132,6 @@ function closeUnmappedModal(e) {
 }
 
 /** TB Recon: Variance Summary popup — two tables (high-level by Entity+GL Nature, then detailed by Entity+GL Nature+GL Number+Currency). No filters. */
-function openTbVarianceSummaryModal() {
-  const data = S.results['tb'] || [];
-
-  // High-level table: sum of variance by Entity + GL Nature (break rows only)
-  const highLevelMap = new Map();
-  data.forEach(r => {
-    if (Math.abs(r.VARIANCE||0) === 0) return;
-    const entity = String(r.ENTITY||'—'), nature = String(r.GL_NATURE||'—');
-    const k = entity + '||' + nature;
-    const cur = highLevelMap.get(k) || { entity, nature, variance: 0 };
-    cur.variance += r.VARIANCE || 0;
-    highLevelMap.set(k, cur);
-  });
-  const highLevelRows = [...highLevelMap.values()].sort((a,b) => Math.abs(b.variance) - Math.abs(a.variance));
-  const highLevelTotal = highLevelRows.reduce((s,r) => s + r.variance, 0);
-
-  // Detailed table: sum of variance by Entity + GL Nature + GL Number + Currency (break rows only)
-  const detailMap = new Map();
-  data.forEach(r => {
-    if (Math.abs(r.VARIANCE||0) === 0) return;
-    const entity = String(r.ENTITY||'—'), nature = String(r.GL_NATURE||'—'), gl = String(r.GL_NUMBER||'—'), ccy = String(r.CURRENCY||'—');
-    const k = entity + '||' + nature + '||' + gl + '||' + ccy;
-    const cur = detailMap.get(k) || { entity, nature, gl, ccy, variance: 0 };
-    cur.variance += r.VARIANCE || 0;
-    detailMap.set(k, cur);
-  });
-  const detailRows = [...detailMap.values()].sort((a,b) => Math.abs(b.variance) - Math.abs(a.variance));
-  const detailTotal = detailRows.reduce((s,r) => s + r.variance, 0);
-
-  const existing = document.getElementById('tb-var-summary-bg'); if (existing) existing.remove();
-
-  const fmtVar = (v) => {
-    if (Math.abs(v) === 0) return `<span style="color:var(--d-ink-4)">—</span>`;
-    return (v<0?'-':'') + fmtNum(Math.abs(v));
-  };
-
-  const highLevelHtml = highLevelRows.map(r => {
-    return `<tr><td>${r.entity}</td><td>${r.nature}</td><td class="num">${fmtVar(r.variance)}</td></tr>`;
-  }).join('') || `<tr><td colspan="3" style="text-align:center;color:var(--d-ink-4);padding:24px">No variance breaks.</td></tr>`;
-
-  const detailHtml = detailRows.map(r => {
-    return `<tr><td>${r.entity}</td><td>${r.nature}</td><td class="d-mono">${r.gl}</td><td class="d-mono" style="color:var(--d-ink-3)">${r.ccy}</td><td class="num">${fmtVar(r.variance)}</td></tr>`;
-  }).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--d-ink-4);padding:24px">No variance breaks.</td></tr>`;
-
-  const totalColor = (v) => Math.abs(v) > 0 ? 'var(--d-neg)' : 'var(--d-pos)';
-
-  const bg = document.createElement('div');
-  bg.id = 'tb-var-summary-bg';
-  bg.className = 'ptb-v2 ptb-modal-bg';
-  bg.onclick = (e) => { if (e.target === bg) bg.remove(); };
-  bg.innerHTML = `
-    <div class="ptb-modal">
-      <div class="ptb-modal-head">
-        <div>
-          <div class="ptb-modal-title">Variance Summary</div>
-          <div class="ptb-modal-sub">Sorted by absolute variance · breaks only</div>
-        </div>
-        <button class="ptb-modal-close" onclick="document.getElementById('tb-var-summary-bg').remove()" aria-label="Close">&times;</button>
-      </div>
-      <div class="ptb-modal-body">
-        <section class="ptb-modal-section">
-          <div class="ptb-modal-section-title">By Entity &amp; GL Nature <span class="ptb-modal-section-count">(${highLevelRows.length.toLocaleString()} row${highLevelRows.length===1?'':'s'})</span></div>
-          <table class="ptb-data">
-            <thead><tr><th>Entity</th><th>GL Nature</th><th class="num">Variance</th></tr></thead>
-            <tbody>${highLevelHtml}</tbody>
-            <tfoot><tr class="ptb-tfoot-row"><td colspan="2" style="text-transform:uppercase;letter-spacing:0.06em;font-size:10px;color:var(--d-ink-3)">Total</td><td class="num" style="color:${totalColor(highLevelTotal)}">${fmtVar(highLevelTotal)}</td></tr></tfoot>
-          </table>
-        </section>
-        <section class="ptb-modal-section">
-          <div class="ptb-modal-section-title">By Entity, GL Nature, GL Number &amp; Currency <span class="ptb-modal-section-count">(${detailRows.length.toLocaleString()} row${detailRows.length===1?'':'s'})</span></div>
-          <table class="ptb-data">
-            <thead><tr><th>Entity</th><th>GL Nature</th><th>GL Number</th><th>Currency</th><th class="num">Variance</th></tr></thead>
-            <tbody>${detailHtml}</tbody>
-            <tfoot><tr class="ptb-tfoot-row"><td colspan="4" style="text-transform:uppercase;letter-spacing:0.06em;font-size:10px;color:var(--d-ink-3)">Total</td><td class="num" style="color:${totalColor(detailTotal)}">${fmtVar(detailTotal)}</td></tr></tfoot>
-          </table>
-        </section>
-      </div>
-    </div>`;
-  document.body.appendChild(bg);
-  const keyHandler = (e) => { if (e.key === 'Escape') { e.preventDefault(); bg.remove(); document.removeEventListener('keydown', keyHandler, true); } };
-  document.addEventListener('keydown', keyHandler, true);
-}
-
 function exportUnmappedCSV() {
   if (!_unmappedStation) return;
   const data = (S.results[_unmappedStation] || {}).unmapped || [];
@@ -5981,7 +5845,22 @@ const TBR_NUM_COLS = new Set(['YTD_ENTERED','PER_RDL','VARIANCE']);
 const TBR_STATUS_LABELS = { break:'Break', matched:'Matched' };
 const TBR_PAGE_SIZE = 50;
 
-const tbReconState = { statusFilter: 'all', filters: {}, page: 1 };
+// Inline "Group by" mode — cycles null → 'high' → 'detail' → null.
+// The grouped view aggregates break rows only.
+const TBR_HIGH_COLS   = ['ENTITY','GL_NATURE','VARIANCE'];
+const TBR_DETAIL_COLS = ['ENTITY','GL_NATURE','GL_NUMBER','CURRENCY','VARIANCE'];
+const TBR_GROUP_LABEL = {
+  high: 'Grouped · Entity / GL Nature',
+  detail: 'Grouped · Entity / GL Nature / GL Number / Currency'
+};
+
+const tbReconState = { statusFilter: 'all', filters: {}, page: 1, groupMode: null };
+
+function tbrActiveCols() {
+  return tbReconState.groupMode === 'high' ? TBR_HIGH_COLS
+       : tbReconState.groupMode === 'detail' ? TBR_DETAIL_COLS
+       : TBR_COLS;
+}
 
 function tbrStatusOf(r) { return Math.abs(r.VARIANCE||0) > 0 ? 'break' : 'matched'; }
 function tbrRowField(r, col) {
@@ -5994,9 +5873,35 @@ function tbrRowField(r, col) {
   return String(r[col] || '');
 }
 
+/** Aggregate break rows for the inline "Group by" mode. */
+function tbrGrouped(mode, results) {
+  const breakRows = results.filter(r => Math.abs(r.VARIANCE||0) > 0);
+  const map = new Map();
+  if (mode === 'high') {
+    breakRows.forEach(r => {
+      const ENTITY = String(r.ENTITY||'—'), GL_NATURE = String(r.GL_NATURE||'—');
+      const k = ENTITY + '||' + GL_NATURE;
+      const cur = map.get(k) || { ENTITY, GL_NATURE, VARIANCE: 0 };
+      cur.VARIANCE += r.VARIANCE || 0;
+      map.set(k, cur);
+    });
+  } else if (mode === 'detail') {
+    breakRows.forEach(r => {
+      const ENTITY = String(r.ENTITY||'—'), GL_NATURE = String(r.GL_NATURE||'—'),
+            GL_NUMBER = String(r.GL_NUMBER||'—'), CURRENCY = String(r.CURRENCY||'—');
+      const k = [ENTITY, GL_NATURE, GL_NUMBER, CURRENCY].join('||');
+      const cur = map.get(k) || { ENTITY, GL_NATURE, GL_NUMBER, CURRENCY, VARIANCE: 0 };
+      cur.VARIANCE += r.VARIANCE || 0;
+      map.set(k, cur);
+    });
+  }
+  return [...map.values()].sort((a,b) => Math.abs(b.VARIANCE) - Math.abs(a.VARIANCE));
+}
+
 function tbrBuildChipsHtml() {
   const filters = tbReconState.filters || {};
-  const active = TBR_COLS.filter(k => fdIsActive(filters[k]));
+  const cols = tbrActiveCols();
+  const active = cols.filter(k => fdIsActive(filters[k]));
   if (!active.length) return '';
   const chips = active.map(k => {
     const f = filters[k];
@@ -6045,21 +5950,28 @@ function renderTbReconResults(container) {
   if (!tbReconState.filters) tbReconState.filters = {};
   if (!tbReconState.statusFilter) tbReconState.statusFilter = 'all';
   if (!tbReconState.page) tbReconState.page = 1;
-  const statusFilter = tbReconState.statusFilter;
+  const groupMode = tbReconState.groupMode || null;
+  const isGrouped = groupMode !== null;
+  const cols = tbrActiveCols();
 
-  // Apply status seg, then per-column filters
-  const afterStatus = statusFilter === 'all' ? results : results.filter(r => tbrStatusOf(r) === statusFilter);
-  const display = afterStatus.filter(r => {
-    for (const k of TBR_COLS) {
+  // Base rows differ by mode: ungrouped → all results with status-seg applied;
+  // grouped → aggregate break rows only (status seg is hidden).
+  let baseRows;
+  if (isGrouped) {
+    baseRows = tbrGrouped(groupMode, results);
+  } else {
+    const statusFilter = tbReconState.statusFilter;
+    baseRows = statusFilter === 'all' ? results : results.filter(r => tbrStatusOf(r) === statusFilter);
+  }
+
+  // Apply column filters (same filter mechanism in both modes)
+  const display = baseRows.filter(r => {
+    for (const k of cols) {
       const f = tbReconState.filters[k];
       if (fdIsActive(f) && !fdMatch(tbrRowField(r, k), f)) return false;
     }
     return true;
   });
-
-  // Totals across the currently-visible (filtered) rows
-  const totals = { YTD_ENTERED: 0, PER_RDL: 0, VARIANCE: 0 };
-  display.forEach(r => { totals.YTD_ENTERED += r.YTD_ENTERED || 0; totals.PER_RDL += r.PER_RDL || 0; totals.VARIANCE += r.VARIANCE || 0; });
 
   // Pagination
   const totalPages = Math.max(1, Math.ceil(display.length / TBR_PAGE_SIZE));
@@ -6096,7 +6008,7 @@ function renderTbReconResults(container) {
     <div class="ptb-grid">
       <div class="ptb-card ptb-kpi ptb-col-3">
         <div class="ptb-label">Net Variance</div>
-        <div class="ptb-value" style="font-family:'JetBrains Mono','IBM Plex Mono',monospace;color:${netVarColor};${netVariance < 0 ? '' : ''}">${netVarDisplay}</div>
+        <div class="ptb-value" style="font-family:'JetBrains Mono','IBM Plex Mono',monospace;color:${netVarColor};">${netVarDisplay}</div>
       </div>
       <div class="ptb-card ptb-kpi ptb-col-3">
         <div class="ptb-label">Reconciliation Status</div>
@@ -6114,80 +6026,91 @@ function renderTbReconResults(container) {
     </div>`;
 
   const segBtn = (f, label, count, tone) => {
-    const active = statusFilter === f;
+    const active = tbReconState.statusFilter === f;
     let cntColor = '';
     if (tone === 'neg' && count > 0) cntColor = 'style="color:var(--d-neg)"';
     else if (!active) cntColor = 'style="color:var(--d-ink-4)"';
     return `<button class="${active?'active':''}" onclick="tbrSetStatusFilter('${f}')">${label}<span class="ptb-count" ${cntColor}>${count.toLocaleString()}</span></button>`;
   };
-  const toolbarHtml = `
-    <div class="ptb-table-toolbar">
+  // Status seg is hidden in grouped mode; only the Group-by button remains.
+  const segHtml = isGrouped ? '' : `
       <div class="ptb-seg">
         ${segBtn('all','All', results.length, 'dim')}
         ${segBtn('break','Breaks', breakRows.length, 'neg')}
         ${segBtn('matched','Matched', matchedRows, 'dim')}
-      </div>
+      </div>`;
+  const groupBtnClass = isGrouped ? 'ptb-btn ptb-btn-active' : 'ptb-btn';
+  const groupBtnLabel = isGrouped ? TBR_GROUP_LABEL[groupMode] : 'Group by';
+  const toolbarHtml = `
+    <div class="ptb-table-toolbar">
+      ${segHtml}
       <div style="flex:1"></div>
-      <button class="ptb-btn" onclick="openTbVarianceSummaryModal()" title="Variance summary grouped by Entity / GL Nature / GL Number / Currency">
-        <svg><use href="#i-layers"/></svg>Group by
+      <button class="${groupBtnClass}" onclick="tbrCycleGroupBy()" title="Cycle: Entity + GL Nature → adds GL Number + Currency → back to ungrouped">
+        <svg><use href="#i-layers"/></svg>${groupBtnLabel}
       </button>
     </div>`;
 
   const chipsHtml = tbrBuildChipsHtml();
 
-  const thHtml = TBR_COLS.map(k => {
+  const thHtml = cols.map(k => {
     const cf = tbReconState.filters[k];
     const active = fdIsActive(cf);
     const numCls = TBR_NUM_COLS.has(k) ? ' num' : '';
     return `<th class="${active?'filtered':''}${numCls}" data-col="${k}" onclick="openTbReconFilter('${k}',this)">${TBR_COL_LABELS[k]}<span class="fcol"></span></th>`;
   }).join('');
 
-  // Build absolute-index map so the clickable Per-RDL cell opens the
-  // right breakdown even when the filter pipeline reorders / paginates.
-  const idxByRef = new Map();
-  results.forEach((r, i) => idxByRef.set(r, i));
+  let rowsHtml;
+  if (isGrouped) {
+    rowsHtml = pageRows.map(r => {
+      const varV = r.VARIANCE || 0;
+      const varCell = Math.abs(varV) === 0
+        ? `<span style="color:var(--d-ink-4)">—</span>`
+        : `${varV < 0 ? '-' : ''}${fmtNum(Math.abs(varV))}`;
+      const tds = cols.map(c => {
+        if (c === 'VARIANCE') return `<td class="num">${varCell}</td>`;
+        if (c === 'GL_NUMBER') return `<td class="d-mono">${r.GL_NUMBER||''}</td>`;
+        if (c === 'CURRENCY') return `<td class="d-mono" style="color:var(--d-ink-3)">${r.CURRENCY||''}</td>`;
+        return `<td>${r[c]||'<span style="color:var(--d-ink-4)">—</span>'}</td>`;
+      }).join('');
+      return `<tr>${tds}</tr>`;
+    }).join('');
+  } else {
+    // Build absolute-index map so the clickable Per-RDL cell opens the
+    // right breakdown even when the filter pipeline reorders / paginates.
+    const idxByRef = new Map();
+    results.forEach((r, i) => idxByRef.set(r, i));
 
-  const rowsHtml = pageRows.map(r => {
-    const st = tbrStatusOf(r);
-    const chip = st === 'break'
-      ? `<span class="status-chip break"><span class="dot"></span>Break</span>`
-      : `<span class="status-chip matched"><span class="dot"></span>Matched</span>`;
-    const varV = r.VARIANCE || 0;
-    const varCell = Math.abs(varV) === 0
-      ? `<span style="color:var(--d-ink-4)">—</span>`
-      : `${varV < 0 ? '-' : ''}${fmtNum(Math.abs(varV))}`;
-    const absIdx = idxByRef.get(r);
-    const perRdlCell = (r.ACCOUNTS_LIST && r.ACCOUNTS_LIST.length > 0)
-      ? `<span class="clickable-cell" onclick="tbrOpenBreakdown(event,${absIdx})">${fmtNum(r.PER_RDL||0)}</span>`
-      : fmtNum(r.PER_RDL||0);
-    return `<tr data-status="${st}">
-      <td>${chip}</td>
-      <td class="d-mono">${r.ACCOUNTS||''}</td>
-      <td>${r.ACCOUNT_NAME||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td>${r.ENTITY||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td>${r.RC||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td class="d-mono">${r.GL_NUMBER||''}</td>
-      <td>${r.GL_NATURE||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td>${r.PRODUCT_CODE||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td>${r.INTERCO||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td>${r.ISLAMIC_INDICATOR||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td class="d-mono" style="color:var(--d-ink-3)">${r.CURRENCY||''}</td>
-      <td class="num">${fmtNum(r.YTD_ENTERED||0)}</td>
-      <td class="num">${perRdlCell}</td>
-      <td class="num">${varCell}</td>
-    </tr>`;
-  }).join('');
-
-  // Totals row across the currently-visible rows — retains the TB-only
-  // footer behaviour the old station renderer had.
-  const totalsRow = display.length > 0
-    ? `<tfoot><tr class="ptb-tfoot-row">
-        <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="d-mono" style="color:var(--d-ink-3);text-transform:uppercase;letter-spacing:0.06em;font-size:10px">Total</td>
-        <td class="num">${fmtNum(totals.YTD_ENTERED)}</td>
-        <td class="num">${fmtNum(totals.PER_RDL)}</td>
-        <td class="num" style="color:${Math.abs(totals.VARIANCE)>0?'var(--d-neg)':'var(--d-ink-2)'}">${Math.abs(totals.VARIANCE)===0?'—':(totals.VARIANCE<0?'-':'')+fmtNum(Math.abs(totals.VARIANCE))}</td>
-      </tr></tfoot>`
-    : '';
+    rowsHtml = pageRows.map(r => {
+      const st = tbrStatusOf(r);
+      const chip = st === 'break'
+        ? `<span class="status-chip break"><span class="dot"></span>Break</span>`
+        : `<span class="status-chip matched"><span class="dot"></span>Matched</span>`;
+      const varV = r.VARIANCE || 0;
+      const varCell = Math.abs(varV) === 0
+        ? `<span style="color:var(--d-ink-4)">—</span>`
+        : `${varV < 0 ? '-' : ''}${fmtNum(Math.abs(varV))}`;
+      const absIdx = idxByRef.get(r);
+      const perRdlCell = (r.ACCOUNTS_LIST && r.ACCOUNTS_LIST.length > 0)
+        ? `<span class="clickable-cell" onclick="tbrOpenBreakdown(event,${absIdx})">${fmtNum(r.PER_RDL||0)}</span>`
+        : fmtNum(r.PER_RDL||0);
+      return `<tr data-status="${st}">
+        <td>${chip}</td>
+        <td class="d-mono">${r.ACCOUNTS||''}</td>
+        <td>${r.ACCOUNT_NAME||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+        <td>${r.ENTITY||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+        <td>${r.RC||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+        <td class="d-mono">${r.GL_NUMBER||''}</td>
+        <td>${r.GL_NATURE||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+        <td>${r.PRODUCT_CODE||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+        <td>${r.INTERCO||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+        <td>${r.ISLAMIC_INDICATOR||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+        <td class="d-mono" style="color:var(--d-ink-3)">${r.CURRENCY||''}</td>
+        <td class="num">${fmtNum(r.YTD_ENTERED||0)}</td>
+        <td class="num">${perRdlCell}</td>
+        <td class="num">${varCell}</td>
+      </tr>`;
+    }).join('');
+  }
 
   const showingFrom = display.length === 0 ? 0 : startIdx + 1;
   const showingTo = endIdx;
@@ -6206,8 +6129,7 @@ function renderTbReconResults(container) {
       <div class="ptb-scroll">
         <table class="ptb-data">
           <thead><tr>${thHtml}</tr></thead>
-          <tbody>${rowsHtml || `<tr><td colspan="${TBR_COLS.length}" style="text-align:center;padding:40px;color:var(--d-ink-4)">No rows match the current filters</td></tr>`}</tbody>
-          ${totalsRow}
+          <tbody>${rowsHtml || `<tr><td colspan="${cols.length}" style="text-align:center;padding:40px;color:var(--d-ink-4)">No rows match the current filters</td></tr>`}</tbody>
         </table>
       </div>
       ${footerHtml}
@@ -6219,10 +6141,19 @@ function openTbReconFilter(key, triggerEl) {
   if (!tbReconState.filters) tbReconState.filters = {};
   const results = S.results.tb || [];
   const base = Array.isArray(results) ? results : [];
-  const statusFilter = tbReconState.statusFilter || 'all';
-  const baseDisplay = statusFilter === 'all' ? base : base.filter(r => tbrStatusOf(r) === statusFilter);
+  const groupMode = tbReconState.groupMode || null;
+  const cols = tbrActiveCols();
+  // Base rows reflect the current mode: ungrouped uses status seg;
+  // grouped aggregates break rows only (no status seg).
+  let baseDisplay;
+  if (groupMode) {
+    baseDisplay = tbrGrouped(groupMode, base);
+  } else {
+    const statusFilter = tbReconState.statusFilter || 'all';
+    baseDisplay = statusFilter === 'all' ? base : base.filter(r => tbrStatusOf(r) === statusFilter);
+  }
   const otherFiltered = baseDisplay.filter(r => {
-    for (const k of TBR_COLS) {
+    for (const k of cols) {
       if (k === key) continue;
       const f = tbReconState.filters[k];
       if (fdIsActive(f) && !fdMatch(tbrRowField(r, k), f)) return false;
@@ -6251,6 +6182,15 @@ function tbrSetPage(p) {
   tbReconState.page = p;
   renderTbReconResults(document.getElementById('view-tb'));
 }
+function tbrCycleGroupBy() {
+  const cycle = [null, 'high', 'detail'];
+  const idx = cycle.indexOf(tbReconState.groupMode || null);
+  tbReconState.groupMode = cycle[(idx + 1) % cycle.length];
+  // Reset column filters when the column set changes (they're keyed by column id).
+  tbReconState.filters = {};
+  tbReconState.page = 1;
+  renderTbReconResults(document.getElementById('view-tb'));
+}
 function tbrClearColFilter(k) {
   if (tbReconState.filters) delete tbReconState.filters[k];
   tbReconState.page = 1;
@@ -6265,6 +6205,7 @@ function tbrResetAll() {
   tbReconState.statusFilter = 'all';
   tbReconState.filters = {};
   tbReconState.page = 1;
+  tbReconState.groupMode = null;
   renderTbReconResults(document.getElementById('view-tb'));
 }
 function tbrOpenBreakdown(e, absIdx) {
@@ -6281,23 +6222,41 @@ function tbrOpenBreakdown(e, absIdx) {
 function tbrExport() {
   const results = S.results.tb;
   if (!Array.isArray(results)) return;
-  const statusFilter = tbReconState.statusFilter || 'all';
-  const afterStatus = statusFilter === 'all' ? results : results.filter(r => tbrStatusOf(r) === statusFilter);
-  const display = afterStatus.filter(r => {
-    for (const k of TBR_COLS) {
+  const groupMode = tbReconState.groupMode || null;
+  const cols = tbrActiveCols();
+  let baseRows;
+  if (groupMode) {
+    baseRows = tbrGrouped(groupMode, results);
+  } else {
+    const statusFilter = tbReconState.statusFilter || 'all';
+    baseRows = statusFilter === 'all' ? results : results.filter(r => tbrStatusOf(r) === statusFilter);
+  }
+  const display = baseRows.filter(r => {
+    for (const k of cols) {
       const f = tbReconState.filters[k];
       if (fdIsActive(f) && !fdMatch(tbrRowField(r, k), f)) return false;
     }
     return true;
   });
   const rows = display.map(r => {
+    if (groupMode) {
+      const o = {};
+      cols.forEach(k => { o[TBR_COL_LABELS[k]] = r[k]; });
+      return o;
+    }
     const o = { 'Status': TBR_STATUS_LABELS[tbrStatusOf(r)] };
     TBR_COLS.forEach(k => { if (k !== 'STATUS') o[TBR_COL_LABELS[k]] = r[k]; });
     return o;
   });
+  const sheetName = groupMode === 'high' ? 'TB Recon — Grouped'
+                  : groupMode === 'detail' ? 'TB Recon — Detailed'
+                  : 'TB Reconciliation';
+  const fileName  = groupMode === 'high' ? 'tb_reconciliation_grouped.xlsx'
+                  : groupMode === 'detail' ? 'tb_reconciliation_grouped_detail.xlsx'
+                  : 'tb_reconciliation.xlsx';
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'TB Reconciliation');
-  XLSX.writeFile(wb, 'tb_reconciliation.xlsx');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), sheetName);
+  XLSX.writeFile(wb, fileName);
 }
 
 // ============================================================
