@@ -862,16 +862,63 @@
   }
   .ptb-v2 .status-chip.matched .dot { background: var(--d-pos); }
 
-  /* Table footer (count) */
+  /* Table footer (count + pagination) */
   .ptb-v2 .ptb-table-foot {
     display: flex; align-items: center; justify-content: space-between;
     padding: 10px 16px; border-top: 1px solid var(--d-line);
     font-size: 11px; color: var(--d-ink-3);
+    gap: 12px; flex-wrap: wrap;
   }
   .ptb-v2 .ptb-table-foot b {
     color: var(--d-ink-2); font-weight: 500;
     font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
   }
+  .ptb-v2 .ptb-pager {
+    display: flex; background: var(--d-surface); border: 1px solid var(--d-line);
+    border-radius: 8px; padding: 3px;
+  }
+  .ptb-v2 .ptb-pager button {
+    border: 0; background: transparent; padding: 4px 9px; border-radius: 6px;
+    font-size: 12px; color: var(--d-ink-3); cursor: pointer; font-weight: 500;
+    font-family: inherit; line-height: 1; min-width: 22px;
+  }
+  .ptb-v2 .ptb-pager button:hover:not(.active):not(:disabled) { color: var(--d-ink); }
+  .ptb-v2 .ptb-pager button.active { background: var(--d-ink); color: var(--d-accent); }
+  .ptb-v2 .ptb-pager button:disabled { opacity: 0.35; cursor: default; }
+  .ptb-v2 .ptb-pager .ptb-pager-ellipsis {
+    padding: 4px 4px; color: var(--d-ink-4); font-size: 12px;
+  }
+
+  /* Active-filter chips strip (above column headers) */
+  .ptb-v2 .ptb-filter-chips {
+    display: none; padding: 10px 16px;
+    border-bottom: 1px solid var(--d-line);
+    background: var(--d-line-2);
+    gap: 6px; flex-wrap: wrap; align-items: center;
+  }
+  .ptb-v2 .ptb-filter-chips.active { display: flex; }
+  .ptb-v2 .ptb-filter-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--d-surface); border: 1px solid var(--d-line);
+    border-radius: 999px; padding: 3px 4px 3px 10px;
+    font-size: 11px; color: var(--d-ink-2);
+  }
+  .ptb-v2 .ptb-filter-chip .dim { color: var(--d-ink-3); }
+  .ptb-v2 .ptb-filter-chip .fc-vals { color: var(--d-ink); font-weight: 500; }
+  .ptb-v2 .ptb-filter-chip .fc-x {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; border-radius: 50%; background: var(--d-line-2);
+    cursor: pointer; color: var(--d-ink-3); border: 0;
+    font-size: 12px; padding: 0; line-height: 1;
+    transition: background 0.1s, color 0.1s;
+  }
+  .ptb-v2 .ptb-filter-chip .fc-x:hover { background: var(--d-neg); color: #fff; }
+  .ptb-v2 .ptb-filter-chip-clear {
+    font-size: 11px; color: var(--d-ink-3); cursor: pointer; border: 0;
+    background: none; padding: 3px 8px; font-family: inherit;
+    text-decoration: underline; text-underline-offset: 2px;
+  }
+  .ptb-v2 .ptb-filter-chip-clear:hover { color: var(--d-ink); }
 
   /* Design-style filter popover */
   .fd-panel.fd-design {
@@ -1744,12 +1791,15 @@ function fdOpenDesign(triggerEl, allValues, currentFilter, colLabel, counts, onA
   panel.style.top = top + 'px';
   panel.style.left = left + 'px';
 
+  // Design-style semantics: empty Set = no filter (shows everything).
+  // Non-empty Set = keep only rows whose value is in the Set. Nothing is
+  // ticked by default on first open.
   const cf = currentFilter || { text: '', selected: null };
   let searchText = cf.text || '';
-  let workingSet = cf.selected ? new Set(cf.selected) : null;
+  let workingSet = new Set(cf.selected || []);
 
-  const isChecked = v => workingSet === null || workingSet.has(v);
-  const hasSelection = () => workingSet !== null;
+  const isChecked = v => workingSet.has(v);
+  const hasSelection = () => workingSet.size > 0;
 
   function renderList() {
     const listEl = panel.querySelector('.fd-list');
@@ -1775,12 +1825,8 @@ function fdOpenDesign(triggerEl, allValues, currentFilter, colLabel, counts, onA
       const val = item.dataset.val;
       item.onclick = (e) => {
         if (e.target !== cb) { cb.checked = !cb.checked; }
-        if (cb.checked) {
-          if (workingSet !== null) workingSet.add(val);
-        } else {
-          if (workingSet === null) workingSet = new Set(allValues);
-          workingSet.delete(val);
-        }
+        if (cb.checked) workingSet.add(val);
+        else workingSet.delete(val);
         updateClearButton();
       };
     });
@@ -1812,11 +1858,18 @@ function fdOpenDesign(triggerEl, allValues, currentFilter, colLabel, counts, onA
   searchInput.focus();
   searchInput.oninput = () => { searchText = searchInput.value; renderList(); };
 
-  panel.querySelector('.fd-clear').onclick = () => { workingSet = null; renderList(); updateClearButton(); };
-  panel.querySelector('.fd-all').onclick = () => { workingSet = null; renderList(); updateClearButton(); };
+  panel.querySelector('.fd-clear').onclick = () => { workingSet = new Set(); renderList(); updateClearButton(); };
+  panel.querySelector('.fd-all').onclick = () => {
+    // Select all currently-visible (search-filtered) values.
+    const q = searchText.toLowerCase();
+    const visible = q ? allValues.filter(v => v.toLowerCase().includes(q)) : allValues;
+    visible.forEach(v => workingSet.add(v));
+    renderList(); updateClearButton();
+  };
   const applyAction = () => {
-    if (workingSet && workingSet.size >= allValues.length) workingSet = null;
-    onApply({ text: searchText, selected: workingSet });
+    // Empty set → no filter (undefined). Non-empty → pass through.
+    const selected = workingSet.size > 0 ? workingSet : null;
+    onApply({ text: searchText, selected });
     fdClose();
   };
   panel.querySelector('.fd-done').onclick = applyAction;
@@ -2196,7 +2249,7 @@ const loanReconState = { tbMapping: null, fifo: null, results: null, files: { tb
 const ccyState = { data: null, loaded: false, results: null };
 const mtmState = { fvoci: null, fvociLoaded: false, disb: null, disbLoaded: false, prevFvoci: null, prevFvociLoaded: false, results: null };
 const moaState = { entries: [], dashView: 'type', journalMonth: '', journalRows: [], compareMonths: [] };
-const preTbState = { results: null, effectiveDate: null, statusFilter: 'all', filters: {} };
+const preTbState = { results: null, effectiveDate: null, statusFilter: 'all', filters: {}, page: 1 };
 const dqState = { DS: [], AD: [], LA: '', LB: '', CF: 'all', TH: 0.10, sort: 'psi', allExpanded: false };
 const DQ_PRODS = ['LN','CC','OD','GUARANTEE','INVMT','RATING'];
 const glteState = { template: null, validation: null, isFiltered: false, results: [] };
@@ -2525,7 +2578,7 @@ function showView(name) {
 
 /** Reload action handlers for each view — called when user clicks the reload button in topbar */
 const RELOAD_HANDLERS = {
-  pretb:     () => { preTbState.results = null; preTbState.filters = {}; preTbState.statusFilter = 'all'; preTbState.onlyEntries = false; blockAutoRun('pretb'); renderPreTb(); },
+  pretb:     () => { preTbState.results = null; preTbState.filters = {}; preTbState.statusFilter = 'all'; preTbState.onlyEntries = false; preTbState.page = 1; blockAutoRun('pretb'); renderPreTb(); },
   loanrecon: () => { loanReconState.results = null; blockAutoRun('loanrecon'); renderLoanRecon(); },
   dq:        () => { if (typeof dqReload === 'function') dqReload(); },
   ccychange: () => { ccyState.results = null; blockAutoRun('ccychange'); renderCcyChange(); },
@@ -4984,6 +5037,54 @@ function ptbRowField(r, col) {
   }
 }
 
+const PTB_PAGE_SIZE = 50;
+
+function ptbBuildChipsHtml() {
+  const filters = preTbState.filters || {};
+  const active = PTB_COLS.filter(k => fdIsActive(filters[k]));
+  if (!active.length) return '';
+  const chips = active.map(k => {
+    const f = filters[k];
+    const sel = f.selected ? [...f.selected] : [];
+    let disp;
+    if (f.text && sel.length === 0) {
+      disp = `contains "${f.text}"`;
+    } else if (sel.length === 0) {
+      disp = '—';
+    } else if (sel.length <= 2) {
+      disp = sel.map(v => escapeHtmlAttr(v)).join(', ');
+    } else {
+      disp = `${escapeHtmlAttr(sel[0])} <span class="dim">+${sel.length - 1}</span>`;
+    }
+    return `<span class="ptb-filter-chip">${PTB_COL_LABELS[k]} <span class="dim">is</span> <span class="fc-vals">${disp}</span><button class="fc-x" onclick="preTbClearColFilter('${k}')" title="Remove">×</button></span>`;
+  }).join('');
+  return `<div class="ptb-filter-chips active">${chips}<button class="ptb-filter-chip-clear" onclick="preTbClearAllColFilters()">Clear all</button></div>`;
+}
+
+function escapeHtmlAttr(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function ptbBuildPagerHtml(totalPages, currentPage) {
+  if (totalPages <= 1) return '';
+  const btns = [];
+  const disabled = (d) => d ? ' disabled' : '';
+  btns.push(`<button${disabled(currentPage === 1)} onclick="preTbSetPage(${currentPage - 1})" title="Previous">‹</button>`);
+
+  // Page list with ellipsis: always show 1, current-1..current+1, totalPages
+  const pages = new Set([1, totalPages, currentPage, currentPage - 1, currentPage + 1]);
+  const sorted = [...pages].filter(p => p >= 1 && p <= totalPages).sort((a, b) => a - b);
+  let prev = 0;
+  for (const p of sorted) {
+    if (p - prev > 1) btns.push(`<span class="ptb-pager-ellipsis">…</span>`);
+    btns.push(`<button class="${p === currentPage ? 'active' : ''}" onclick="preTbSetPage(${p})">${p}</button>`);
+    prev = p;
+  }
+
+  btns.push(`<button${disabled(currentPage === totalPages)} onclick="preTbSetPage(${currentPage + 1})" title="Next">›</button>`);
+  return `<div class="ptb-pager">${btns.join('')}</div>`;
+}
+
 function renderPreTbResults(container) {
   const results = preTbState.results || [];
   const withEntries = results.filter(r => r.HAS_ENTRY);
@@ -4991,6 +5092,7 @@ function renderPreTbResults(container) {
   const effectiveDate = preTbState.effectiveDate || null;
   if (!preTbState.filters) preTbState.filters = {};
   if (!preTbState.statusFilter) preTbState.statusFilter = 'all';
+  if (!preTbState.page) preTbState.page = 1;
   const statusFilter = preTbState.statusFilter;
 
   // Apply status seg first, then per-column filters
@@ -5002,6 +5104,15 @@ function renderPreTbResults(container) {
     }
     return true;
   });
+
+  // Pagination (fixed 50 rows/page)
+  const totalPages = Math.max(1, Math.ceil(display.length / PTB_PAGE_SIZE));
+  if (preTbState.page > totalPages) preTbState.page = totalPages;
+  if (preTbState.page < 1) preTbState.page = 1;
+  const page = preTbState.page;
+  const startIdx = (page - 1) * PTB_PAGE_SIZE;
+  const endIdx = Math.min(startIdx + PTB_PAGE_SIZE, display.length);
+  const pageRows = display.slice(startIdx, endIdx);
 
   const matchedPct = results.length ? (cleanCount / results.length * 100) : 0;
   const pageHeadHtml = `
@@ -5052,6 +5163,8 @@ function renderPreTbResults(container) {
       </div>
     </div>`;
 
+  const chipsHtml = ptbBuildChipsHtml();
+
   const thHtml = PTB_COLS.map(k => {
     const cf = preTbState.filters[k];
     const active = fdIsActive(cf);
@@ -5059,7 +5172,7 @@ function renderPreTbResults(container) {
     return `<th class="${active?'filtered':''}${numCls}" data-col="${k}" onclick="openPreTbFilter('${k}',this)">${PTB_COL_LABELS[k]}<span class="fcol"></span></th>`;
   }).join('');
 
-  const rowsHtml = display.map(r => {
+  const rowsHtml = pageRows.map(r => {
     const st = ptbStatusOf(r);
     const chip = st === 'break'
       ? `<span class="status-chip break"><span class="dot"></span>Break</span>`
@@ -5075,9 +5188,12 @@ function renderPreTbResults(container) {
     </tr>`;
   }).join('');
 
+  const showingFrom = display.length === 0 ? 0 : startIdx + 1;
+  const showingTo = endIdx;
   const footerHtml = `
     <div class="ptb-table-foot">
-      <span>Showing <b>${display.length.toLocaleString()}</b> of <b>${results.length.toLocaleString()}</b> accounts</span>
+      <span>Showing <b>${showingFrom.toLocaleString()}–${showingTo.toLocaleString()}</b> of <b>${display.length.toLocaleString()}</b> accounts</span>
+      ${ptbBuildPagerHtml(totalPages, page)}
     </div>`;
 
   container.innerHTML = `<div class="ptb-v2">
@@ -5085,6 +5201,7 @@ function renderPreTbResults(container) {
     ${kpiHtml}
     <div class="ptb-card ptb-table-card">
       ${toolbarHtml}
+      ${chipsHtml}
       <div class="ptb-scroll">
         <table class="ptb-data">
           <thead><tr>${thHtml}</tr></thead>
@@ -5094,6 +5211,21 @@ function renderPreTbResults(container) {
       ${footerHtml}
     </div>
   </div>`;
+}
+
+function preTbSetPage(p) {
+  preTbState.page = p;
+  renderPreTbResults(document.getElementById('view-pretb'));
+}
+function preTbClearColFilter(k) {
+  if (preTbState.filters) delete preTbState.filters[k];
+  preTbState.page = 1;
+  renderPreTbResults(document.getElementById('view-pretb'));
+}
+function preTbClearAllColFilters() {
+  preTbState.filters = {};
+  preTbState.page = 1;
+  renderPreTbResults(document.getElementById('view-pretb'));
 }
 
 function openPreTbFilter(key, triggerEl) {
@@ -5118,12 +5250,14 @@ function openPreTbFilter(key, triggerEl) {
   const allValues = [...counts.keys()].filter(v => v !== '' && v !== '–').sort();
   fdOpenDesign(triggerEl, allValues, preTbState.filters[key] || null, PTB_COL_LABELS[key], counts, (newFilter) => {
     preTbState.filters[key] = fdIsActive(newFilter) ? newFilter : undefined;
+    preTbState.page = 1;
     renderPreTbResults(document.getElementById('view-pretb'));
   });
 }
 
 function preTbSetStatusFilter(f) {
   preTbState.statusFilter = f;
+  preTbState.page = 1;
   renderPreTbResults(document.getElementById('view-pretb'));
 }
 
@@ -5137,6 +5271,7 @@ function preTbSetFilter(onlyEntries) {
     preTbState.statusFilter = 'break';
     preTbState.onlyEntries = true;
   }
+  preTbState.page = 1;
   renderPreTbResults(document.getElementById('view-pretb'));
 }
 function preTbToggleFilter() {
