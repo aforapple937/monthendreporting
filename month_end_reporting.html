@@ -831,6 +831,15 @@
     height: 2px; background: var(--d-accent);
   }
 
+  /* Totals row (TB Reconciliation) */
+  .ptb-v2 table.ptb-data tfoot tr.ptb-tfoot-row td {
+    background: var(--d-line-2);
+    border-top: 1px solid var(--d-line);
+    border-bottom: 0;
+    font-weight: 500;
+    height: var(--d-row-h);
+  }
+
   /* Break row tint */
   .ptb-v2 table.ptb-data tbody tr[data-status="break"] {
     background: color-mix(in srgb, var(--d-neg) 3%, transparent);
@@ -2585,7 +2594,7 @@ const RELOAD_HANDLERS = {
   mtmfvoci:  () => { mtmState.results = null; blockAutoRun('mtmfvoci'); renderMtmFvoci(); },
   reversal:  () => { revState.statusFilter = 'all'; revState.filters = {}; revState.page = 1; reupload('reversal'); },
   recon:     () => { if (typeof reconState !== 'undefined') { reconState.statusFilter = 'all'; reconState.filters = {}; reconState.page = 1; } reupload('recon'); },
-  tb:        () => reupload('tb'),
+  tb:        () => { if (typeof tbReconState !== 'undefined') { tbReconState.statusFilter = 'all'; tbReconState.filters = {}; tbReconState.page = 1; } reupload('tb'); },
   majmov:    () => { majMovState.results = null; majMovState.presentation = null; blockAutoRun('majmov'); renderMajorMovement(); },
   moa:       () => { if (typeof importMoaJson === 'function') importMoaJson(); },
   query:     () => renderQueryUpload(document.getElementById('view-query')),
@@ -2599,7 +2608,7 @@ function setTopbarReload(viewName) {
   const actions = document.getElementById('topbar-actions');
   if (!actions) return;
   const handler = RELOAD_HANDLERS[viewName];
-  if (!handler || viewName === 'pretb' || viewName === 'reversal' || viewName === 'recon') { actions.innerHTML = ''; return; }
+  if (!handler || viewName === 'pretb' || viewName === 'reversal' || viewName === 'recon' || viewName === 'tb') { actions.innerHTML = ''; return; }
   actions.innerHTML = `<button class="btn btn-sm" onclick="RELOAD_HANDLERS['${viewName}']()" title="Reload files for this pipeline (R)" style="display:flex;align-items:center;gap:4px;"><span style="font-size:13px">↻</span>Reload files</button>`;
 }
 
@@ -2611,7 +2620,7 @@ const SHORTCUT_HANDLERS = {
     mtmfvoci:  () => mtmSetFilter(false),
     reversal:  () => revResetAll(),
     recon:     () => rcnResetAll(),
-    tb:        () => stationSetFilter('tb', false),
+    tb:        () => tbrResetAll(),
     majmov:    () => { majMovState.filters = {}; majMovState.page = 0; renderMajMovResults(document.getElementById('view-majmov')); },
     glte:      () => { if (typeof resetGlteFilters === 'function') resetGlteFilters(); }
   },
@@ -2623,7 +2632,7 @@ const SHORTCUT_HANDLERS = {
     mtmfvoci:  () => { if (typeof exportMtmXlsx === 'function') exportMtmXlsx(); },
     reversal:  () => { if (typeof revExport === 'function') revExport(); },
     recon:     () => { if (typeof rcnExport === 'function') rcnExport(); },
-    tb:        () => { if (typeof exportCSV === 'function') exportCSV('tb'); },
+    tb:        () => { if (typeof tbrExport === 'function') tbrExport(); },
     moa:       () => { if (moaState.dashView === 'journal') { if (typeof exportMoaJournalXlsx === 'function') exportMoaJournalXlsx(); } else { if (typeof exportMoaXlsx === 'function') exportMoaXlsx(); } },
     majmov:    () => { if (typeof exportMajMov === 'function') exportMajMov(); },
     glte:      () => { if (typeof exportGlteCSV === 'function') exportGlteCSV(); }
@@ -2674,7 +2683,7 @@ function renderView(name) {
   // Pre-Check TB uses the design-handoff page-head as its title; hide the
   // shared main-topbar so it doesn't double up.
   const topbar = document.querySelector('.main-topbar');
-  if (topbar) topbar.style.display = (name === 'pretb' || name === 'reversal' || name === 'recon') ? 'none' : '';
+  if (topbar) topbar.style.display = (name === 'pretb' || name === 'reversal' || name === 'recon' || name === 'tb') ? 'none' : '';
   const views = {
     'pretb':     renderPreTb,
     'loanrecon': renderLoanRecon,
@@ -2924,7 +2933,7 @@ function renderStation(name) {
   // Reversal Check uses a design-handoff page-head inside the view itself,
   // so leave the shared topbar title/subtitle empty (the topbar is hidden
   // anyway in renderView).
-  const isDesign = name === 'reversal' || name === 'recon';
+  const isDesign = name === 'reversal' || name === 'recon' || name === 'tb';
   document.getElementById('topbar-title').textContent    = isDesign ? '' : cfg.title;
   document.getElementById('topbar-subtitle').textContent = isDesign ? '' : cfg.subtitle;
   const container = document.getElementById('view-' + name);
@@ -2971,7 +2980,7 @@ function renderUploadPanel(name, container, cfg) {
 
   // Reversal Check & Posting Validation follow the Pre-Check TB design:
   // simplified intro, no long procedural description.
-  const simpleIntro = name === 'reversal' || name === 'recon';
+  const simpleIntro = name === 'reversal' || name === 'recon' || name === 'tb';
   const introHtml = simpleIntro
     ? `<div class="upload-intro"><div class="upload-intro-title">${cfg.title}</div></div>`
     : `<div class="upload-intro"><div class="upload-intro-title">${cfg.title}</div><div class="upload-intro-desc">${cfg.description || cfg.subtitle + '.'}</div></div>`;
@@ -3022,9 +3031,11 @@ async function runStation(name) {
 let _unmappedStation = null;
 
 function renderResultsPanel(name, container, cfg) {
-  // Reversal Check & Posting Validation use the Pre-Check TB design-handoff layout
+  // Reversal Check, Posting Validation and TB Reconciliation all use the
+  // Pre-Check TB design-handoff layout.
   if (name === 'reversal') { renderReversalResults(container); return; }
   if (name === 'recon')    { renderReconResults(container);    return; }
+  if (name === 'tb')       { renderTbReconResults(container);  return; }
 
   const data = S.results[name]; if (!data) return;
   const cols     = cfg.columns;
@@ -5900,6 +5911,336 @@ function rcnExport() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Posting Validation');
   XLSX.writeFile(wb, 'posting_validation.xlsx');
+}
+
+// ============================================================
+//  TB RECONCILIATION — design-handoff (mirrors Pre-Check TB styling,
+//  with an extra Net Variance KPI per the Dashboard.html handoff)
+// ============================================================
+const TBR_COLS = ['STATUS','ACCOUNTS','ACCOUNT_NAME','ENTITY','RC','GL_NUMBER','GL_NATURE','PRODUCT_CODE','INTERCO','ISLAMIC_INDICATOR','CURRENCY','YTD_ENTERED','PER_RDL','VARIANCE'];
+const TBR_COL_LABELS = {
+  STATUS:'Status', ACCOUNTS:'Account String', ACCOUNT_NAME:'Account Name',
+  ENTITY:'Entity', RC:'RC', GL_NUMBER:'GL Number', GL_NATURE:'GL Nature',
+  PRODUCT_CODE:'Product', INTERCO:'Interco', ISLAMIC_INDICATOR:'Islamic',
+  CURRENCY:'Currency', YTD_ENTERED:'YTD Entered', PER_RDL:'Per RDL', VARIANCE:'Variance'
+};
+const TBR_NUM_COLS = new Set(['YTD_ENTERED','PER_RDL','VARIANCE']);
+const TBR_STATUS_LABELS = { break:'Break', matched:'Matched' };
+const TBR_PAGE_SIZE = 50;
+
+const tbReconState = { statusFilter: 'all', filters: {}, page: 1 };
+
+function tbrStatusOf(r) { return Math.abs(r.VARIANCE||0) > 0 ? 'break' : 'matched'; }
+function tbrRowField(r, col) {
+  if (col === 'STATUS') return TBR_STATUS_LABELS[tbrStatusOf(r)];
+  if (TBR_NUM_COLS.has(col)) {
+    const v = r[col] || 0;
+    if (col === 'VARIANCE') return Math.abs(v) === 0 ? '–' : (v < 0 ? '-' : '') + fmtNum(Math.abs(v));
+    return fmtNum(v);
+  }
+  return String(r[col] || '');
+}
+
+function tbrBuildChipsHtml() {
+  const filters = tbReconState.filters || {};
+  const active = TBR_COLS.filter(k => fdIsActive(filters[k]));
+  if (!active.length) return '';
+  const chips = active.map(k => {
+    const f = filters[k];
+    const sel = f.selected ? [...f.selected] : [];
+    let disp;
+    if (f.text && sel.length === 0) {
+      disp = `contains "${f.text}"`;
+    } else if (sel.length === 0) {
+      disp = '—';
+    } else if (sel.length <= 2) {
+      disp = sel.map(v => escapeHtmlAttr(v)).join(', ');
+    } else {
+      disp = `${escapeHtmlAttr(sel[0])} <span class="dim">+${sel.length - 1}</span>`;
+    }
+    return `<span class="ptb-filter-chip">${TBR_COL_LABELS[k]} <span class="dim">is</span> <span class="fc-vals">${disp}</span><button class="fc-x" onclick="tbrClearColFilter('${k}')" title="Remove">×</button></span>`;
+  }).join('');
+  return `<div class="ptb-filter-chips active">${chips}<button class="ptb-filter-chip-clear" onclick="tbrClearAllColFilters()">Clear all</button></div>`;
+}
+
+function tbrBuildPagerHtml(totalPages, currentPage) {
+  if (totalPages <= 1) return '';
+  const btns = [];
+  const disabled = (d) => d ? ' disabled' : '';
+  btns.push(`<button${disabled(currentPage === 1)} onclick="tbrSetPage(${currentPage - 1})" title="Previous">‹</button>`);
+  const pages = new Set([1, totalPages, currentPage, currentPage - 1, currentPage + 1]);
+  const sorted = [...pages].filter(p => p >= 1 && p <= totalPages).sort((a, b) => a - b);
+  let prev = 0;
+  for (const p of sorted) {
+    if (p - prev > 1) btns.push(`<span class="ptb-pager-ellipsis">…</span>`);
+    btns.push(`<button class="${p === currentPage ? 'active' : ''}" onclick="tbrSetPage(${p})">${p}</button>`);
+    prev = p;
+  }
+  btns.push(`<button${disabled(currentPage === totalPages)} onclick="tbrSetPage(${currentPage + 1})" title="Next">›</button>`);
+  return `<div class="ptb-pager">${btns.join('')}</div>`;
+}
+
+function renderTbReconResults(container) {
+  const data = S.results.tb;
+  if (!data) return;
+  const results = Array.isArray(data) ? data : [];
+  const breakRows = results.filter(r => Math.abs(r.VARIANCE||0) > 0);
+  const matchedRows = results.length - breakRows.length;
+  const reportingMonth = data.__reportingMonth || null;
+  const unmappedCount = (data.unmapped || []).length;
+  const netVariance = results.reduce((s, r) => s + (r.VARIANCE||0), 0);
+  if (!tbReconState.filters) tbReconState.filters = {};
+  if (!tbReconState.statusFilter) tbReconState.statusFilter = 'all';
+  if (!tbReconState.page) tbReconState.page = 1;
+  const statusFilter = tbReconState.statusFilter;
+
+  // Apply status seg, then per-column filters
+  const afterStatus = statusFilter === 'all' ? results : results.filter(r => tbrStatusOf(r) === statusFilter);
+  const display = afterStatus.filter(r => {
+    for (const k of TBR_COLS) {
+      const f = tbReconState.filters[k];
+      if (fdIsActive(f) && !fdMatch(tbrRowField(r, k), f)) return false;
+    }
+    return true;
+  });
+
+  // Totals across the currently-visible (filtered) rows
+  const totals = { YTD_ENTERED: 0, PER_RDL: 0, VARIANCE: 0 };
+  display.forEach(r => { totals.YTD_ENTERED += r.YTD_ENTERED || 0; totals.PER_RDL += r.PER_RDL || 0; totals.VARIANCE += r.VARIANCE || 0; });
+
+  // Pagination
+  const totalPages = Math.max(1, Math.ceil(display.length / TBR_PAGE_SIZE));
+  if (tbReconState.page > totalPages) tbReconState.page = totalPages;
+  if (tbReconState.page < 1) tbReconState.page = 1;
+  const page = tbReconState.page;
+  const startIdx = (page - 1) * TBR_PAGE_SIZE;
+  const endIdx = Math.min(startIdx + TBR_PAGE_SIZE, display.length);
+  const pageRows = display.slice(startIdx, endIdx);
+
+  const matchedPct = results.length ? (matchedRows / results.length * 100) : 0;
+  const unmappedMetaHtml = unmappedCount
+    ? `<span>·</span><span style="cursor:pointer;color:var(--d-warn,#B8740E);text-decoration:underline;text-underline-offset:2px;" onclick="openUnmappedModal('tb')" title="View unmapped accounts">⚠ ${unmappedCount.toLocaleString()} unmapped</span>`
+    : '';
+  const pageHeadHtml = `
+    <div class="ptb-page-head">
+      <div class="ptb-page-title">
+        <h1>TB Reconciliation</h1>
+        <div class="ptb-meta">
+          ${reportingMonth ? `<span>Period <b>${reportingMonth}</b></span>` : ''}
+          ${unmappedMetaHtml}
+        </div>
+      </div>
+      <div class="ptb-page-actions">
+        <button class="ptb-btn primary" onclick="tbrExport()" title="Export (E)">
+          <svg><use href="#i-download"/></svg>Export
+        </button>
+      </div>
+    </div>`;
+
+  const netVarColor = Math.abs(netVariance) > 0 ? 'var(--d-neg)' : 'var(--d-pos)';
+  const netVarDisplay = (netVariance < 0 ? '-' : '') + fmtNum(Math.abs(netVariance));
+  const kpiHtml = `
+    <div class="ptb-grid">
+      <div class="ptb-card ptb-kpi ptb-col-3">
+        <div class="ptb-label">Net Variance</div>
+        <div class="ptb-value" style="font-family:'JetBrains Mono','IBM Plex Mono',monospace;color:${netVarColor};${netVariance < 0 ? '' : ''}">${netVarDisplay}</div>
+      </div>
+      <div class="ptb-card ptb-kpi ptb-col-3">
+        <div class="ptb-label">Reconciliation Status</div>
+        <div class="ptb-value" style="font-size:22px;letter-spacing:-0.02em">
+          <span style="color:var(--d-pos)">${matchedRows.toLocaleString()}</span>
+          <span class="dim" style="font-size:14px">matched</span>
+          <span style="color:${breakRows.length?'var(--d-neg)':'var(--d-ink-4)'};margin-left:6px">${breakRows.length.toLocaleString()}</span>
+          <span class="dim" style="font-size:14px">breaks</span>
+        </div>
+        <div class="ptb-footline">
+          <div class="ptb-bar-track"><div class="ptb-bar-fill" style="width:${matchedPct.toFixed(1)}%"></div></div>
+          <span class="mono">${matchedPct.toFixed(1)}%</span>
+        </div>
+      </div>
+    </div>`;
+
+  const segBtn = (f, label, count, tone) => {
+    const active = statusFilter === f;
+    let cntColor = '';
+    if (tone === 'neg' && count > 0) cntColor = 'style="color:var(--d-neg)"';
+    else if (!active) cntColor = 'style="color:var(--d-ink-4)"';
+    return `<button class="${active?'active':''}" onclick="tbrSetStatusFilter('${f}')">${label}<span class="ptb-count" ${cntColor}>${count.toLocaleString()}</span></button>`;
+  };
+  const toolbarHtml = `
+    <div class="ptb-table-toolbar">
+      <div class="ptb-seg">
+        ${segBtn('all','All', results.length, 'dim')}
+        ${segBtn('break','Breaks', breakRows.length, 'neg')}
+        ${segBtn('matched','Matched', matchedRows, 'dim')}
+      </div>
+    </div>`;
+
+  const chipsHtml = tbrBuildChipsHtml();
+
+  const thHtml = TBR_COLS.map(k => {
+    const cf = tbReconState.filters[k];
+    const active = fdIsActive(cf);
+    const numCls = TBR_NUM_COLS.has(k) ? ' num' : '';
+    return `<th class="${active?'filtered':''}${numCls}" data-col="${k}" onclick="openTbReconFilter('${k}',this)">${TBR_COL_LABELS[k]}<span class="fcol"></span></th>`;
+  }).join('');
+
+  // Build absolute-index map so the clickable Per-RDL cell opens the
+  // right breakdown even when the filter pipeline reorders / paginates.
+  const idxByRef = new Map();
+  results.forEach((r, i) => idxByRef.set(r, i));
+
+  const rowsHtml = pageRows.map(r => {
+    const st = tbrStatusOf(r);
+    const chip = st === 'break'
+      ? `<span class="status-chip break"><span class="dot"></span>Break</span>`
+      : `<span class="status-chip matched"><span class="dot"></span>Matched</span>`;
+    const varV = r.VARIANCE || 0;
+    const varCell = Math.abs(varV) === 0
+      ? `<span style="color:var(--d-ink-4)">—</span>`
+      : `${varV < 0 ? '-' : ''}${fmtNum(Math.abs(varV))}`;
+    const absIdx = idxByRef.get(r);
+    const perRdlCell = (r.ACCOUNTS_LIST && r.ACCOUNTS_LIST.length > 0)
+      ? `<span class="clickable-cell" onclick="tbrOpenBreakdown(event,${absIdx})">${fmtNum(r.PER_RDL||0)}</span>`
+      : fmtNum(r.PER_RDL||0);
+    return `<tr data-status="${st}">
+      <td>${chip}</td>
+      <td class="d-mono">${r.ACCOUNTS||''}</td>
+      <td>${r.ACCOUNT_NAME||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+      <td>${r.ENTITY||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+      <td>${r.RC||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+      <td class="d-mono">${r.GL_NUMBER||''}</td>
+      <td>${r.GL_NATURE||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+      <td>${r.PRODUCT_CODE||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+      <td>${r.INTERCO||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+      <td>${r.ISLAMIC_INDICATOR||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+      <td class="d-mono" style="color:var(--d-ink-3)">${r.CURRENCY||''}</td>
+      <td class="num">${fmtNum(r.YTD_ENTERED||0)}</td>
+      <td class="num">${perRdlCell}</td>
+      <td class="num">${varCell}</td>
+    </tr>`;
+  }).join('');
+
+  // Totals row across the currently-visible rows — retains the TB-only
+  // footer behaviour the old station renderer had.
+  const totalsRow = display.length > 0
+    ? `<tfoot><tr class="ptb-tfoot-row">
+        <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="d-mono" style="color:var(--d-ink-3);text-transform:uppercase;letter-spacing:0.06em;font-size:10px">Total</td>
+        <td class="num">${fmtNum(totals.YTD_ENTERED)}</td>
+        <td class="num">${fmtNum(totals.PER_RDL)}</td>
+        <td class="num" style="color:${Math.abs(totals.VARIANCE)>0?'var(--d-neg)':'var(--d-ink-2)'}">${Math.abs(totals.VARIANCE)===0?'—':(totals.VARIANCE<0?'-':'')+fmtNum(Math.abs(totals.VARIANCE))}</td>
+      </tr></tfoot>`
+    : '';
+
+  const showingFrom = display.length === 0 ? 0 : startIdx + 1;
+  const showingTo = endIdx;
+  const footerHtml = `
+    <div class="ptb-table-foot">
+      <span>Showing <b>${showingFrom.toLocaleString()}–${showingTo.toLocaleString()}</b> of <b>${display.length.toLocaleString()}</b> rows</span>
+      ${tbrBuildPagerHtml(totalPages, page)}
+    </div>`;
+
+  container.innerHTML = `<div class="ptb-v2">
+    ${pageHeadHtml}
+    ${kpiHtml}
+    <div class="ptb-card ptb-table-card">
+      ${toolbarHtml}
+      ${chipsHtml}
+      <div class="ptb-scroll">
+        <table class="ptb-data">
+          <thead><tr>${thHtml}</tr></thead>
+          <tbody>${rowsHtml || `<tr><td colspan="${TBR_COLS.length}" style="text-align:center;padding:40px;color:var(--d-ink-4)">No rows match the current filters</td></tr>`}</tbody>
+          ${totalsRow}
+        </table>
+      </div>
+      ${footerHtml}
+    </div>
+  </div>`;
+}
+
+function openTbReconFilter(key, triggerEl) {
+  if (!tbReconState.filters) tbReconState.filters = {};
+  const results = S.results.tb || [];
+  const base = Array.isArray(results) ? results : [];
+  const statusFilter = tbReconState.statusFilter || 'all';
+  const baseDisplay = statusFilter === 'all' ? base : base.filter(r => tbrStatusOf(r) === statusFilter);
+  const otherFiltered = baseDisplay.filter(r => {
+    for (const k of TBR_COLS) {
+      if (k === key) continue;
+      const f = tbReconState.filters[k];
+      if (fdIsActive(f) && !fdMatch(tbrRowField(r, k), f)) return false;
+    }
+    return true;
+  });
+  const counts = new Map();
+  otherFiltered.forEach(r => {
+    const v = tbrRowField(r, key);
+    counts.set(v, (counts.get(v) || 0) + 1);
+  });
+  const allValues = [...counts.keys()].filter(v => v !== '' && v !== '–').sort();
+  fdOpenDesign(triggerEl, allValues, tbReconState.filters[key] || null, TBR_COL_LABELS[key], counts, (newFilter) => {
+    tbReconState.filters[key] = fdIsActive(newFilter) ? newFilter : undefined;
+    tbReconState.page = 1;
+    renderTbReconResults(document.getElementById('view-tb'));
+  });
+}
+
+function tbrSetStatusFilter(f) {
+  tbReconState.statusFilter = f;
+  tbReconState.page = 1;
+  renderTbReconResults(document.getElementById('view-tb'));
+}
+function tbrSetPage(p) {
+  tbReconState.page = p;
+  renderTbReconResults(document.getElementById('view-tb'));
+}
+function tbrClearColFilter(k) {
+  if (tbReconState.filters) delete tbReconState.filters[k];
+  tbReconState.page = 1;
+  renderTbReconResults(document.getElementById('view-tb'));
+}
+function tbrClearAllColFilters() {
+  tbReconState.filters = {};
+  tbReconState.page = 1;
+  renderTbReconResults(document.getElementById('view-tb'));
+}
+function tbrResetAll() {
+  tbReconState.statusFilter = 'all';
+  tbReconState.filters = {};
+  tbReconState.page = 1;
+  renderTbReconResults(document.getElementById('view-tb'));
+}
+function tbrOpenBreakdown(e, absIdx) {
+  e.stopPropagation();
+  const results = S.results.tb || [];
+  const row = results[absIdx];
+  if (!row || !row.ACCOUNTS_LIST) return;
+  breakdownData = row.ACCOUNTS_LIST;
+  breakdownPage = 1;
+  document.getElementById('breakdown-title').textContent = `Account Breakdown — ${row.GL_NUMBER||''}`;
+  renderBreakdownPage();
+  document.getElementById('breakdown-modal-bg').classList.add('show');
+}
+function tbrExport() {
+  const results = S.results.tb;
+  if (!Array.isArray(results)) return;
+  const statusFilter = tbReconState.statusFilter || 'all';
+  const afterStatus = statusFilter === 'all' ? results : results.filter(r => tbrStatusOf(r) === statusFilter);
+  const display = afterStatus.filter(r => {
+    for (const k of TBR_COLS) {
+      const f = tbReconState.filters[k];
+      if (fdIsActive(f) && !fdMatch(tbrRowField(r, k), f)) return false;
+    }
+    return true;
+  });
+  const rows = display.map(r => {
+    const o = { 'Status': TBR_STATUS_LABELS[tbrStatusOf(r)] };
+    TBR_COLS.forEach(k => { if (k !== 'STATUS') o[TBR_COL_LABELS[k]] = r[k]; });
+    return o;
+  });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'TB Reconciliation');
+  XLSX.writeFile(wb, 'tb_reconciliation.xlsx');
 }
 
 // ============================================================
