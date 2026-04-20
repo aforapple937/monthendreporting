@@ -840,6 +840,55 @@
     height: var(--d-row-h);
   }
 
+  /* Variance-summary modal (TB Reconciliation "Group by") */
+  .ptb-modal-bg {
+    position: fixed; inset: 0; z-index: 3000;
+    background: rgba(10, 10, 10, 0.38);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  .ptb-v2.ptb-modal-bg .ptb-modal {
+    background: var(--d-surface);
+    border: 1px solid var(--d-line);
+    border-radius: 12px;
+    width: 860px; max-width: 100%; max-height: 88vh;
+    display: flex; flex-direction: column;
+    box-shadow: 0 16px 48px -12px rgba(0,0,0,0.25), 0 4px 12px -4px rgba(0,0,0,0.1);
+    overflow: hidden;
+  }
+  .ptb-v2.ptb-modal-bg .ptb-modal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border-bottom: 1px solid var(--d-line);
+  }
+  .ptb-v2.ptb-modal-bg .ptb-modal-title {
+    font-size: 15px; font-weight: 600; color: var(--d-ink);
+    letter-spacing: -0.01em;
+  }
+  .ptb-v2.ptb-modal-bg .ptb-modal-sub {
+    font-size: 11px; color: var(--d-ink-3); margin-top: 3px;
+  }
+  .ptb-v2.ptb-modal-bg .ptb-modal-close {
+    border: 0; background: transparent; cursor: pointer;
+    color: var(--d-ink-3); font-size: 22px; line-height: 1;
+    padding: 4px 8px; border-radius: 6px;
+  }
+  .ptb-v2.ptb-modal-bg .ptb-modal-close:hover { background: var(--d-line-2); color: var(--d-ink); }
+  .ptb-v2.ptb-modal-bg .ptb-modal-body {
+    overflow: auto; flex: 1; padding: 18px 20px 20px;
+    display: flex; flex-direction: column; gap: 22px;
+  }
+  .ptb-v2.ptb-modal-bg .ptb-modal-section-title {
+    font-size: 11px; font-weight: 500; color: var(--d-ink-2);
+    text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px;
+  }
+  .ptb-v2.ptb-modal-bg .ptb-modal-section-count {
+    color: var(--d-ink-4); font-weight: 400; letter-spacing: 0; text-transform: none;
+    margin-left: 4px;
+  }
+  .ptb-v2.ptb-modal-bg .ptb-modal-section .ptb-data {
+    border: 1px solid var(--d-line); border-radius: 8px; overflow: hidden;
+  }
+
   /* Break row tint */
   .ptb-v2 table.ptb-data tbody tr[data-status="break"] {
     background: color-mix(in srgb, var(--d-neg) 3%, transparent);
@@ -3139,7 +3188,7 @@ function closeUnmappedModal(e) {
 function openTbVarianceSummaryModal() {
   const data = S.results['tb'] || [];
 
-  // High-level table: Entity + GL Nature
+  // High-level table: sum of variance by Entity + GL Nature (break rows only)
   const highLevelMap = new Map();
   data.forEach(r => {
     if (Math.abs(r.VARIANCE||0) === 0) return;
@@ -3152,7 +3201,7 @@ function openTbVarianceSummaryModal() {
   const highLevelRows = [...highLevelMap.values()].sort((a,b) => Math.abs(b.variance) - Math.abs(a.variance));
   const highLevelTotal = highLevelRows.reduce((s,r) => s + r.variance, 0);
 
-  // Detailed table: Entity + GL Nature + GL Number + Currency
+  // Detailed table: sum of variance by Entity + GL Nature + GL Number + Currency (break rows only)
   const detailMap = new Map();
   data.forEach(r => {
     if (Math.abs(r.VARIANCE||0) === 0) return;
@@ -3167,47 +3216,51 @@ function openTbVarianceSummaryModal() {
 
   const existing = document.getElementById('tb-var-summary-bg'); if (existing) existing.remove();
 
+  const fmtVar = (v) => {
+    if (Math.abs(v) === 0) return `<span style="color:var(--d-ink-4)">—</span>`;
+    return (v<0?'-':'') + fmtNum(Math.abs(v));
+  };
+
   const highLevelHtml = highLevelRows.map(r => {
-    const v = r.variance;
-    return `<tr><td style="padding:6px 10px;font-size:11px">${r.entity}</td><td style="padding:6px 10px;font-size:11px">${r.nature}</td><td class="mono-val" style="padding:6px 10px;text-align:right;font-size:11px">${v<0?'-':''}${fmtNum(Math.abs(v))}</td></tr>`;
-  }).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--ink3);padding:20px;font-size:11px">No variance breaks.</td></tr>';
+    return `<tr><td>${r.entity}</td><td>${r.nature}</td><td class="num">${fmtVar(r.variance)}</td></tr>`;
+  }).join('') || `<tr><td colspan="3" style="text-align:center;color:var(--d-ink-4);padding:24px">No variance breaks.</td></tr>`;
 
   const detailHtml = detailRows.map(r => {
-    const v = r.variance;
-    return `<tr><td style="padding:6px 10px;font-size:11px">${r.entity}</td><td style="padding:6px 10px;font-size:11px">${r.nature}</td><td style="padding:6px 10px;font-size:11px;font-family:var(--mono)">${r.gl}</td><td style="padding:6px 10px;font-size:11px">${r.ccy}</td><td class="mono-val" style="padding:6px 10px;text-align:right;font-size:11px">${v<0?'-':''}${fmtNum(Math.abs(v))}</td></tr>`;
-  }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--ink3);padding:20px;font-size:11px">No variance breaks.</td></tr>';
+    return `<tr><td>${r.entity}</td><td>${r.nature}</td><td class="d-mono">${r.gl}</td><td class="d-mono" style="color:var(--d-ink-3)">${r.ccy}</td><td class="num">${fmtVar(r.variance)}</td></tr>`;
+  }).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--d-ink-4);padding:24px">No variance breaks.</td></tr>`;
+
+  const totalColor = (v) => Math.abs(v) > 0 ? 'var(--d-neg)' : 'var(--d-pos)';
 
   const bg = document.createElement('div');
   bg.id = 'tb-var-summary-bg';
-  bg.className = 'modal-bg show';
-  bg.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:3000;display:flex;align-items:center;justify-content:center;';
+  bg.className = 'ptb-v2 ptb-modal-bg';
   bg.onclick = (e) => { if (e.target === bg) bg.remove(); };
   bg.innerHTML = `
-    <div style="background:#fff;border-radius:12px;width:820px;max-width:92vw;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.18);">
-      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+    <div class="ptb-modal">
+      <div class="ptb-modal-head">
         <div>
-          <div style="font-size:13px;font-weight:700;color:var(--ink);">Variance Summary</div>
-          <div style="font-size:10px;color:var(--ink3);margin-top:2px;">Sorted by absolute variance</div>
+          <div class="ptb-modal-title">Variance Summary</div>
+          <div class="ptb-modal-sub">Sorted by absolute variance · breaks only</div>
         </div>
-        <span style="cursor:pointer;font-size:18px;color:var(--ink3);line-height:1" onclick="document.getElementById('tb-var-summary-bg').remove()">&times;</span>
+        <button class="ptb-modal-close" onclick="document.getElementById('tb-var-summary-bg').remove()" aria-label="Close">&times;</button>
       </div>
-      <div style="overflow:auto;flex:1;padding:14px 20px;display:flex;flex-direction:column;gap:18px;">
-        <div>
-          <div style="font-size:11px;font-weight:600;color:var(--ink);margin-bottom:6px;">By Entity &amp; GL Nature <span style="color:var(--ink3);font-weight:400;">(${highLevelRows.length.toLocaleString()} row${highLevelRows.length===1?'':'s'})</span></div>
-          <table class="data-table" style="font-size:11px;width:100%;">
-            <thead><tr><th>Entity</th><th>GL Nature</th><th style="text-align:right">Variance</th></tr></thead>
+      <div class="ptb-modal-body">
+        <section class="ptb-modal-section">
+          <div class="ptb-modal-section-title">By Entity &amp; GL Nature <span class="ptb-modal-section-count">(${highLevelRows.length.toLocaleString()} row${highLevelRows.length===1?'':'s'})</span></div>
+          <table class="ptb-data">
+            <thead><tr><th>Entity</th><th>GL Nature</th><th class="num">Variance</th></tr></thead>
             <tbody>${highLevelHtml}</tbody>
-            <tfoot class="moa-tfoot"><tr><td colspan="2" style="padding:8px 10px;font-weight:700;font-size:11px">Total</td><td class="mono-val" style="padding:8px 10px;text-align:right;font-weight:700;font-size:11px;color:${Math.abs(highLevelTotal)>0?'var(--red) !important':'var(--green) !important'}">${highLevelTotal<0?'-':''}${fmtNum(Math.abs(highLevelTotal))}</td></tr></tfoot>
+            <tfoot><tr class="ptb-tfoot-row"><td colspan="2" style="text-transform:uppercase;letter-spacing:0.06em;font-size:10px;color:var(--d-ink-3)">Total</td><td class="num" style="color:${totalColor(highLevelTotal)}">${fmtVar(highLevelTotal)}</td></tr></tfoot>
           </table>
-        </div>
-        <div>
-          <div style="font-size:11px;font-weight:600;color:var(--ink);margin-bottom:6px;">By Entity, GL Nature, GL Number &amp; Currency <span style="color:var(--ink3);font-weight:400;">(${detailRows.length.toLocaleString()} row${detailRows.length===1?'':'s'})</span></div>
-          <table class="data-table" style="font-size:11px;width:100%;">
-            <thead><tr><th>Entity</th><th>GL Nature</th><th>GL Number</th><th>Currency</th><th style="text-align:right">Variance</th></tr></thead>
+        </section>
+        <section class="ptb-modal-section">
+          <div class="ptb-modal-section-title">By Entity, GL Nature, GL Number &amp; Currency <span class="ptb-modal-section-count">(${detailRows.length.toLocaleString()} row${detailRows.length===1?'':'s'})</span></div>
+          <table class="ptb-data">
+            <thead><tr><th>Entity</th><th>GL Nature</th><th>GL Number</th><th>Currency</th><th class="num">Variance</th></tr></thead>
             <tbody>${detailHtml}</tbody>
-            <tfoot class="moa-tfoot"><tr><td colspan="4" style="padding:8px 10px;font-weight:700;font-size:11px">Total</td><td class="mono-val" style="padding:8px 10px;text-align:right;font-weight:700;font-size:11px;color:${Math.abs(detailTotal)>0?'var(--red) !important':'var(--green) !important'}">${detailTotal<0?'-':''}${fmtNum(Math.abs(detailTotal))}</td></tr></tfoot>
+            <tfoot><tr class="ptb-tfoot-row"><td colspan="4" style="text-transform:uppercase;letter-spacing:0.06em;font-size:10px;color:var(--d-ink-3)">Total</td><td class="num" style="color:${totalColor(detailTotal)}">${fmtVar(detailTotal)}</td></tr></tfoot>
           </table>
-        </div>
+        </section>
       </div>
     </div>`;
   document.body.appendChild(bg);
@@ -6074,6 +6127,10 @@ function renderTbReconResults(container) {
         ${segBtn('break','Breaks', breakRows.length, 'neg')}
         ${segBtn('matched','Matched', matchedRows, 'dim')}
       </div>
+      <div style="flex:1"></div>
+      <button class="ptb-btn" onclick="openTbVarianceSummaryModal()" title="Variance summary grouped by Entity / GL Nature / GL Number / Currency">
+        <svg><use href="#i-layers"/></svg>Group by
+      </button>
     </div>`;
 
   const chipsHtml = tbrBuildChipsHtml();
