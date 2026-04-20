@@ -2583,7 +2583,7 @@ const RELOAD_HANDLERS = {
   dq:        () => { if (typeof dqReload === 'function') dqReload(); },
   ccychange: () => { ccyState.results = null; blockAutoRun('ccychange'); renderCcyChange(); },
   mtmfvoci:  () => { mtmState.results = null; blockAutoRun('mtmfvoci'); renderMtmFvoci(); },
-  reversal:  () => reupload('reversal'),
+  reversal:  () => { revState.statusFilter = 'all'; revState.filters = {}; revState.page = 1; reupload('reversal'); },
   recon:     () => reupload('recon'),
   tb:        () => reupload('tb'),
   majmov:    () => { majMovState.results = null; majMovState.presentation = null; blockAutoRun('majmov'); renderMajorMovement(); },
@@ -2599,7 +2599,7 @@ function setTopbarReload(viewName) {
   const actions = document.getElementById('topbar-actions');
   if (!actions) return;
   const handler = RELOAD_HANDLERS[viewName];
-  if (!handler || viewName === 'pretb') { actions.innerHTML = ''; return; }
+  if (!handler || viewName === 'pretb' || viewName === 'reversal') { actions.innerHTML = ''; return; }
   actions.innerHTML = `<button class="btn btn-sm" onclick="RELOAD_HANDLERS['${viewName}']()" title="Reload files for this pipeline (R)" style="display:flex;align-items:center;gap:4px;"><span style="font-size:13px">↻</span>Reload files</button>`;
 }
 
@@ -2609,7 +2609,7 @@ const SHORTCUT_HANDLERS = {
   resetFilters: {
     pretb:     () => preTbSetFilter(false),
     mtmfvoci:  () => mtmSetFilter(false),
-    reversal:  () => stationSetFilter('reversal', false),
+    reversal:  () => revResetAll(),
     recon:     () => stationSetFilter('recon', false),
     tb:        () => stationSetFilter('tb', false),
     majmov:    () => { majMovState.filters = {}; majMovState.page = 0; renderMajMovResults(document.getElementById('view-majmov')); },
@@ -2621,7 +2621,7 @@ const SHORTCUT_HANDLERS = {
     loanrecon: () => { if (typeof loanReconExport === 'function') loanReconExport(); },
     ccychange: () => { if (typeof exportCcyXlsx === 'function') exportCcyXlsx(_ccyTab); },
     mtmfvoci:  () => { if (typeof exportMtmXlsx === 'function') exportMtmXlsx(); },
-    reversal:  () => { if (typeof exportCSV === 'function') exportCSV('reversal'); },
+    reversal:  () => { if (typeof revExport === 'function') revExport(); },
     recon:     () => { if (typeof exportCSV === 'function') exportCSV('recon'); },
     tb:        () => { if (typeof exportCSV === 'function') exportCSV('tb'); },
     moa:       () => { if (moaState.dashView === 'journal') { if (typeof exportMoaJournalXlsx === 'function') exportMoaJournalXlsx(); } else { if (typeof exportMoaXlsx === 'function') exportMoaXlsx(); } },
@@ -2674,7 +2674,7 @@ function renderView(name) {
   // Pre-Check TB uses the design-handoff page-head as its title; hide the
   // shared main-topbar so it doesn't double up.
   const topbar = document.querySelector('.main-topbar');
-  if (topbar) topbar.style.display = (name === 'pretb') ? 'none' : '';
+  if (topbar) topbar.style.display = (name === 'pretb' || name === 'reversal') ? 'none' : '';
   const views = {
     'pretb':     renderPreTb,
     'loanrecon': renderLoanRecon,
@@ -2921,8 +2921,12 @@ function exportCSV(name) {
 // ============================================================
 function renderStation(name) {
   const cfg = stationConfig[name];
-  document.getElementById('topbar-title').textContent    = cfg.title;
-  document.getElementById('topbar-subtitle').textContent = cfg.subtitle;
+  // Reversal Check uses a design-handoff page-head inside the view itself,
+  // so leave the shared topbar title/subtitle empty (the topbar is hidden
+  // anyway in renderView).
+  const isDesign = name === 'reversal';
+  document.getElementById('topbar-title').textContent    = isDesign ? '' : cfg.title;
+  document.getElementById('topbar-subtitle').textContent = isDesign ? '' : cfg.subtitle;
   const container = document.getElementById('view-' + name);
   if (!S.results[name]) {
     // Auto-run if all files are ready and no prior date error
@@ -2965,12 +2969,15 @@ function renderUploadPanel(name, container, cfg) {
     rdlMonthsHtml = `<div style="padding:6px 16px;font-size:10px;color:var(--ink3);">Stored RDL months: ${monthBadges} <span style="color:var(--ink4);margin-left:4px">· Auto-selects based on TB date</span></div>`;
   }
 
+  // Reversal Check follows the Pre-Check TB design: simplified intro, no
+  // long procedural description.
+  const introHtml = name === 'reversal'
+    ? `<div class="upload-intro"><div class="upload-intro-title">${cfg.title}</div></div>`
+    : `<div class="upload-intro"><div class="upload-intro-title">${cfg.title}</div><div class="upload-intro-desc">${cfg.description || cfg.subtitle + '.'}</div></div>`;
+
   container.innerHTML = `
     <div class="upload-view">
-      <div class="upload-intro">
-        <div class="upload-intro-title">${cfg.title}</div>
-        <div class="upload-intro-desc">${cfg.description || cfg.subtitle + '.'}</div>
-      </div>
+      ${introHtml}
       <div class="file-slots">
         <div class="slot-group-label">Required files</div>
         ${slotsHtml}
@@ -3014,6 +3021,9 @@ async function runStation(name) {
 let _unmappedStation = null;
 
 function renderResultsPanel(name, container, cfg) {
+  // Reversal Check uses the Pre-Check TB design-handoff layout
+  if (name === 'reversal') { renderReversalResults(container); return; }
+
   const data = S.results[name]; if (!data) return;
   const cols     = cfg.columns;
   const filtered = applyStationFilters(name, data, cols);
@@ -3022,15 +3032,6 @@ function renderResultsPanel(name, container, cfg) {
 
   const revMonth    = data.__revMonth    || null;
   const dateWarning = data.__dateWarning || null;
-  if (name === 'reversal' && dateWarning) {
-    container.innerHTML = `<div class="results-view" style="padding:24px">
-      <div style="background:var(--red-bg);border:1px solid #f5c4c0;border-radius:var(--radius);padding:16px 20px;max-width:600px">
-        <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:8px">⚠ Date Mismatch</div>
-        <div style="font-size:12px;color:var(--ink);line-height:1.6">${dateWarning}</div>
-        <button class="btn btn-sm" style="margin-top:14px" onclick="S.results['reversal']=null;renderStation('reversal')">Back</button>
-      </div></div>`;
-    return;
-  }
 
   const unmappedCount = (data.unmapped || []).length;
   const breaksActive = !!stationOnlyBreaks[name];
@@ -5300,6 +5301,297 @@ function preTbExport() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Pre-Check TB');
   XLSX.writeFile(wb, 'pre_check_tb.xlsx');
+}
+
+// ============================================================
+//  REVERSAL CHECK — design-handoff (mirrors Pre-Check TB styling)
+// ============================================================
+const REV_COLS = ['STATUS','ENTITY','RC','GL_NUMBER','PRODUCT_CODE','INTERCO','ISLAMIC_INDICATOR','CURRENCY','PREV_DRCR','PREV_AMT','REV_DRCR','REV_AMT','VARIANCE'];
+const REV_COL_LABELS = {
+  STATUS:'Status', ENTITY:'Entity', RC:'RC', GL_NUMBER:'GL Number',
+  PRODUCT_CODE:'Product', INTERCO:'Interco', ISLAMIC_INDICATOR:'Islamic',
+  CURRENCY:'Currency', PREV_DRCR:'Prev DR/CR', PREV_AMT:'Prev Amount',
+  REV_DRCR:'Rev DR/CR', REV_AMT:'Rev Amount', VARIANCE:'Variance'
+};
+const REV_NUM_COLS = new Set(['PREV_AMT','REV_AMT','VARIANCE']);
+const REV_STATUS_LABELS = { break:'Break', matched:'Matched' };
+const REV_PAGE_SIZE = 50;
+
+const revState = { statusFilter: 'all', filters: {}, page: 1 };
+
+function revStatusOf(r) { return Math.abs(r.VARIANCE||0) > 0 ? 'break' : 'matched'; }
+function revRowField(r, col) {
+  if (col === 'STATUS') return REV_STATUS_LABELS[revStatusOf(r)];
+  if (REV_NUM_COLS.has(col)) {
+    const v = r[col] || 0;
+    if (col === 'VARIANCE') return Math.abs(v) === 0 ? '–' : (v < 0 ? '-' : '') + fmtNum(Math.abs(v));
+    return fmtNum(v);
+  }
+  return String(r[col] || '');
+}
+
+function revBuildChipsHtml() {
+  const filters = revState.filters || {};
+  const active = REV_COLS.filter(k => fdIsActive(filters[k]));
+  if (!active.length) return '';
+  const chips = active.map(k => {
+    const f = filters[k];
+    const sel = f.selected ? [...f.selected] : [];
+    let disp;
+    if (f.text && sel.length === 0) {
+      disp = `contains "${f.text}"`;
+    } else if (sel.length === 0) {
+      disp = '—';
+    } else if (sel.length <= 2) {
+      disp = sel.map(v => escapeHtmlAttr(v)).join(', ');
+    } else {
+      disp = `${escapeHtmlAttr(sel[0])} <span class="dim">+${sel.length - 1}</span>`;
+    }
+    return `<span class="ptb-filter-chip">${REV_COL_LABELS[k]} <span class="dim">is</span> <span class="fc-vals">${disp}</span><button class="fc-x" onclick="revClearColFilter('${k}')" title="Remove">×</button></span>`;
+  }).join('');
+  return `<div class="ptb-filter-chips active">${chips}<button class="ptb-filter-chip-clear" onclick="revClearAllColFilters()">Clear all</button></div>`;
+}
+
+function revBuildPagerHtml(totalPages, currentPage) {
+  if (totalPages <= 1) return '';
+  const btns = [];
+  const disabled = (d) => d ? ' disabled' : '';
+  btns.push(`<button${disabled(currentPage === 1)} onclick="revSetPage(${currentPage - 1})" title="Previous">‹</button>`);
+  const pages = new Set([1, totalPages, currentPage, currentPage - 1, currentPage + 1]);
+  const sorted = [...pages].filter(p => p >= 1 && p <= totalPages).sort((a, b) => a - b);
+  let prev = 0;
+  for (const p of sorted) {
+    if (p - prev > 1) btns.push(`<span class="ptb-pager-ellipsis">…</span>`);
+    btns.push(`<button class="${p === currentPage ? 'active' : ''}" onclick="revSetPage(${p})">${p}</button>`);
+    prev = p;
+  }
+  btns.push(`<button${disabled(currentPage === totalPages)} onclick="revSetPage(${currentPage + 1})" title="Next">›</button>`);
+  return `<div class="ptb-pager">${btns.join('')}</div>`;
+}
+
+function renderReversalResults(container) {
+  const data = S.results.reversal || [];
+
+  // Date-mismatch gate (unchanged behaviour, re-skinned on the design background)
+  if (data.__dateWarning) {
+    container.innerHTML = `<div class="ptb-v2"><div class="ptb-page-head"><div class="ptb-page-title"><h1>Reversal Check</h1></div></div>
+      <div class="ptb-card" style="max-width:600px;background:var(--d-neg-soft);border-color:color-mix(in srgb, var(--d-neg) 22%, transparent);">
+        <div style="font-size:13px;font-weight:600;color:var(--d-neg);margin-bottom:8px">⚠ Date Mismatch</div>
+        <div style="font-size:12px;color:var(--d-ink);line-height:1.6">${data.__dateWarning}</div>
+        <button class="ptb-btn" style="margin-top:14px" onclick="S.results['reversal']=null;renderStation('reversal')">Back</button>
+      </div></div>`;
+    return;
+  }
+
+  const results = Array.isArray(data) ? data : [];
+  const breakRows = results.filter(r => Math.abs(r.VARIANCE||0) > 0);
+  const matchedRows = results.length - breakRows.length;
+  const revMonth = data.__revMonth || null;
+  if (!revState.filters) revState.filters = {};
+  if (!revState.statusFilter) revState.statusFilter = 'all';
+  if (!revState.page) revState.page = 1;
+  const statusFilter = revState.statusFilter;
+
+  // Apply status seg, then per-column filters
+  const afterStatus = statusFilter === 'all' ? results : results.filter(r => revStatusOf(r) === statusFilter);
+  const display = afterStatus.filter(r => {
+    for (const k of REV_COLS) {
+      const f = revState.filters[k];
+      if (fdIsActive(f) && !fdMatch(revRowField(r, k), f)) return false;
+    }
+    return true;
+  });
+
+  // Pagination
+  const totalPages = Math.max(1, Math.ceil(display.length / REV_PAGE_SIZE));
+  if (revState.page > totalPages) revState.page = totalPages;
+  if (revState.page < 1) revState.page = 1;
+  const page = revState.page;
+  const startIdx = (page - 1) * REV_PAGE_SIZE;
+  const endIdx = Math.min(startIdx + REV_PAGE_SIZE, display.length);
+  const pageRows = display.slice(startIdx, endIdx);
+
+  const matchedPct = results.length ? (matchedRows / results.length * 100) : 0;
+  const pageHeadHtml = `
+    <div class="ptb-page-head">
+      <div class="ptb-page-title">
+        <h1>Reversal Check</h1>
+        <div class="ptb-meta">
+          ${revMonth ? `<span>Period <b>${revMonth}</b></span>` : ''}
+        </div>
+      </div>
+      <div class="ptb-page-actions">
+        <button class="ptb-btn primary" onclick="revExport()" title="Export (E)">
+          <svg><use href="#i-download"/></svg>Export
+        </button>
+      </div>
+    </div>`;
+
+  const kpiHtml = `
+    <div class="ptb-grid">
+      <div class="ptb-card ptb-kpi ptb-col-3">
+        <div class="ptb-label">Reconciliation Status</div>
+        <div class="ptb-value" style="font-size:22px;letter-spacing:-0.02em">
+          <span style="color:var(--d-pos)">${matchedRows.toLocaleString()}</span>
+          <span class="dim" style="font-size:14px">matched</span>
+          <span style="color:${breakRows.length?'var(--d-neg)':'var(--d-ink-4)'};margin-left:6px">${breakRows.length.toLocaleString()}</span>
+          <span class="dim" style="font-size:14px">breaks</span>
+        </div>
+        <div class="ptb-footline">
+          <div class="ptb-bar-track"><div class="ptb-bar-fill" style="width:${matchedPct.toFixed(1)}%"></div></div>
+          <span class="mono">${matchedPct.toFixed(1)}%</span>
+        </div>
+      </div>
+    </div>`;
+
+  const segBtn = (f, label, count, tone) => {
+    const active = statusFilter === f;
+    let cntColor = '';
+    if (tone === 'neg' && count > 0) cntColor = 'style="color:var(--d-neg)"';
+    else if (!active) cntColor = 'style="color:var(--d-ink-4)"';
+    return `<button class="${active?'active':''}" onclick="revSetStatusFilter('${f}')">${label}<span class="ptb-count" ${cntColor}>${count.toLocaleString()}</span></button>`;
+  };
+  const toolbarHtml = `
+    <div class="ptb-table-toolbar">
+      <div class="ptb-seg">
+        ${segBtn('all','All', results.length, 'dim')}
+        ${segBtn('break','Breaks', breakRows.length, 'neg')}
+        ${segBtn('matched','Matched', matchedRows, 'dim')}
+      </div>
+    </div>`;
+
+  const chipsHtml = revBuildChipsHtml();
+
+  const thHtml = REV_COLS.map(k => {
+    const cf = revState.filters[k];
+    const active = fdIsActive(cf);
+    const numCls = REV_NUM_COLS.has(k) ? ' num' : '';
+    return `<th class="${active?'filtered':''}${numCls}" data-col="${k}" onclick="openReversalFilter('${k}',this)">${REV_COL_LABELS[k]}<span class="fcol"></span></th>`;
+  }).join('');
+
+  const rowsHtml = pageRows.map(r => {
+    const st = revStatusOf(r);
+    const chip = st === 'break'
+      ? `<span class="status-chip break"><span class="dot"></span>Break</span>`
+      : `<span class="status-chip matched"><span class="dot"></span>Matched</span>`;
+    const varV = r.VARIANCE || 0;
+    const varCell = Math.abs(varV) === 0
+      ? `<span style="color:var(--d-ink-4)">—</span>`
+      : `${varV < 0 ? '-' : ''}${fmtNum(Math.abs(varV))}`;
+    return `<tr data-status="${st}">
+      <td>${chip}</td>
+      <td>${r.ENTITY||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+      <td>${r.RC||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+      <td class="d-mono">${r.GL_NUMBER||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+      <td>${r.PRODUCT_CODE||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+      <td>${r.INTERCO||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+      <td>${r.ISLAMIC_INDICATOR||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+      <td class="d-mono" style="color:var(--d-ink-3)">${r.CURRENCY||''}</td>
+      <td class="d-mono">${r.PREV_DRCR||''}</td>
+      <td class="num">${fmtNum(r.PREV_AMT||0)}</td>
+      <td class="d-mono">${r.REV_DRCR||''}</td>
+      <td class="num">${fmtNum(r.REV_AMT||0)}</td>
+      <td class="num">${varCell}</td>
+    </tr>`;
+  }).join('');
+
+  const showingFrom = display.length === 0 ? 0 : startIdx + 1;
+  const showingTo = endIdx;
+  const footerHtml = `
+    <div class="ptb-table-foot">
+      <span>Showing <b>${showingFrom.toLocaleString()}–${showingTo.toLocaleString()}</b> of <b>${display.length.toLocaleString()}</b> rows</span>
+      ${revBuildPagerHtml(totalPages, page)}
+    </div>`;
+
+  container.innerHTML = `<div class="ptb-v2">
+    ${pageHeadHtml}
+    ${kpiHtml}
+    <div class="ptb-card ptb-table-card">
+      ${toolbarHtml}
+      ${chipsHtml}
+      <div class="ptb-scroll">
+        <table class="ptb-data">
+          <thead><tr>${thHtml}</tr></thead>
+          <tbody>${rowsHtml || `<tr><td colspan="${REV_COLS.length}" style="text-align:center;padding:40px;color:var(--d-ink-4)">No rows match the current filters</td></tr>`}</tbody>
+        </table>
+      </div>
+      ${footerHtml}
+    </div>
+  </div>`;
+}
+
+function openReversalFilter(key, triggerEl) {
+  if (!revState.filters) revState.filters = {};
+  const results = S.results.reversal || [];
+  const statusFilter = revState.statusFilter || 'all';
+  const baseDisplay = statusFilter === 'all' ? results : results.filter(r => revStatusOf(r) === statusFilter);
+  // Rows passing all OTHER column filters (for dynamic value counts)
+  const otherFiltered = baseDisplay.filter(r => {
+    for (const k of REV_COLS) {
+      if (k === key) continue;
+      const f = revState.filters[k];
+      if (fdIsActive(f) && !fdMatch(revRowField(r, k), f)) return false;
+    }
+    return true;
+  });
+  const counts = new Map();
+  otherFiltered.forEach(r => {
+    const v = revRowField(r, key);
+    counts.set(v, (counts.get(v) || 0) + 1);
+  });
+  const allValues = [...counts.keys()].filter(v => v !== '' && v !== '–').sort();
+  fdOpenDesign(triggerEl, allValues, revState.filters[key] || null, REV_COL_LABELS[key], counts, (newFilter) => {
+    revState.filters[key] = fdIsActive(newFilter) ? newFilter : undefined;
+    revState.page = 1;
+    renderReversalResults(document.getElementById('view-reversal'));
+  });
+}
+
+function revSetStatusFilter(f) {
+  revState.statusFilter = f;
+  revState.page = 1;
+  renderReversalResults(document.getElementById('view-reversal'));
+}
+function revSetPage(p) {
+  revState.page = p;
+  renderReversalResults(document.getElementById('view-reversal'));
+}
+function revClearColFilter(k) {
+  if (revState.filters) delete revState.filters[k];
+  revState.page = 1;
+  renderReversalResults(document.getElementById('view-reversal'));
+}
+function revClearAllColFilters() {
+  revState.filters = {};
+  revState.page = 1;
+  renderReversalResults(document.getElementById('view-reversal'));
+}
+function revResetAll() {
+  revState.statusFilter = 'all';
+  revState.filters = {};
+  revState.page = 1;
+  renderReversalResults(document.getElementById('view-reversal'));
+}
+function revExport() {
+  const results = S.results.reversal || [];
+  if (!Array.isArray(results)) return;
+  const statusFilter = revState.statusFilter || 'all';
+  const afterStatus = statusFilter === 'all' ? results : results.filter(r => revStatusOf(r) === statusFilter);
+  const display = afterStatus.filter(r => {
+    for (const k of REV_COLS) {
+      const f = revState.filters[k];
+      if (fdIsActive(f) && !fdMatch(revRowField(r, k), f)) return false;
+    }
+    return true;
+  });
+  const rows = display.map(r => {
+    const o = { 'Status': REV_STATUS_LABELS[revStatusOf(r)] };
+    REV_COLS.forEach(k => { if (k !== 'STATUS') o[REV_COL_LABELS[k]] = r[k]; });
+    return o;
+  });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Reversal Check');
+  XLSX.writeFile(wb, 'reversal_check.xlsx');
 }
 // ============================================================
 //  LOAN RECON
