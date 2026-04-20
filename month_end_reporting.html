@@ -444,6 +444,51 @@
     font-size: 11px; color: var(--ink3); font-family: var(--mono);
   }
 
+  /* ============ OVERLAY MODAL (design-file layout) ============ */
+  .ov-modal-sheet {
+    background: #fff; border-radius: 12px;
+    width: 640px; max-width: calc(100vw - 32px);
+    max-height: calc(100vh - 40px); display: flex; flex-direction: column;
+    box-shadow: 0 24px 64px -12px rgba(0,0,0,0.25), 0 8px 24px -8px rgba(0,0,0,0.15);
+    border: 1px solid var(--border);
+  }
+  .ov-modal-head { padding: 18px 20px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .ov-modal-title { font-size: 17px; font-weight: 500; letter-spacing: -0.02em; color: var(--ink); }
+  .ov-modal-sub { font-size: 12px; color: var(--ink3); margin-top: 3px; max-width: 500px; }
+  .ov-modal-x { border: 0; background: none; font-size: 24px; line-height: 1; color: var(--ink3); cursor: pointer; padding: 0 4px; }
+  .ov-modal-x:hover { color: var(--ink); }
+  .ov-modal-body { padding: 18px 20px; overflow-y: auto; }
+  .ov-modal-foot { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--paper2); border-radius: 0 0 12px 12px; }
+  .ov-modal-err { font-size: 11px; color: var(--red); }
+
+  .ov-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
+  .ov-field { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--ink3); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+  .ov-field.span-2 { grid-column: 1 / -1; }
+  .ov-field input, .ov-field select {
+    font-family: inherit; font-size: 13px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--paper2); color: var(--ink); outline: 0; font-weight: 400; text-transform: none; letter-spacing: 0;
+  }
+  .ov-field input:focus, .ov-field select:focus { border-color: var(--ink3); background: #fff; }
+
+  .ov-alloc-wrap { margin-top: 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .ov-alloc-col { border: 1px solid var(--border); border-radius: 8px; padding: 0; background: var(--paper2); overflow: hidden; }
+  .ov-alloc-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid var(--border); background: #fff; }
+  .ov-alloc-title { font-size: 11px; font-weight: 500; color: var(--ink); }
+  .ov-alloc-title .dim { color: var(--ink3); font-weight: 400; }
+  .ov-alloc-sum { font-size: 11px; font-family: var(--mono); color: var(--ink3); }
+  .ov-alloc-sum.match { color: var(--green); }
+  .ov-alloc-sum.mismatch { color: var(--red); }
+  .ov-alloc-list { padding: 6px 8px; display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; }
+  .ov-alloc-row { display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 8px; }
+  .ov-alloc-row label { font-size: 11px; color: var(--ink3); font-family: var(--mono); padding-left: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ov-alloc-row input {
+    font-family: var(--mono); font-size: 12px; padding: 5px 8px; border: 1px solid var(--border);
+    border-radius: 5px; background: #fff; color: var(--ink); outline: 0; text-align: right; width: 100%; box-sizing: border-box;
+  }
+  .ov-alloc-row input:focus { border-color: var(--ink3); }
+  .ov-fill-btn { margin: 6px 8px 8px; font-size: 11px; padding: 5px 10px; border: 1px dashed var(--border); border-radius: 5px; background: transparent; cursor: pointer; color: var(--ink3); font-family: inherit; }
+  .ov-fill-btn:hover { background: #fff; color: var(--ink); border-color: var(--ink3); }
+
   .breakdown-table { width: 100%; border-collapse: collapse; font-size: 12px; }
   .breakdown-table th { font-weight: 500; font-size: 10px; font-family: var(--mono); letter-spacing: 0.06em; color: var(--ink3); padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; }
   .breakdown-table td { padding: 7px 8px; border-bottom: 1px solid var(--paper2); font-size: 11px; }
@@ -1173,124 +1218,82 @@
 
 <!-- MOA Entry Modal -->
 <div class="modal-bg" id="moa-modal-bg" onclick="closeMoaModal(event)">
-  <div class="modal" style="width:580px;max-height:90vh;display:flex;flex-direction:column;" onclick="event.stopPropagation()">
-    <div class="modal-head">
-      <h3 id="moa-modal-title">New MOA Entry</h3>
-      <span class="modal-close" onclick="closeMoaModal()">&times;</span>
-    </div>
-    <div style="padding:16px 20px 20px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;">
-
-      <!-- Row 1: Reporting Month + Entity -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <div>
-          <div style="font-size:11px;font-weight:600;color:var(--ink);margin-bottom:5px;">Reporting Month</div>
-          <input id="moa-f-month" type="month" style="width:100%;font-family:var(--sans);font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);outline:none;box-sizing:border-box;">
-        </div>
-        <div>
-          <div style="font-size:11px;font-weight:600;color:var(--ink);margin-bottom:5px;">Entity</div>
-          <select id="moa-f-entity" style="width:100%;font-family:var(--sans);font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);outline:none;background:#fff;">
-            <option value="">— Select —</option>
-            <option value="MBB-SG">MBB-SG</option>
-            <option value="MSL">MSL</option>
-          </select>
-        </div>
+  <div class="ov-modal-sheet" onclick="event.stopPropagation()">
+    <div class="ov-modal-head">
+      <div>
+        <div class="ov-modal-title" id="moa-modal-title">New overlay</div>
+        <div class="ov-modal-sub" id="moa-modal-sub">Add a management overlay applied to ECL for the selected month.</div>
       </div>
-
-      <!-- Row 2: MOA Type + Amount -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <div>
-          <div style="font-size:11px;font-weight:600;color:var(--ink);margin-bottom:5px;">Type of MOA</div>
-          <select id="moa-f-type" onchange="moaTypeChanged()" style="width:100%;font-family:var(--sans);font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);outline:none;background:#fff;">
+      <button class="ov-modal-x" onclick="closeMoaModal()" title="Close">&times;</button>
+    </div>
+    <div class="ov-modal-body">
+      <div class="ov-form-grid">
+        <label class="ov-field"><span>Overlay type</span>
+          <select id="moa-f-type" onchange="moaTypeChanged()">
             <option value="">— Select —</option>
             <option value="Borrower">Borrower</option>
             <option value="Model">Model</option>
             <option value="Sector">Sector</option>
           </select>
-        </div>
-        <div>
-          <div style="font-size:11px;font-weight:600;color:var(--ink);margin-bottom:5px;">MOA Amount (LCY)</div>
-          <input id="moa-f-amount" type="text" inputmode="decimal" placeholder="0.00"
-            oninput="moaRcBalanceUpdate()"
-            onfocus="moaAmtFocus(this)"
-            onblur="moaAmtBlur(this)"
-            style="width:100%;font-family:var(--mono);font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);outline:none;box-sizing:border-box;">
-        </div>
+        </label>
+        <label class="ov-field"><span>Month</span>
+          <input id="moa-f-month" type="month">
+        </label>
+        <label class="ov-field"><span>Entity</span>
+          <select id="moa-f-entity">
+            <option value="">— Select —</option>
+            <option value="MBB-SG">MBB-SG</option>
+            <option value="MSL">MSL</option>
+          </select>
+        </label>
+        <label class="ov-field"><span>Amount (LCY, signed)</span>
+          <input id="moa-f-amount" type="text" inputmode="decimal" placeholder="e.g. 2,500,000 or -750,000"
+            oninput="moaAllocBalanceUpdate()" onfocus="moaAmtFocus(this)" onblur="moaAmtBlur(this)">
+        </label>
+
+        <!-- Type-specific fields (Borrower) -->
+        <label class="ov-field" id="moa-field-cif" style="display:none"><span>CIF number</span>
+          <input id="moa-f-cif" type="text" placeholder="e.g. 1234567">
+        </label>
+        <label class="ov-field" id="moa-field-borrower" style="display:none"><span>Borrower name</span>
+          <input id="moa-f-borrower" type="text" placeholder="Borrower name">
+        </label>
+        <label class="ov-field span-2" id="moa-field-group" style="display:none"><span>Group name (optional)</span>
+          <input id="moa-f-group" type="text" placeholder="Group name">
+        </label>
+
+        <!-- Type-specific fields (Model) -->
+        <label class="ov-field span-2" id="moa-field-model" style="display:none"><span>Model description</span>
+          <input id="moa-f-model" type="text" placeholder="Describe the model adjustment">
+        </label>
       </div>
 
-      <!-- Type-specific fields -->
-      <div id="moa-type-fields" style="display:none;background:var(--paper2);border-radius:var(--radius);padding:12px 14px;display:none;flex-direction:column;gap:10px;">
-        <!-- Borrower fields -->
-        <div id="moa-borrower-fields" style="display:none;gap:10px;grid-template-columns:1fr 1fr 1fr;">
-          <div>
-            <div style="font-size:11px;font-weight:600;color:var(--ink);margin-bottom:5px;">CIF Number</div>
-            <input id="moa-f-cif" type="text" placeholder="e.g. 1234567" style="width:100%;font-family:var(--mono);font-size:12px;padding:6px 9px;border:1px solid var(--border);border-radius:var(--radius);outline:none;box-sizing:border-box;">
+      <div class="ov-alloc-wrap">
+        <div class="ov-alloc-col">
+          <div class="ov-alloc-head">
+            <div class="ov-alloc-title">LOB allocation <span class="dim">· must sum to total</span></div>
+            <div class="ov-alloc-sum" id="moa-lob-sum">—</div>
           </div>
-          <div>
-            <div style="font-size:11px;font-weight:600;color:var(--ink);margin-bottom:5px;">Borrower Name</div>
-            <input id="moa-f-borrower" type="text" placeholder="Borrower name" style="width:100%;font-family:var(--sans);font-size:12px;padding:6px 9px;border:1px solid var(--border);border-radius:var(--radius);outline:none;box-sizing:border-box;">
-          </div>
-          <div>
-            <div style="font-size:11px;font-weight:600;color:var(--ink);margin-bottom:5px;">Group Name <span style="font-weight:400;color:var(--ink3)">(optional)</span></div>
-            <input id="moa-f-group" type="text" placeholder="Group name" style="width:100%;font-family:var(--sans);font-size:12px;padding:6px 9px;border:1px solid var(--border);border-radius:var(--radius);outline:none;box-sizing:border-box;">
-          </div>
+          <div class="ov-alloc-list" id="moa-lob-list"></div>
+          <button class="ov-fill-btn" type="button" onclick="moaFillEvenly('lob')">Distribute evenly</button>
         </div>
-        <!-- Model fields -->
-        <div id="moa-model-fields" style="display:none;">
-          <div style="font-size:11px;font-weight:600;color:var(--ink);margin-bottom:5px;">Model Description</div>
-          <input id="moa-f-model" type="text" placeholder="Describe the model adjustment" style="width:100%;font-family:var(--sans);font-size:12px;padding:6px 9px;border:1px solid var(--border);border-radius:var(--radius);outline:none;box-sizing:border-box;">
+        <div class="ov-alloc-col">
+          <div class="ov-alloc-head">
+            <div class="ov-alloc-title">RC allocation <span class="dim">· must sum to total</span></div>
+            <div class="ov-alloc-sum" id="moa-rc-sum">—</div>
+          </div>
+          <div class="ov-alloc-list" id="moa-rc-list"></div>
+          <button class="ov-fill-btn" type="button" onclick="moaFillEvenly('rc')">Distribute evenly</button>
         </div>
       </div>
-
-      <!-- RC Split -->
-      <div>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;">
-          <div style="font-size:11px;font-weight:600;color:var(--ink);">RC Allocation</div>
-          <div style="display:flex;gap:6px;">
-            <button class="btn btn-sm" onclick="moaAutoAllocate()">Auto-allocate</button>
-            <button class="btn btn-sm" onclick="moaAddRcRow()">+ Add RC</button>
-          </div>
-        </div>
-        <div id="moa-rc-table-wrap">
-          <table style="width:100%;border-collapse:collapse;font-size:12px;" id="moa-rc-table">
-            <thead>
-              <tr style="background:var(--ink);color:#fff;">
-                <th style="padding:6px 10px;font-size:10px;font-family:var(--mono);font-weight:500;text-align:left;">LOB</th>
-                <th style="padding:6px 10px;font-size:10px;font-family:var(--mono);font-weight:500;text-align:left;">RC</th>
-                <th style="padding:6px 10px;font-size:10px;font-family:var(--mono);font-weight:500;text-align:right;">Amount (LCY)</th>
-                <th style="padding:6px 10px;width:32px;"></th>
-              </tr>
-            </thead>
-            <tbody id="moa-rc-tbody"></tbody>
-            <tfoot>
-              <tr style="background:var(--paper2);border-top:2px solid var(--border);">
-                <td colspan="2" style="padding:6px 10px;font-size:11px;font-weight:600;">Total allocated</td>
-                <td id="moa-rc-total" class="mono-val" style="padding:6px 10px;text-align:right;font-weight:700;font-size:12px;">0.00</td>
-                <td></td>
-              </tr>
-              <tr id="moa-rc-balance-row">
-                <td id="moa-rc-balance-label" colspan="2" style="padding:2px 10px 6px;font-size:11px;color:var(--ink3);">Unallocated</td>
-                <td id="moa-rc-balance" class="mono-val" style="padding:2px 10px 6px;text-align:right;font-size:11px;">0.00</td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
-
-      <div id="moa-modal-err" style="font-size:11px;color:var(--red);display:none;"></div>
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div style="display:flex;gap:8px;">
-          <div id="moa-modal-dup-btn" style="display:none;">
-            <button class="btn btn-sm" onclick="duplicateMoaEntry()">Duplicate this entry</button>
-          </div>
-          <div id="moa-modal-del-btn" style="display:none;">
-            <button class="btn btn-sm" style="color:var(--red);border-color:var(--red)" onclick="deleteMoaFromModal()">Delete</button>
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn" onclick="closeMoaModal()">Cancel</button>
-          <button class="btn btn-primary" onclick="saveMoaEntry()">Save</button>
-        </div>
+    </div>
+    <div class="ov-modal-foot">
+      <div id="moa-modal-err" class="ov-modal-err"></div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-sm" id="moa-modal-dup-btn" style="display:none" onclick="duplicateMoaEntry()">Duplicate</button>
+        <button class="btn btn-sm" id="moa-modal-del-btn" style="display:none;color:var(--red);border-color:var(--red)" onclick="deleteMoaFromModal()">Delete</button>
+        <button class="btn" onclick="closeMoaModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveMoaEntry()">Save overlay</button>
       </div>
     </div>
   </div>
@@ -6879,67 +6882,111 @@ function closeMtmSim(e) { document.getElementById('mtm-sim-bg').classList.remove
 //  MANAGEMENT OVERLAY (MOA)
 // ============================================================
 let _moaEditIdx = null;
-let _moaRcRows = [];
 
 function moaAmtFocus(el) { el.value = el.dataset.raw || el.value.replace(/,/g, ''); }
-function moaAmtBlur(el) { var n = parseFloat(el.value.replace(/,/g, '')); if (!isNaN(n)) { el.dataset.raw = n; el.value = fmtN2(n); } moaRcBalanceUpdate(); }
+function moaAmtBlur(el) { var n = parseFloat(el.value.replace(/,/g, '')); if (!isNaN(n)) { el.dataset.raw = n; el.value = fmtN2(n); } moaAllocBalanceUpdate(); }
 
 const MOA_LOB_OPTIONS = ['AFHP','BB','CARDS','CB','CO','CREDITABLE','GCT','GM','HOUSING','OTHER RETAIL','RSME','SME+','TB'];
 const MOA_RC_OPTIONS = [{code:'11033',label:'11033 - AFHP'},{code:'21111',label:'21111 - CB'},{code:'22121',label:'22121 - GM'},{code:'22480',label:'22480 - GCT'},{code:'31143',label:'31143 - RSME'},{code:'31151',label:'31151 - CBD'},{code:'31211',label:'31211 - CARDS'},{code:'31213',label:'31213 - CREDITABLE'},{code:'31223',label:'31223 - OTHER RETAIL'},{code:'82101',label:'82101 - MGT'}];
 function moaRcLabel(code) { var opt = MOA_RC_OPTIONS.find(function(o){ return o.code===code; }); return opt ? opt.label : (code||'—'); }
 
-function moaRcDropdown(field, i, selected) {
-  var opts = '<option value="">- Select -</option>';
-  if (field === 'rcMgt') { opts += MOA_LOB_OPTIONS.map(function(v){ return '<option value="' + v + '"' + (selected===v?' selected':'') + '>' + v + '</option>'; }).join(''); }
-  else { opts += MOA_RC_OPTIONS.map(function(o){ return '<option value="' + o.code + '"' + (selected===o.code?' selected':'') + '>' + o.label + '</option>'; }).join(''); }
-  return '<select onchange="moaRcRowChanged(' + i + ',\'' + field + '\',this.value)" style="font-family:var(--mono);font-size:11px;padding:4px 6px;border:1px solid var(--border);border-radius:3px;outline:none;background:#fff;width:150px;">' + opts + '</select>';
-}
+/* ============================================================
+ *  Allocation helpers (design-file layout: two independent lists)
+ *  Each entry carries `lobAlloc: {LOB: amount, ...}` and
+ *  `rcAlloc: {RC_CODE: amount, ...}` — both must sum to entry.amount.
+ *  ============================================================ */
 
-function moaAddRcRow(rcMgt, rcTb, amount) { _moaRcRows.push({rcMgt:rcMgt||'',rcTb:rcTb||'',amount:amount||''}); moaRenderRcRows(); }
-function moaRcRowChanged(i, field, val) { if (!_moaRcRows[i]) return; _moaRcRows[i][field] = val; moaRcBalanceUpdate(); }
-function moaRemoveRcRow(i) { _moaRcRows.splice(i, 1); moaRenderRcRows(); }
-
-function moaRenderRcRows() {
-  var tbody = document.getElementById('moa-rc-tbody'); if (!tbody) return;
-  var html = '';
-  for (var i = 0; i < _moaRcRows.length; i++) {
-    var r = _moaRcRows[i], rawAmt = r.amount === '' ? '' : parseFloat(r.amount);
-    var dispAmt = (rawAmt !== '' && !isNaN(rawAmt)) ? fmtN2(rawAmt) : '';
-    html += '<tr style="border-bottom:1px solid var(--border);"><td style="padding:5px 8px;">' + moaRcDropdown('rcMgt', i, r.rcMgt) + '</td><td style="padding:5px 8px;">' + moaRcDropdown('rcTb', i, r.rcTb) + '</td><td style="padding:5px 8px;text-align:right;"><input type="text" inputmode="decimal" data-idx="' + i + '" value="' + dispAmt + '" placeholder="0.00" onfocus="moaRcAmtFocus(this)" onblur="moaRcAmtBlur(this,' + i + ')" style="width:120px;font-family:var(--mono);font-size:12px;padding:4px 7px;border:1px solid var(--border);border-radius:3px;outline:none;text-align:right;"></td><td style="padding:5px 8px;text-align:center;"><button class="btn btn-sm" style="padding:2px 7px;color:var(--red);border-color:var(--red)" onclick="moaRemoveRcRow(' + i + ')">&#x2715;</button></td></tr>';
+// Migrate legacy rcSplits → lobAlloc + rcAlloc by summing per key.
+function moaMigrateEntry(e) {
+  if (!e) return e;
+  if (!e.lobAlloc) {
+    var lob = {};
+    (e.rcSplits||[]).forEach(function(r){ var k = r.rcMgt; if (k) lob[k] = (lob[k]||0) + (parseFloat(r.amount)||0); });
+    e.lobAlloc = lob;
   }
-  tbody.innerHTML = html; moaRcBalanceUpdate();
+  if (!e.rcAlloc) {
+    var rc = {};
+    (e.rcSplits||[]).forEach(function(r){ var k = r.rcTb; if (k) rc[k] = (rc[k]||0) + (parseFloat(r.amount)||0); });
+    e.rcAlloc = rc;
+  }
+  return e;
 }
 
-function moaRcAmtFocus(el) { el.value = el.dataset.raw || ''; }
-function moaRcAmtBlur(el, i) { var n = parseFloat(el.value.replace(/,/g,'')); if (!isNaN(n)) { el.dataset.raw = n; el.value = fmtN2(n); moaRcRowChanged(i,'amount',n); } else { el.dataset.raw = ''; el.value = ''; moaRcRowChanged(i,'amount',''); } }
-
-function moaRcBalanceUpdate() {
-  var amtEl = document.getElementById('moa-f-amount');
-  var total = parseFloat(amtEl ? (amtEl.dataset.raw || amtEl.value || '0').toString().replace(/,/g,'') : 0) || 0;
-  var alloc = _moaRcRows.reduce(function(s,r){ return s + (parseFloat(r.amount)||0); }, 0), bal = total - alloc;
-  var totEl = document.getElementById('moa-rc-total'), balEl = document.getElementById('moa-rc-balance'), labEl = document.getElementById('moa-rc-balance-label');
-  if (totEl) totEl.textContent = fmtN2(alloc);
-  if (balEl) { balEl.textContent = fmtN2(Math.abs(bal)); balEl.style.color = Math.abs(bal) < 0.01 ? 'var(--green)' : 'var(--red)'; }
-  if (labEl) labEl.textContent = bal > 0.005 ? 'Unallocated' : bal < -0.005 ? 'Over-allocated' : 'Balanced';
+function moaAmtFromInput(el) {
+  if (!el) return 0;
+  return parseFloat((el.dataset.raw || el.value || '0').toString().replace(/,/g,'')) || 0;
 }
 
-function moaAutoAllocate() {
-  var amtEl = document.getElementById('moa-f-amount');
-  var total = parseFloat(amtEl ? (amtEl.dataset.raw || amtEl.value || '0').toString().replace(/,/g,'') : 0) || 0;
-  var filledTotal = 0, emptyIndices = [];
-  _moaRcRows.forEach(function(r, i) { var v = parseFloat(r.amount); if (!isNaN(v) && String(r.amount).trim() !== '') filledTotal += v; else emptyIndices.push(i); });
-  if (emptyIndices.length === 0) return;
-  var share = parseFloat(((total - filledTotal) / emptyIndices.length).toFixed(2));
-  emptyIndices.forEach(function(i) { _moaRcRows[i].amount = share; }); moaRenderRcRows();
+// In-modal editing state
+var _moaLobDraft = {};
+var _moaRcDraft  = {};
+
+function moaRenderAllocList(kind) {
+  var listEl = document.getElementById(kind === 'lob' ? 'moa-lob-list' : 'moa-rc-list');
+  if (!listEl) return;
+  var draft = kind === 'lob' ? _moaLobDraft : _moaRcDraft;
+  var items = kind === 'lob'
+    ? MOA_LOB_OPTIONS.map(function(v){ return {code:v, label:v}; })
+    : MOA_RC_OPTIONS.map(function(o){ return {code:o.code, label:o.label}; });
+  listEl.innerHTML = items.map(function(it) {
+    var v = draft[it.code];
+    var disp = (v !== undefined && v !== '' && !isNaN(parseFloat(v))) ? fmtN2(parseFloat(v)) : '';
+    return '<div class="ov-alloc-row"><label title="' + it.label + '">' + it.label + '</label>'
+      + '<input type="text" inputmode="decimal" data-kind="' + kind + '" data-code="' + it.code + '" value="' + disp + '" placeholder="0.00" '
+      + 'onfocus="moaAllocAmtFocus(this)" onblur="moaAllocAmtBlur(this)"></div>';
+  }).join('');
+  moaAllocBalanceUpdate();
+}
+
+function moaAllocAmtFocus(el) { el.value = el.dataset.raw || (el.value || '').replace(/,/g,''); }
+function moaAllocAmtBlur(el) {
+  var kind = el.dataset.kind, code = el.dataset.code;
+  var draft = kind === 'lob' ? _moaLobDraft : _moaRcDraft;
+  var n = parseFloat((el.value||'').replace(/,/g,''));
+  if (!isNaN(n) && String(el.value).trim() !== '') { el.dataset.raw = n; el.value = fmtN2(n); draft[code] = n; }
+  else { el.dataset.raw = ''; el.value = ''; delete draft[code]; }
+  moaAllocBalanceUpdate();
+}
+
+function moaAllocSum(kind) {
+  var draft = kind === 'lob' ? _moaLobDraft : _moaRcDraft;
+  return Object.keys(draft).reduce(function(s,k){ return s + (parseFloat(draft[k])||0); }, 0);
+}
+
+function moaAllocBalanceUpdate() {
+  var total = moaAmtFromInput(document.getElementById('moa-f-amount'));
+  ['lob','rc'].forEach(function(kind) {
+    var sum = moaAllocSum(kind);
+    var sumEl = document.getElementById(kind === 'lob' ? 'moa-lob-sum' : 'moa-rc-sum');
+    if (!sumEl) return;
+    var empty = moaAllocSum(kind) === 0 && Object.keys(kind==='lob'?_moaLobDraft:_moaRcDraft).length === 0;
+    if (empty) { sumEl.textContent = '—'; sumEl.className = 'ov-alloc-sum'; return; }
+    var diff = total - sum;
+    sumEl.textContent = fmtN2(sum) + ' / ' + fmtN2(total);
+    sumEl.className = 'ov-alloc-sum ' + (Math.abs(diff) < 0.01 ? 'match' : 'mismatch');
+  });
+}
+
+function moaFillEvenly(kind) {
+  var total = moaAmtFromInput(document.getElementById('moa-f-amount'));
+  var items = kind === 'lob' ? MOA_LOB_OPTIONS : MOA_RC_OPTIONS.map(function(o){ return o.code; });
+  var draft = kind === 'lob' ? _moaLobDraft : _moaRcDraft;
+  var empties = items.filter(function(c){ return draft[c] === undefined || draft[c] === ''; });
+  var filled = items.reduce(function(s,c){ return s + (parseFloat(draft[c])||0); }, 0);
+  if (!empties.length) return;
+  var share = parseFloat(((total - filled) / empties.length).toFixed(2));
+  empties.forEach(function(c){ draft[c] = share; });
+  moaRenderAllocList(kind);
 }
 
 function moaTypeChanged() {
   var type = document.getElementById('moa-f-type') ? document.getElementById('moa-f-type').value : '';
-  var wrap = document.getElementById('moa-type-fields'), bFlds = document.getElementById('moa-borrower-fields'), mFlds = document.getElementById('moa-model-fields');
-  if (!wrap) return;
-  if (type === 'Borrower') { wrap.style.display = 'flex'; bFlds.style.display = 'grid'; mFlds.style.display = 'none'; }
-  else if (type === 'Model') { wrap.style.display = 'flex'; bFlds.style.display = 'none'; mFlds.style.display = 'block'; }
-  else { wrap.style.display = 'none'; bFlds.style.display = 'none'; mFlds.style.display = 'none'; }
+  var cifF = document.getElementById('moa-field-cif'), bF = document.getElementById('moa-field-borrower'), gF = document.getElementById('moa-field-group'), mF = document.getElementById('moa-field-model');
+  if (!cifF) return;
+  cifF.style.display = type === 'Borrower' ? '' : 'none';
+  bF.style.display   = type === 'Borrower' ? '' : 'none';
+  gF.style.display   = type === 'Borrower' ? '' : 'none';
+  mF.style.display   = type === 'Model' ? '' : 'none';
 }
 
 function moaGetMissingFields(e) {
@@ -6948,9 +6995,12 @@ function moaGetMissingFields(e) {
   if (e.amount === undefined || e.amount === null || e.amount === '') missing.push('Amount');
   if (e.type === 'Borrower') { if (!e.cif) missing.push('CIF Number'); if (!e.borrower) missing.push('Borrower Name'); }
   if (e.type === 'Model' && !e.modelDesc) missing.push('Model Description');
-  var splits = e.rcSplits || [];
-  if (splits.some(function(r){ return r.rc !== undefined && (r.rcMgt === undefined || r.rcTb === undefined); })) missing.push('RC format outdated (re-enter RC allocation)');
-  if (splits.some(function(r){ return r.rcMgt && MOA_LOB_OPTIONS.indexOf(r.rcMgt) < 0; })) missing.push('LOB value outdated (re-select LOB)');
+  moaMigrateEntry(e);
+  var total = parseFloat(e.amount) || 0;
+  var lobSum = Object.keys(e.lobAlloc||{}).reduce(function(s,k){ return s + (parseFloat(e.lobAlloc[k])||0); }, 0);
+  var rcSum  = Object.keys(e.rcAlloc ||{}).reduce(function(s,k){ return s + (parseFloat(e.rcAlloc[k]) ||0); }, 0);
+  if (Object.keys(e.lobAlloc||{}).length && Math.abs(lobSum - total) > 0.01) missing.push('LOB allocation does not sum to total');
+  if (Object.keys(e.rcAlloc ||{}).length && Math.abs(rcSum  - total) > 0.01) missing.push('RC allocation does not sum to total');
   return missing;
 }
 
@@ -7086,8 +7136,8 @@ function buildMoaJournalHtml(entries, allMonths) {
   var rmParts = curMonth.split('-'); var remarks = MONTH_NAMES[parseInt(rmParts[1])-1] + rmParts[0].slice(2) + ' MOA';
   var BS_AC = '3403107', PL_BORROW = '6705208', PL_OTHER = '6705207', CCY2 = 'SGD', PRODUCT = '00000', INTERCO2 = '000', FUTURE1 = '00000', SUB_AC = '0000', FUTURE3 = '0000';
   var itemMap = new Map();
-  function itemKey(e) { var sub = e.type==='Borrower' ? (e.cif||'') : e.type==='Model' ? (e.modelDesc||'') : ''; return (e.entity||'') + '||' + (e.type||'') + '||' + sub + '||' + (e.rcSplits||[]).map(function(r){ return r.rcTb||''; }).join(','); }
-  entries.forEach(function(e) { if (e.month !== curMonth && e.month !== prevMonth) return; var k = itemKey(e); if (!itemMap.has(k)) { var plAc = e.type==='Borrower' ? PL_BORROW : PL_OTHER; itemMap.set(k, {entity:e.entity||'', type:e.type||'', plAc:plAc, rcSplits:e.rcSplits||[], cur:0, prev:0}); } var item = itemMap.get(k); if (e.month === curMonth) item.cur += parseFloat(e.amount)||0; if (e.month === prevMonth) item.prev += parseFloat(e.amount)||0; });
+  function itemKey(e) { moaMigrateEntry(e); var sub = e.type==='Borrower' ? (e.cif||'') : e.type==='Model' ? (e.modelDesc||'') : ''; return (e.entity||'') + '||' + (e.type||'') + '||' + sub + '||' + Object.keys(e.rcAlloc||{}).sort().join(','); }
+  entries.forEach(function(e) { if (e.month !== curMonth && e.month !== prevMonth) return; moaMigrateEntry(e); var k = itemKey(e); if (!itemMap.has(k)) { var plAc = e.type==='Borrower' ? PL_BORROW : PL_OTHER; itemMap.set(k, {entity:e.entity||'', type:e.type||'', plAc:plAc, rcAlloc:e.rcAlloc||{}, cur:0, prev:0}); } var item = itemMap.get(k); if (e.month === curMonth) item.cur += parseFloat(e.amount)||0; if (e.month === prevMonth) item.prev += parseFloat(e.amount)||0; });
   var jCols = ['CCY','Cost Centre','Account','Product','Interco','Future1','Sub Account','Future3','Entered Debit','Entered Credit','Remarks'];
   moaState.journalRows = [];
   if (!entries.some(function(e){ return e.month===curMonth||e.month===prevMonth; })) return '<div style="padding:20px;font-size:11px;color:var(--ink3);">No delta entries for ' + curMonth + ' vs ' + prevMonth + '.</div>';
@@ -7100,10 +7150,10 @@ function buildMoaJournalHtml(entries, allMonths) {
   itemMap.forEach(function(item) {
     var delta = item.cur - item.prev; if (Math.abs(delta) < 0.005) return;
     var en = item.entity; if (!entityNetMaps[en]) entityNetMaps[en] = new Map();
-    var splits = item.rcSplits.filter(function(r){ return r.rcTb; });
-    var totalSplit = splits.reduce(function(s,r){ return s+(parseFloat(r.amount)||0); },0);
-    if (!splits.length) { addNetE(en, CCY2, '', BS_AC, PRODUCT, INTERCO2, FUTURE1, SUB_AC, FUTURE3, delta > 0 ? -delta : Math.abs(delta)); addNetE(en, CCY2, '', item.plAc, PRODUCT, INTERCO2, FUTURE1, SUB_AC, FUTURE3, delta > 0 ? delta : -Math.abs(delta)); return; }
-    splits.forEach(function(r) { var weight = totalSplit > 0 ? (parseFloat(r.amount)||0)/totalSplit : 1/splits.length; var splitDelta = parseFloat((delta * weight).toFixed(2)); var cc2 = r.rcTb; addNetE(en, CCY2, cc2, BS_AC, PRODUCT, INTERCO2, FUTURE1, SUB_AC, FUTURE3, delta > 0 ? -splitDelta : Math.abs(splitDelta)); addNetE(en, CCY2, cc2, item.plAc, PRODUCT, INTERCO2, FUTURE1, SUB_AC, FUTURE3, delta > 0 ? splitDelta : -Math.abs(splitDelta)); });
+    var rcEntries = Object.keys(item.rcAlloc||{}).filter(function(rc){ return rc; }).map(function(rc){ return {rc:rc, amount:parseFloat(item.rcAlloc[rc])||0}; });
+    var totalSplit = rcEntries.reduce(function(s,r){ return s+r.amount; }, 0);
+    if (!rcEntries.length) { addNetE(en, CCY2, '', BS_AC, PRODUCT, INTERCO2, FUTURE1, SUB_AC, FUTURE3, delta > 0 ? -delta : Math.abs(delta)); addNetE(en, CCY2, '', item.plAc, PRODUCT, INTERCO2, FUTURE1, SUB_AC, FUTURE3, delta > 0 ? delta : -Math.abs(delta)); return; }
+    rcEntries.forEach(function(r) { var weight = totalSplit > 0 ? r.amount/totalSplit : 1/rcEntries.length; var splitDelta = parseFloat((delta * weight).toFixed(2)); var cc2 = r.rc; addNetE(en, CCY2, cc2, BS_AC, PRODUCT, INTERCO2, FUTURE1, SUB_AC, FUTURE3, delta > 0 ? -splitDelta : Math.abs(splitDelta)); addNetE(en, CCY2, cc2, item.plAc, PRODUCT, INTERCO2, FUTURE1, SUB_AC, FUTURE3, delta > 0 ? splitDelta : -Math.abs(splitDelta)); });
   });
   var allJRows = [];
   var html2 = '<div style="font-size:11px;color:var(--ink3);margin-bottom:12px;">Delta: <b>' + curMonth + '</b> vs <b>' + prevMonth + '</b></div>';
@@ -7116,7 +7166,21 @@ function exportMoaJournalXlsx() { var rows = moaState.journalRows; if (!rows || 
 function buildMoaRcHtml(entries, visMonths, rcField) {
   if (!visMonths.length) return '<div style="padding:20px;font-size:11px;color:var(--ink3);">No entries in the selected range.</div>';
   var rowKeys = [], rowMap = new Map();
-  entries.forEach(function(e) { (e.rcSplits||[]).forEach(function(split) { var rc = split[rcField] || ''; var gk = (e.entity||'') + '||' + rc; if (!rowMap.has(gk)) { rowMap.set(gk, {entity:e.entity||'', rc:rc, byMonth:{}}); rowKeys.push(gk); } var row = rowMap.get(gk); if (!row.byMonth[e.month]) row.byMonth[e.month] = []; row.byMonth[e.month].push({ei:entries.indexOf(e), entry:e, allocAmt: parseFloat(split.amount)||0}); }); });
+  // rcField = 'rcMgt' → use lobAlloc; rcField = 'rcTb' → use rcAlloc
+  var allocField = rcField === 'rcMgt' ? 'lobAlloc' : 'rcAlloc';
+  entries.forEach(function(e) {
+    moaMigrateEntry(e);
+    var alloc = e[allocField] || {};
+    Object.keys(alloc).forEach(function(rc) {
+      var amt = parseFloat(alloc[rc])||0;
+      if (!rc || !amt) return;
+      var gk = (e.entity||'') + '||' + rc;
+      if (!rowMap.has(gk)) { rowMap.set(gk, {entity:e.entity||'', rc:rc, byMonth:{}}); rowKeys.push(gk); }
+      var row = rowMap.get(gk);
+      if (!row.byMonth[e.month]) row.byMonth[e.month] = [];
+      row.byMonth[e.month].push({ei:entries.indexOf(e), entry:e, allocAmt: amt});
+    });
+  });
   rowKeys.sort(function(a,b){ var ap=a.split('||'), bp=b.split('||'); if(ap[0]!==bp[0]) return ap[0]==='MBB-SG'?-1:1; return (ap[1]||'').localeCompare(bp[1]||''); });
   if (!rowKeys.length) return '<div style="padding:20px;font-size:11px;color:var(--ink3);">No RC allocations found in entries.</div>';
   var thMonths = visMonths.map(function(m){ return moaCompareThHtml(m); }).join('');
@@ -7155,7 +7219,7 @@ function closeMoaRcBreakdownModal() { var el = document.getElementById('moa-rc-b
 
 function renderMoa() {
   document.getElementById('topbar-title').textContent = 'Management Overlay';
-  document.getElementById('topbar-subtitle').textContent = 'MOA Dashboard';
+  document.getElementById('topbar-subtitle').textContent = '';
   var container = document.getElementById('view-moa'), entries = moaState.entries;
   var seen = {}, allMonths = []; entries.forEach(function(e){ if(e.month && !seen[e.month]){ seen[e.month]=1; allMonths.push(e.month); } }); allMonths.sort();
 
@@ -7194,6 +7258,12 @@ function renderMoa() {
   else if (view === 'journal') { moaState.journalMonth = moaState.dashTo; mainHtml = buildMoaJournalHtml(entries, allMonths); }
   else { mainHtml = buildMoaRcHtml(entries, visMonths, view === 'rcMgt' ? 'rcMgt' : 'rcTb'); }
 
+  // ===== View-mode buttons (moved up to page-head, next to Roll-forward) =====
+  var viewBtn = function(k, label) {
+    var active = (view === k);
+    return '<button class="ptb-btn' + (active?' ptb-btn-active':'') + '" onclick="moaSetView(\'' + k + '\')">' + label + '</button>';
+  };
+
   // ===== Top panel (design-file layout) =====
   var pageHeadHtml = ''
     + '<div class="ptb-page-head">'
@@ -7202,6 +7272,12 @@ function renderMoa() {
     +     '<div class="ptb-seg" id="moa-mode-seg">'
     +       '<button class="' + (moaState.mode==='single'?'active':'') + '" onclick="moaSetMode(\'single\')">Single month</button>'
     +       '<button class="' + (moaState.mode==='compare'?'active':'') + '" onclick="moaSetMode(\'compare\')">Compare 2 months</button>'
+    +     '</div>'
+    +     '<div class="ptb-seg" id="moa-view-seg">'
+    +       viewBtn('type', 'By Type')
+    +       viewBtn('rcMgt', 'By LOB')
+    +       viewBtn('rcTb', 'By RC')
+    +       viewBtn('journal', 'Journal Entries')
     +     '</div>'
     +     '<button class="ptb-btn" onclick="openMoaDuplicateModal()" title="Roll-forward overlays from one month to another"><svg><use href="#i-refresh"/></svg>Roll-forward</button>'
     +     '<button class="ptb-btn primary" onclick="openMoaModal(null)" title="New MOA (N)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>New overlay</button>'
@@ -7222,19 +7298,13 @@ function renderMoa() {
   var mpA = allMonths.map(function(m){ return mpBtn(m, 'A'); }).join('');
   var mpB = allMonths.map(function(m){ return mpBtn(m, 'B'); }).join('');
   var compareStripHtml = moaState.mode === 'compare'
-    ? '<div class="ov-compare-strip"><span>→ Compare with</span><div class="ov-month-picker compact">' + mpB + '</div></div>'
+    ? '<div class="ov-compare-strip" style="flex-basis:100%;margin-top:8px;"><span>→ Compare with</span><div class="ov-month-picker compact">' + mpB + '</div></div>'
     : '';
   var monthStripHtml = allMonths.length
-    ? '<div class="ov-strip-card"><div class="ov-month-picker">' + mpA + '</div><div style="flex:1"></div>' + compareStripHtml + '</div>'
+    ? '<div class="ov-strip-card"><div class="ov-month-picker">' + mpA + '</div>' + compareStripHtml + '</div>'
     : '';
 
-  // ===== Secondary toolbar (view modes + save/export/expand) =====
-  var viewBtn = function(k, label) {
-    var active = (view === k);
-    return '<button class="ptb-btn' + (active?' ptb-btn-active':'') + '" onclick="moaSetView(\'' + k + '\')">' + label + '</button>';
-  };
-  var expandBtnLabel = moaState.allCollapsed ? 'Expand All' : 'Collapse All';
-  var expandAllBtn = view === 'type' ? '<button class="ptb-btn" id="moa-expand-all-btn" onclick="moaToggleAllBreakdowns()" title="Expand/Collapse all breakdowns (X)">' + expandBtnLabel + '</button>' : '';
+  // ===== Secondary toolbar (save/export only) =====
   var saveBtnStyle = moaState.dirty ? 'background:var(--d-neg);color:#fff;border-color:var(--d-neg);' : '';
   var saveBtnLabel = moaState.dirty ? 'Save *' : 'Save';
   var journalExportBtn = view === 'journal'
@@ -7242,11 +7312,6 @@ function renderMoa() {
     : '<button class="ptb-btn" onclick="exportMoaXlsx()"><svg><use href="#i-download"/></svg>Export XLSX</button>';
   var secondaryToolbarHtml = ''
     + '<div class="ov-secondary-toolbar">'
-    +   viewBtn('type', 'By Type')
-    +   viewBtn('rcMgt', 'By LOB')
-    +   viewBtn('rcTb', 'By RC')
-    +   viewBtn('journal', 'Journal Entries')
-    +   expandAllBtn
     +   '<div class="spacer"></div>'
     +   '<button class="ptb-btn" style="' + saveBtnStyle + '" onclick="exportMoaJson()" title="' + (moaState.dirty?'Unsaved changes — click to save (S)':'No unsaved changes — click to save (S)') + '">' + saveBtnLabel + '</button>'
     +   journalExportBtn
@@ -7337,50 +7402,59 @@ function applyMoaRange() {
 }
 
 function openMoaModal(idx) {
-  _moaEditIdx = idx; var isEdit = idx !== null; var e = isEdit ? moaState.entries[idx] : {};
+  _moaEditIdx = idx; var isEdit = idx !== null; var e = isEdit ? moaMigrateEntry(moaState.entries[idx]) : {};
   var now = new Date(), defaultMonth = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
-  document.getElementById('moa-modal-title').textContent = isEdit ? 'Edit MOA Entry' : 'New MOA Entry';
+  document.getElementById('moa-modal-title').textContent = isEdit ? 'Edit overlay' : 'New overlay';
+  var sub = document.getElementById('moa-modal-sub');
+  if (sub) sub.textContent = isEdit ? 'Edit this management overlay and its allocations.' : 'Add a management overlay applied to ECL for the selected month.';
   document.getElementById('moa-f-month').value = e.month || defaultMonth;
   document.getElementById('moa-f-entity').value = e.entity || '';
   document.getElementById('moa-f-type').value = e.type || '';
   var amtEl = document.getElementById('moa-f-amount');
-  if (e.amount !== undefined) { amtEl.dataset.raw = e.amount; amtEl.value = fmtN2(parseFloat(e.amount)); } else { amtEl.dataset.raw = ''; amtEl.value = ''; }
+  if (e.amount !== undefined && e.amount !== '') { amtEl.dataset.raw = e.amount; amtEl.value = fmtN2(parseFloat(e.amount)); } else { amtEl.dataset.raw = ''; amtEl.value = ''; }
   document.getElementById('moa-f-cif').value = e.cif || ''; document.getElementById('moa-f-borrower').value = e.borrower || '';
   document.getElementById('moa-f-group').value = e.group || ''; document.getElementById('moa-f-model').value = e.modelDesc || '';
-  document.getElementById('moa-modal-err').style.display = 'none';
-  document.getElementById('moa-modal-dup-btn').style.display = isEdit ? 'block' : 'none';
-  document.getElementById('moa-modal-del-btn').style.display = isEdit ? 'block' : 'none';
-  _moaRcRows = ((e.rcSplits||[]).length ? e.rcSplits : [{rcMgt:'',rcTb:'',amount:''}]).map(function(r){ return {rcMgt:r.rcMgt||'',rcTb:r.rcTb||'',amount:r.amount||''}; });
-  moaRenderRcRows(); moaTypeChanged(); document.getElementById('moa-modal-bg').classList.add('show');
+  document.getElementById('moa-modal-err').textContent = '';
+  document.getElementById('moa-modal-dup-btn').style.display = isEdit ? '' : 'none';
+  document.getElementById('moa-modal-del-btn').style.display = isEdit ? '' : 'none';
+  _moaLobDraft = Object.assign({}, e.lobAlloc || {});
+  _moaRcDraft  = Object.assign({}, e.rcAlloc  || {});
+  moaRenderAllocList('lob');
+  moaRenderAllocList('rc');
+  moaTypeChanged();
+  document.getElementById('moa-modal-bg').classList.add('show');
 }
 
 function closeMoaModal(e) { if (e && e.target !== document.getElementById('moa-modal-bg')) return; document.getElementById('moa-modal-bg').classList.remove('show'); }
 
 async function saveMoaEntry() {
   var errEl = document.getElementById('moa-modal-err');
+  function setErr(msg) { errEl.textContent = msg; }
   var month = document.getElementById('moa-f-month').value, entity = document.getElementById('moa-f-entity').value, type = document.getElementById('moa-f-type').value;
   var amount = parseFloat((document.getElementById('moa-f-amount').dataset.raw || document.getElementById('moa-f-amount').value || '').toString().replace(/,/g,''));
   var cif = document.getElementById('moa-f-cif').value.trim(), borrower = document.getElementById('moa-f-borrower').value.trim(), modelDesc = document.getElementById('moa-f-model').value.trim();
-  if (!month || !entity || !type || isNaN(amount)) { errEl.textContent = 'Reporting month, entity, type and amount are all required.'; errEl.style.display = 'block'; return; }
-  if (type === 'Borrower' && (!cif || !borrower)) { errEl.textContent = 'CIF number and borrower name are required for Borrower MOA.'; errEl.style.display = 'block'; return; }
-  if (type === 'Model' && !modelDesc) { errEl.textContent = 'Model description is required for Model MOA.'; errEl.style.display = 'block'; return; }
+  if (!month || !entity || !type || isNaN(amount)) { setErr('Month, entity, type and amount are all required.'); return; }
+  if (type === 'Borrower' && (!cif || !borrower)) { setErr('CIF number and borrower name are required for Borrower overlays.'); return; }
+  if (type === 'Model' && !modelDesc) { setErr('Model description is required for Model overlays.'); return; }
   var dupIdx = moaState.entries.findIndex(function(e, i) { if (i === _moaEditIdx) return false; if (e.month !== month || e.entity !== entity || e.type !== type) return false; if (type === 'Borrower') return e.cif === cif; if (type === 'Model') return (e.modelDesc||'') === modelDesc; return true; });
-  if (dupIdx >= 0) { errEl.textContent = 'A duplicate entry already exists (entry #' + (dupIdx+1) + '). Please review before saving.'; errEl.style.display = 'block'; return; }
-  var rcSplits = _moaRcRows.filter(function(r){ return r.rcMgt || r.rcTb || r.amount; }).map(function(r){ return {rcMgt: String(r.rcMgt||'').trim(), rcTb: String(r.rcTb||'').trim(), amount: parseFloat(r.amount)||0}; });
-  var invalidLob = rcSplits.find(function(r){ return r.rcMgt && MOA_LOB_OPTIONS.indexOf(r.rcMgt) < 0; });
-  if (invalidLob) { errEl.textContent = 'Invalid LOB value "' + invalidLob.rcMgt + '". Please select from the dropdown.'; errEl.style.display = 'block'; return; }
-  var invalidRc = rcSplits.find(function(r){ return r.rcTb && !/^\d{5}$/.test(r.rcTb); });
-  if (invalidRc) { errEl.textContent = 'RC code "' + invalidRc.rcTb + '" must be a 5-digit numeric value from the dropdown.'; errEl.style.display = 'block'; return; }
-  var allocated = rcSplits.reduce(function(s,r){ return s+r.amount; }, 0);
-  if (rcSplits.length > 0 && Math.abs(allocated - amount) > 0.01) { errEl.textContent = 'RC total (' + allocated.toFixed(2) + ') does not match MOA amount (' + amount.toFixed(2) + ').'; errEl.style.display = 'block'; return; }
-  var entry = { month: month, entity: entity, type: type, amount: amount, rcSplits: rcSplits, cif: cif, borrower: borrower, group: document.getElementById('moa-f-group').value.trim(), modelDesc: modelDesc, savedAt: new Date().toISOString() };
+  if (dupIdx >= 0) { setErr('A duplicate entry already exists (entry #' + (dupIdx+1) + ').'); return; }
+
+  var lobAlloc = {}, rcAlloc = {};
+  Object.keys(_moaLobDraft).forEach(function(k){ var v = parseFloat(_moaLobDraft[k]); if (!isNaN(v) && v !== 0) lobAlloc[k] = v; });
+  Object.keys(_moaRcDraft).forEach(function(k){ var v = parseFloat(_moaRcDraft[k]);  if (!isNaN(v) && v !== 0) rcAlloc[k]  = v; });
+  var lobSum = Object.keys(lobAlloc).reduce(function(s,k){ return s + lobAlloc[k]; }, 0);
+  var rcSum  = Object.keys(rcAlloc ).reduce(function(s,k){ return s + rcAlloc[k];  }, 0);
+  if (Object.keys(lobAlloc).length && Math.abs(lobSum - amount) > 0.01) { setErr('LOB allocation (' + fmtN2(lobSum) + ') does not match overlay amount (' + fmtN2(amount) + ').'); return; }
+  if (Object.keys(rcAlloc ).length && Math.abs(rcSum  - amount) > 0.01) { setErr('RC allocation (' + fmtN2(rcSum)  + ') does not match overlay amount (' + fmtN2(amount) + ').'); return; }
+
+  var entry = { month: month, entity: entity, type: type, amount: amount, lobAlloc: lobAlloc, rcAlloc: rcAlloc, cif: cif, borrower: borrower, group: document.getElementById('moa-f-group').value.trim(), modelDesc: modelDesc, savedAt: new Date().toISOString() };
   if (_moaEditIdx !== null) moaState.entries[_moaEditIdx] = entry; else moaState.entries.push(entry);
   moaState.dirty = true;
   document.getElementById('moa-modal-bg').classList.remove('show'); renderMoa();
 }
 
 function deleteMoaFromModal() { if (_moaEditIdx === null) return; document.getElementById('moa-modal-bg').classList.remove('show'); deleteMoaEntry(_moaEditIdx); }
-function duplicateMoaEntry() { _moaEditIdx = null; document.getElementById('moa-modal-title').textContent = 'New MOA Entry (Duplicate)'; document.getElementById('moa-modal-dup-btn').style.display = 'none'; document.getElementById('moa-modal-err').style.display = 'none'; }
+function duplicateMoaEntry() { _moaEditIdx = null; document.getElementById('moa-modal-title').textContent = 'New overlay (duplicate)'; document.getElementById('moa-modal-dup-btn').style.display = 'none'; document.getElementById('moa-modal-err').textContent = ''; }
 async function deleteMoaEntry(idx) { if (!confirm('Delete this MOA entry?')) return; moaState.entries.splice(idx, 1); moaState.dirty = true; renderMoa(); }
 
 async function exportMoaJson() { await persistSlot('moa_entries', moaState.entries, 'manual'); var json = JSON.stringify(moaState.entries, null, 2); var blob = new Blob([json], {type:'application/json'}); var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'moa_entries.json'; a.click(); URL.revokeObjectURL(a.href); moaState.dirty = false; renderMoa(); }
@@ -7390,8 +7464,13 @@ function exportMoaXlsx() {
   var seen = {}, allMonths = []; entries.forEach(function(e){ if(e.month&&!seen[e.month]){ seen[e.month]=1; allMonths.push(e.month); } }); allMonths.sort();
   var dashFrom = moaState.dashFrom || '', dashTo = moaState.dashTo || '';
   var visMonths = allMonths.filter(function(m){ return (!dashFrom || m >= dashFrom) && (!dashTo || m <= dashTo); });
-  var headers = ['Entity','Type','Group','CIF','Borrower','Model Description','Month','Amount (LCY)','LOB','RC'];
-  var rows = entries.filter(function(e){ return !visMonths.length || visMonths.indexOf(e.month) >= 0; }).map(function(e){ var rc = (e.rcSplits||[])[0] || {}; return { 'Entity': e.entity||'', 'Type': e.type||'', 'Group': e.group||'', 'CIF': e.cif||'', 'Borrower': e.borrower||'', 'Model Description': e.modelDesc||'', 'Month': e.month||'', 'Amount (LCY)': typeof e.amount==='number'?e.amount:(parseFloat(e.amount)||0), 'LOB': rc.rcMgt||'', 'RC': rc.rcTb||'' }; });
+  var headers = ['Entity','Type','Group','CIF','Borrower','Model Description','Month','Amount (LCY)','LOB Allocation','RC Allocation'];
+  var rows = entries.filter(function(e){ return !visMonths.length || visMonths.indexOf(e.month) >= 0; }).map(function(e){
+    moaMigrateEntry(e);
+    var lobStr = Object.keys(e.lobAlloc||{}).map(function(k){ return k + ':' + fmtN2(e.lobAlloc[k]); }).join('; ');
+    var rcStr  = Object.keys(e.rcAlloc ||{}).map(function(k){ return k + ':' + fmtN2(e.rcAlloc[k]);  }).join('; ');
+    return { 'Entity': e.entity||'', 'Type': e.type||'', 'Group': e.group||'', 'CIF': e.cif||'', 'Borrower': e.borrower||'', 'Model Description': e.modelDesc||'', 'Month': e.month||'', 'Amount (LCY)': typeof e.amount==='number'?e.amount:(parseFloat(e.amount)||0), 'LOB Allocation': lobStr, 'RC Allocation': rcStr };
+  });
   var ws = XLSX.utils.json_to_sheet(rows, {header: headers}), wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'MOA'); XLSX.writeFile(wb, 'moa_dashboard.xlsx');
 }
 
