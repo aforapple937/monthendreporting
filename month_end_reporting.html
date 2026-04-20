@@ -48,130 +48,77 @@
   #app { display: flex; height: 100vh; }
 
   #sidebar {
-    width: 240px;
+    width: 220px;
     flex-shrink: 0;
-    background: var(--ink);
-    color: #e8e7e2;
+    background: #fff;
+    color: var(--ink2);
     display: flex;
     flex-direction: column;
-    border-right: 1px solid #222;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
   }
 
-  .sidebar-brand {
-    padding: 20px 20px 16px;
-    border-bottom: 1px solid #2a2a2a;
-  }
-  .brand-eyebrow {
-    font-family: var(--mono);
-    font-size: 9px;
+  .sb-section-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--ink4);
+    padding: 18px 18px 6px;
     font-weight: 500;
-    letter-spacing: 0.12em;
-    color: var(--gold);
-    text-transform: uppercase;
-    margin-bottom: 4px;
-  }
-  .brand-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: #fff;
-    letter-spacing: -0.01em;
   }
 
-  .idb-status {
-    padding: 8px 16px;
-    border-bottom: 1px solid #2a2a2a;
+  .sb-nav {
     display: flex;
-    align-items: center;
-    gap: 6px;
-    font-family: var(--mono);
-    font-size: 9px;
-    letter-spacing: 0.08em;
-    color: #555;
-  }
-  .idb-dot {
-    width: 5px; height: 5px;
-    border-radius: 50%;
-    background: #555;
-    flex-shrink: 0;
-    transition: background 0.3s;
-  }
-  .idb-dot.ready   { background: var(--green); }
-  .idb-dot.working { background: var(--amber); }
-  .idb-dot.error   { background: var(--red); }
-  .idb-label { flex: 1; }
-  .idb-clear {
-    font-size: 9px; color: #444; cursor: pointer; text-decoration: underline;
-    background: none; border: none; font-family: var(--mono); letter-spacing: 0.06em;
-  }
-  .idb-clear:hover { color: var(--red); }
-
-  .pipeline-nav { flex: 1; padding: 12px 0; overflow-y: auto; }
-  
-  .nav-section-label {
-    font-family: var(--mono);
-    font-size: 9px;
-    letter-spacing: 0.1em;
-    color: #444;
-    text-transform: uppercase;
-    padding: 12px 16px 6px;
+    flex-direction: column;
+    padding: 0 10px;
+    gap: 2px;
   }
 
   .nav-item {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 9px 16px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    color: var(--ink2);
     cursor: pointer;
-    position: relative;
-    transition: background 0.15s;
     border: none;
     background: none;
     width: 100%;
     text-align: left;
-    color: #888;
+    font: inherit;
+    transition: background 0.12s, color 0.12s;
   }
-  .nav-item:hover { background: #1a1a1a; color: #ccc; }
-  .nav-item.active { background: #1e1e1e; color: #fff; }
-  .nav-item.active::before {
-    content: '';
-    position: absolute;
-    left: 0; top: 0; bottom: 0;
-    width: 3px;
-    background: var(--gold);
+  .nav-item:hover { background: var(--paper2); color: var(--ink); }
+  .nav-item.active { background: var(--ink); color: var(--gold); }
+
+  .sb-icon {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+    color: var(--ink3);
+  }
+  .nav-item:hover .sb-icon { color: var(--ink); }
+  .nav-item.active .sb-icon { color: var(--gold); }
+
+  .sb-label {
+    font-size: 13px;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .nav-step-num {
-    font-family: var(--mono);
+  .sb-badge {
+    margin-left: auto;
     font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--gold);
+    color: var(--ink);
     font-weight: 600;
-    width: 20px; height: 20px;
-    border-radius: 50%;
-    border: 1px solid #333;
-    display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
-    color: #555;
-    transition: all 0.2s;
+    font-family: var(--mono);
   }
-  .nav-item.active .nav-step-num { border-color: var(--gold); color: var(--gold); }
-  .nav-item.done .nav-step-num { background: var(--green); border-color: var(--green); color: #fff; font-size: 11px; }
-  .nav-item.has-breaks .nav-step-num { background: var(--red); border-color: var(--red); color: #fff; }
-
-  .nav-item-text { flex: 1; }
-  .nav-item-title { font-size: 12px; font-weight: 500; }
-  .nav-item-sub { font-size: 10px; color: #555; margin-top: 1px; }
-  .nav-item.active .nav-item-sub { color: #888; }
-
-  .nav-status-dot {
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-  .status-dot-green { background: var(--green); }
-  .status-dot-red   { background: var(--red); }
-  .status-dot-amber { background: var(--amber); }
-  .status-dot-grey  { background: #444; }
-
-  .nav-connector { height: 1px; background: #2a2a2a; margin: 0 16px; }
 
   #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 
@@ -705,140 +652,56 @@
   <div class="su-status" id="su-status">Connecting…</div>
 </div>
 
+<!-- ICONS (symbol library) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h12M4 12h8M4 18h14M20 6l-3 3-1.5-1.5"/></symbol>
+  <symbol id="i-scale" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v18M5 7h14M7 7l-3 7a4 4 0 0 0 8 0l-3-7M17 7l-3 7a4 4 0 0 0 8 0l-3-7"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l8 3v6c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V6z"/></symbol>
+  <symbol id="i-swap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 4l-4 4 4 4M3 8h13M17 20l4-4-4-4M21 16H8"/></symbol>
+  <symbol id="i-trend" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17l6-6 4 4 8-8M14 7h7v7"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-3-6.7M21 4v5h-5"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v6h6M8 14h8M8 18h5"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l9 5-9 5-9-5z M3 13l9 5 9-5 M3 18l9 5 9-5"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21h18M6 17V9m5 8V5m5 12v-7m5 7v-3"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 1 0-5.66-5.66l-1.5 1.5M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 1 0 5.66 5.66l1.5-1.5"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  <symbol id="i-calc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 12h2M12 12h2M16 12h0M8 16h2M12 16h2M16 16h0"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20V8m0 0l-4 4m4-4l4 4M4 4h16"/></symbol>
+</svg>
+
 <div id="app">
 
   <!-- SIDEBAR -->
   <div id="sidebar">
-    <div class="sidebar-brand">
-      <div class="brand-title">Month-End Reporting</div>
-    </div>
 
-    <!-- IndexedDB status -->
-    <div class="idb-status">
-      <div class="idb-dot" id="idb-dot"></div>
-      <span class="idb-label" id="idb-label">Connecting…</span>
-      <button class="idb-clear" onclick="openCacheModal()" title="View cached files">View cache</button>
-    </div>
+    <div class="sb-section-title" style="padding-top:22px">Pipeline</div>
+    <nav class="sb-nav">
+      <button class="nav-item" id="nav-pretb" onclick="showView('pretb')"><svg class="sb-icon"><use href="#i-check"/></svg><span class="sb-label">Pre-Check TB</span></button>
+      <button class="nav-item" id="nav-loanrecon" onclick="showView('loanrecon')"><svg class="sb-icon"><use href="#i-scale"/></svg><span class="sb-label">Loan Recon</span></button>
+      <button class="nav-item" id="nav-dq" onclick="showView('dq')"><svg class="sb-icon"><use href="#i-shield"/></svg><span class="sb-label">Outbound DQ</span></button>
+      <button class="nav-item" id="nav-ccychange" onclick="showView('ccychange')"><svg class="sb-icon"><use href="#i-swap"/></svg><span class="sb-label">CCY Change</span></button>
+      <button class="nav-item" id="nav-mtmfvoci" onclick="showView('mtmfvoci')"><svg class="sb-icon"><use href="#i-trend"/></svg><span class="sb-label">MTM FVOCI</span></button>
+      <button class="nav-item" id="nav-reversal" onclick="showView('reversal')"><svg class="sb-icon"><use href="#i-refresh"/></svg><span class="sb-label">Reversal Check</span></button>
+      <button class="nav-item" id="nav-recon" onclick="showView('recon')"><svg class="sb-icon"><use href="#i-doc"/></svg><span class="sb-label">Posting Validation</span></button>
+      <button class="nav-item" id="nav-moa" onclick="showView('moa')"><svg class="sb-icon"><use href="#i-layers"/></svg><span class="sb-label">Management Overlay</span></button>
+      <button class="nav-item" id="nav-majmov" onclick="showView('majmov')"><svg class="sb-icon"><use href="#i-chart"/></svg><span class="sb-label">Major Movement</span></button>
+      <button class="nav-item" id="nav-tb" onclick="showView('tb')"><svg class="sb-icon"><use href="#i-link"/></svg><span class="sb-label">TB Reconciliation</span></button>
+    </nav>
 
-    <div class="pipeline-nav">
-      <div class="nav-section-label">Pipeline</div>
+    <div class="sb-section-title">Tools</div>
+    <nav class="sb-nav">
+      <button class="nav-item" id="nav-query" onclick="showView('query')"><svg class="sb-icon"><use href="#i-search"/></svg><span class="sb-label">Account Query</span></button>
+      <button class="nav-item" id="nav-glte" onclick="showView('glte')"><svg class="sb-icon"><use href="#i-calc"/></svg><span class="sb-label">GLTE Validation</span></button>
+    </nav>
 
-      <button class="nav-item" id="nav-pretb" onclick="showView('pretb')">
-        <div class="nav-step-num" id="nnum-pretb">1</div>
-        <div class="nav-item-text">
-          <div class="nav-item-title">Pre-Check TB</div>
-          <div class="nav-item-sub">Ensure no prior entries in TB</div>
-        </div>
-      </button>
+    <div class="sb-section-title">Files</div>
+    <nav class="sb-nav" style="padding-bottom:18px">
+      <button class="nav-item" id="nav-files" onclick="openCacheModal()"><svg class="sb-icon"><use href="#i-folder"/></svg><span class="sb-label">Stored Files</span><span class="sb-badge" id="files-badge">0</span></button>
+      <button class="nav-item" id="nav-upload" onclick="triggerSidebarUpload()"><svg class="sb-icon"><use href="#i-upload"/></svg><span class="sb-label">Upload / Reload</span></button>
+    </nav>
+    <input type="file" id="sidebar-file-input" multiple hidden />
 
-      <div class="nav-connector"></div>
-
-      <button class="nav-item" id="nav-loanrecon" onclick="showView('loanrecon')">
-        <div class="nav-step-num" id="nnum-loanrecon">2</div>
-        <div class="nav-item-text">
-          <div class="nav-item-title">Loan Recon</div>
-          <div class="nav-item-sub">Product files vs trial balance</div>
-        </div>
-      </button>
-
-      <div class="nav-connector"></div>
-
-      <button class="nav-item" id="nav-dq" onclick="showView('dq')">
-        <div class="nav-step-num" id="nnum-dq">3</div>
-        <div class="nav-item-text">
-          <div class="nav-item-title">Outbound DQ</div>
-          <div class="nav-item-sub">Distribution &amp; quality check</div>
-        </div>
-      </button>
-
-      <div class="nav-connector"></div>
-
-      <button class="nav-item" id="nav-ccychange" onclick="showView('ccychange')">
-        <div class="nav-step-num" id="nnum-ccychange">4</div>
-        <div class="nav-item-text">
-          <div class="nav-item-title">CCY Change</div>
-          <div class="nav-item-sub">Patching file &amp; journal entries</div>
-        </div>
-      </button>
-
-      <div class="nav-connector"></div>
-
-      <button class="nav-item" id="nav-mtmfvoci" onclick="showView('mtmfvoci')">
-        <div class="nav-step-num" id="nnum-mtmfvoci">5</div>
-        <div class="nav-item-text">
-          <div class="nav-item-title">MTM FVOCI</div>
-          <div class="nav-item-sub">Mark-to-market FVOCI loans</div>
-        </div>
-      </button>
-
-      <div class="nav-connector"></div>
-
-      <button class="nav-item" id="nav-reversal" onclick="showView('reversal')">
-        <div class="nav-step-num" id="nnum-reversal">6</div>
-        <div class="nav-item-text">
-          <div class="nav-item-title">Reversal Check</div>
-          <div class="nav-item-sub">Prev posting vs reversal file</div>
-        </div>
-      </button>
-
-      <div class="nav-connector"></div>
-
-      <button class="nav-item" id="nav-recon" onclick="showView('recon')">
-        <div class="nav-step-num" id="nnum-recon">7</div>
-        <div class="nav-item-text">
-          <div class="nav-item-title">Posting Validation</div>
-          <div class="nav-item-sub">RDL (pre-patch) vs EGL posting</div>
-        </div>
-      </button>
-
-      <div class="nav-connector"></div>
-
-      <button class="nav-item" id="nav-moa" onclick="showView('moa')">
-        <div class="nav-step-num" id="nnum-moa">8</div>
-        <div class="nav-item-text">
-          <div class="nav-item-title">Management Overlay</div>
-          <div class="nav-item-sub">MOA Dashboard</div>
-        </div>
-      </button>
-
-      <div class="nav-connector"></div>
-
-      <button class="nav-item" id="nav-majmov" onclick="showView('majmov')">
-        <div class="nav-step-num" id="nnum-majmov">9</div>
-        <div class="nav-item-text">
-          <div class="nav-item-title">Major Movement</div>
-          <div class="nav-item-sub">ECL movement by CIF</div>
-        </div>
-      </button>
-
-      <div class="nav-connector"></div>
-
-      <button class="nav-item" id="nav-tb" onclick="showView('tb')">
-        <div class="nav-step-num" id="nnum-tb">10</div>
-        <div class="nav-item-text">
-          <div class="nav-item-title">TB Reconciliation</div>
-          <div class="nav-item-sub">RDL (post-patch) vs trial balance</div>
-        </div>
-      </button>
-
-      <div class="nav-section-label" style="margin-top:8px">Tools</div>
-
-      <button class="nav-item" id="nav-query" onclick="showView('query')">
-        <div class="nav-step-num" id="nnum-query" style="font-size:13px;">⌕</div>
-        <div class="nav-item-text">
-          <div class="nav-item-title">Account Query</div>
-          <div class="nav-item-sub">Journal entries by account</div>
-        </div>
-      </button>
-
-      <button class="nav-item" id="nav-glte" onclick="showView('glte')">
-        <div class="nav-step-num" id="nnum-glte" style="font-size:13px;">≠</div>
-        <div class="nav-item-text">
-          <div class="nav-item-title">GLTE Validation</div>
-          <div class="nav-item-sub">Compare two GLTE files</div>
-        </div>
-      </button>
-    </div>
   </div>
 
   <!-- MAIN -->
@@ -1806,6 +1669,7 @@ async function persistSlot(key, value, filename) {
     meta[key] = { filename: filename || key, savedAt: Date.now() };
     await idbPut('_meta', meta);
     idbSetStatus('ready', 'Saved');
+    if (typeof refreshFilesBadge === 'function') refreshFilesBadge();
   } catch(e) {
     idbSetStatus('error', 'Save failed');
     console.error('IDB write error', e);
@@ -4139,11 +4003,48 @@ async function deleteCacheKey(key) {
   try { const m = await idbGet('_meta'); if (m) { delete m[key]; await idbPut('_meta', m); } } catch(e) {}
   idbSetStatus('ready', 'Entry removed');
   await openCacheModal();
+  refreshFilesBadge();
   if (currentView) renderView(currentView);
 }
 
 function closeCacheModal(e) { if (e && e.target !== document.getElementById('cache-modal-bg')) return; document.getElementById('cache-modal-bg').classList.remove('show'); }
-async function clearIDBFromModal() { if (!confirm('Clear all cached file data? You will need to re-upload everything.')) return; document.getElementById('cache-modal-bg').classList.remove('show'); await clearIDB(); }
+async function clearIDBFromModal() { if (!confirm('Clear all cached file data? You will need to re-upload everything.')) return; document.getElementById('cache-modal-bg').classList.remove('show'); await clearIDB(); refreshFilesBadge(); }
+
+// ============================================================
+//  SIDEBAR FILES — badge count + generic upload
+// ============================================================
+async function refreshFilesBadge() {
+  const badge = document.getElementById('files-badge');
+  if (!badge) return;
+  try {
+    const inv = await idbGetInventory();
+    const n = inv.keys.filter(k => k !== '_meta').length;
+    badge.textContent = n;
+    badge.style.display = n ? '' : 'none';
+  } catch(e) {
+    badge.style.display = 'none';
+  }
+}
+
+function triggerSidebarUpload() {
+  const input = document.getElementById('sidebar-file-input');
+  if (!input) return;
+  input.value = '';
+  input.onchange = async (ev) => {
+    const files = Array.from(ev.target.files || []);
+    if (!files.length) return;
+    for (const f of files) {
+      const key = 'file_' + Date.now().toString(36) + '_' + f.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+      try {
+        const buf = await f.arrayBuffer();
+        await persistSlot(key, buf, f.name);
+      } catch(e) { console.error('Upload failed for', f.name, e); }
+    }
+    await refreshFilesBadge();
+    openCacheModal();
+  };
+  input.click();
+}
 
 // ============================================================
 //  FILE INFO MODAL (unchanged data, unchanged logic)
@@ -5771,6 +5672,7 @@ function suProgress(pct, msg) {
     await loadFromIDB();
     suProgress(90, 'Restoring state…');
     updateAllNavStatuses();
+    refreshFilesBadge();
     suProgress(100, 'Ready');
   } catch(e) {
     idbSetStatus('error', 'IDB unavailable');
