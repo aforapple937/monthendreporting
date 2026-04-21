@@ -805,6 +805,10 @@
     line-height: 1;
   }
   .ptb-v2 .ptb-seg button.active { background: var(--d-ink); color: var(--d-accent); }
+  .ptb-v2 .ptb-seg button.ptb-btn-disabled,
+  .ptb-v2 .ptb-btn.ptb-btn-disabled {
+    opacity: 0.4; cursor: not-allowed; pointer-events: none;
+  }
   .ptb-v2 .ptb-seg .ptb-count {
     font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
     font-size: 11px; margin-left: 4px;
@@ -1091,6 +1095,7 @@
     background: var(--d-line-2); border-bottom: 1px solid var(--d-line);
     white-space: nowrap;
   }
+  .ptb-v2 .ov-tcard.no-sticky-head table.ov-data thead th { position: static; }
   .ptb-v2 table.ov-data thead th.num { text-align: right; }
   .ptb-v2 table.ov-data tbody td {
     padding: 10px 10px; vertical-align: top;

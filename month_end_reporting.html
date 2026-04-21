@@ -386,42 +386,32 @@
     </div>
     <div class="kbd-body">
       <div class="kbd-group">
-        <h4>Navigation</h4>
-        <div class="kbd-row"><span class="desc">Management Overlay</span><span class="keys"><span class="k">G</span><span class="plus">then</span><span class="k">M</span></span></div>
-        <div class="kbd-row"><span class="desc">TB Reconciliation</span><span class="keys"><span class="k">G</span><span class="plus">then</span><span class="k">T</span></span></div>
-        <div class="kbd-row"><span class="desc">Major Movement</span><span class="keys"><span class="k">G</span><span class="plus">then</span><span class="k">J</span></span></div>
-        <div class="kbd-row"><span class="desc">Data Quality</span><span class="keys"><span class="k">G</span><span class="plus">then</span><span class="k">Q</span></span></div>
-        <div class="kbd-row"><span class="desc">MTM Recon</span><span class="keys"><span class="k">G</span><span class="plus">then</span><span class="k">F</span></span></div>
-      </div>
-      <div class="kbd-group">
         <h4>Global</h4>
         <div class="kbd-row"><span class="desc">Show / hide this panel</span><span class="keys"><span class="k">?</span></span></div>
         <div class="kbd-row"><span class="desc">Close popover / modal</span><span class="keys"><span class="k wide">Esc</span></span></div>
-        <div class="kbd-row"><span class="desc">Focus search</span><span class="keys"><span class="k wide">⌘ / Ctrl</span><span class="plus">+</span><span class="k">K</span></span></div>
-        <div class="kbd-row"><span class="desc">Export current view</span><span class="keys"><span class="k wide">⌘ / Ctrl</span><span class="plus">+</span><span class="k">E</span></span></div>
-        <div class="kbd-row"><span class="desc">Toggle dark mode</span><span class="keys"><span class="k wide">Shift</span><span class="plus">+</span><span class="k">D</span></span></div>
+        <div class="kbd-row"><span class="desc">Reload current pipeline</span><span class="keys"><span class="k">R</span></span></div>
+        <div class="kbd-row"><span class="desc">Reset filters (current view)</span><span class="keys"><span class="k">F</span></span></div>
+        <div class="kbd-row"><span class="desc">Export current view to XLSX</span><span class="keys"><span class="k">E</span></span></div>
       </div>
       <div class="kbd-group">
         <h4>Management Overlay</h4>
         <div class="kbd-row"><span class="desc">New overlay</span><span class="keys"><span class="k">N</span></span></div>
-        <div class="kbd-row"><span class="desc">Edit / save overlay</span><span class="keys"><span class="k wide">Enter</span></span></div>
-        <div class="kbd-row"><span class="desc">Delete overlay</span><span class="keys"><span class="k wide">⌘ / Ctrl</span><span class="plus">+</span><span class="k wide">⌫</span></span></div>
-        <div class="kbd-row"><span class="desc">Roll-forward month</span><span class="keys"><span class="k wide">Shift</span><span class="plus">+</span><span class="k">R</span></span></div>
-        <div class="kbd-row"><span class="desc">Switch view: List / LOB / RC / JE</span><span class="keys"><span class="k">V</span></span></div>
-        <div class="kbd-row"><span class="desc">Prev / next month</span><span class="keys"><span class="k">[</span><span class="k">]</span></span></div>
-        <div class="kbd-row"><span class="desc">Toggle compare mode</span><span class="keys"><span class="k">M</span></span></div>
+        <div class="kbd-row"><span class="desc">Save &amp; export JSON</span><span class="keys"><span class="k">S</span></span></div>
+        <div class="kbd-row"><span class="desc">Expand / collapse all (List view)</span><span class="keys"><span class="k">X</span></span></div>
+        <div class="kbd-row"><span class="desc">Cycle view (List &harr; Journal entries)</span><span class="keys"><span class="k">[</span><span class="k">]</span></span></div>
       </div>
       <div class="kbd-group">
-        <h4>TB Recon table</h4>
-        <div class="kbd-row"><span class="desc">Filter: All / Breaks / Matched</span><span class="keys"><span class="k">1</span><span class="k">2</span><span class="k">3</span></span></div>
-        <div class="kbd-row"><span class="desc">Expand all breaks</span><span class="keys"><span class="k">X</span></span></div>
-        <div class="kbd-row"><span class="desc">Collapse all</span><span class="keys"><span class="k wide">Shift</span><span class="plus">+</span><span class="k">X</span></span></div>
-        <div class="kbd-row"><span class="desc">Next / prev row</span><span class="keys"><span class="k">J</span><span class="k">K</span></span></div>
-        <div class="kbd-row"><span class="desc">Open drill-down</span><span class="keys"><span class="k wide">Enter</span></span></div>
+        <h4>MTM FVOCI</h4>
+        <div class="kbd-row"><span class="desc">Cycle tabs (Listing &rarr; Journal &rarr; WAIR)</span><span class="keys"><span class="k">[</span><span class="k">]</span></span></div>
+      </div>
+      <div class="kbd-group">
+        <h4>Major Movement</h4>
+        <div class="kbd-row"><span class="desc">Cycle tabs (Presentation &harr; Data)</span><span class="keys"><span class="k">[</span><span class="k">]</span></span></div>
+        <div class="kbd-row"><span class="desc">Toggle million / whole units</span><span class="keys"><span class="k">M</span></span></div>
       </div>
     </div>
     <div class="kbd-foot">
-      <span>Tip:</span> press <span class="k">G</span> then a destination letter to jump between tools &mdash; works from anywhere except text inputs.
+      <span>Tip:</span> shortcuts are suppressed while typing in an input or when a modal is open.
     </div>
   </div>
 </div>
@@ -5656,7 +5646,12 @@ function moaGetMissingFields(e) {
   return missing;
 }
 
-function moaSetView(v) { moaState.dashView = v; renderMoa(); }
+function moaSetView(v) {
+  // Journal entries is single-month only — fall back if the user was in compare.
+  if (v === 'journal' && moaState.mode === 'compare') moaState.mode = 'single';
+  moaState.dashView = v;
+  renderMoa();
+}
 
 function moaToggleCompareMonth(m) {
   if (!moaState.compareMonths) moaState.compareMonths = [];
@@ -6183,7 +6178,7 @@ function buildMoaCompareListHtml(entries, mA, mB) {
       + moaCmpAmtCell(netA) + moaCmpAmtCell(netB) + moaCmpDeltaCell(netB - netA) + '</tr>';
   }
 
-  return '<div class="ov-tcard">'
+  return '<div class="ov-tcard no-sticky-head">'
     + moaFilterChipsHtml('list')
     + '<div class="ov-tscroll"><table class="ov-data">'
     + '<thead><tr>'
@@ -6318,7 +6313,7 @@ function buildMoaComparePivotHtml(entries, mA, mB, dim) {
   var dimColW = dim === 'rc' ? '200px' : '120px';
   var totalItems = dimRows.reduce(function(s,r){ return s+r.items.length; }, 0);
 
-  return '<div class="ov-tcard">'
+  return '<div class="ov-tcard no-sticky-head">'
     + moaFilterChipsHtml(view)
     + '<div class="ov-tscroll"><table class="ov-data">'
     + '<thead><tr>'
@@ -6339,114 +6334,142 @@ function buildMoaComparePivotHtml(entries, mA, mB, dim) {
 }
 
 /* ============================================================
- *  JOURNAL ENTRIES VIEW (design spec)
- *  2 aggregated JEs (one per entity), just the MOA table + entity tag.
+ *  JOURNAL ENTRIES VIEW
+ *  Posts the DELTA between the selected month and the previous month
+ *  (one aggregated JE per entity). Amounts roll up by (CCY, Cost Centre,
+ *  Account, Product, …) so BS and P&L offsets net out correctly.
  *  ============================================================ */
 function buildMoaJournalHtml(entries, allMonths) {
   if (!allMonths.length) return '<div style="padding:20px;font-size:11px;color:var(--ink3);">No entries yet.</div>';
   if (!moaState.journalMonth || allMonths.indexOf(moaState.journalMonth) < 0) moaState.journalMonth = allMonths[allMonths.length - 1];
   var curMonth = moaState.journalMonth;
-  var parts = curMonth.split('-');
-  var remarks = (MONTH_NAMES[parseInt(parts[1]) - 1] || '') + parts[0].slice(2) + ' MOA';
-  // MOA posting accounts (design spec placeholder codes)
+  var cParts = curMonth.split('-'), cY = parseInt(cParts[0]), cM = parseInt(cParts[1]);
+  var pM = cM - 1, pY = cY; if (pM === 0) { pM = 12; pY--; }
+  var prevMonth = pY + '-' + String(pM).padStart(2, '0');
+  var remarks = (MONTH_NAMES[cM - 1] || '') + cParts[0].slice(2) + ' MOA';
+
+  // MOA posting accounts
   var BS_AC = '3403107', PL_BORROW = '6705208', PL_OTHER = '6705207';
-  var INTERCO2 = '000000', FUTURE1 = '00000', SUB_AC = '0000', FUTURE3 = '00000';
+  var CCY = 'SGD', PRODUCT = '00000', INTERCO2 = '000', FUTURE1 = '00000', SUB_AC = '0000', FUTURE3 = '0000';
 
   moaState.journalRows = [];
-  var monthEntries = entries.filter(function(e){ return e.month === curMonth; });
-  if (!monthEntries.length) return '<div style="padding:20px;font-size:11px;color:var(--ink3);">No overlays to post for ' + curMonth + '.</div>';
 
-  var ENTITIES = ['MBB-SG', 'MSL'];
-  var byEntity = {};
-  monthEntries.forEach(function(e) {
+  // Aggregate overlays into items keyed by (entity, type, sub [cif/model], RC signature)
+  // so an identical overlay in prev vs cur is matched line-for-line.
+  var itemMap = new Map();
+  function itemKey(e) {
     moaMigrateEntry(e);
-    if (!byEntity[e.entity]) byEntity[e.entity] = [];
-    byEntity[e.entity].push(e);
+    var sub = e.type === 'Borrower' ? (e.cif || '')
+           : e.type === 'Model'    ? (e.modelDesc || '')
+           : '';
+    return (e.entity || '') + '||' + (e.type || '') + '||' + sub + '||' + Object.keys(e.rcAlloc || {}).sort().join(',');
+  }
+  entries.forEach(function(e) {
+    if (e.month !== curMonth && e.month !== prevMonth) return;
+    moaMigrateEntry(e);
+    var k = itemKey(e);
+    if (!itemMap.has(k)) {
+      var plAc = e.type === 'Borrower' ? PL_BORROW : PL_OTHER;
+      itemMap.set(k, { entity: e.entity || '', type: e.type || '', plAc: plAc, rcAlloc: e.rcAlloc || {}, cur: 0, prev: 0 });
+    }
+    var it = itemMap.get(k);
+    if (e.month === curMonth)  it.cur  += parseFloat(e.amount) || 0;
+    if (e.month === prevMonth) it.prev += parseFloat(e.amount) || 0;
   });
-  var entitiesPresent = ENTITIES.filter(function(en){ return byEntity[en]; });
 
-  var html = '';
-  var allExportRows = [];
+  if (!itemMap.size) return '<div style="padding:20px;font-size:11px;color:var(--ink3);">No overlays for ' + curMonth + ' or ' + prevMonth + '.</div>';
 
-  entitiesPresent.forEach(function(ent) {
-    var ovs = byEntity[ent];
-    var ccy = ent === 'MBB-SG' ? 'SGD' : 'MYR';
+  // Net delta per (entity, account, CC, product, ...)
+  var ENTITIES = ['MBB-SG', 'MSL'];
+  var entityNet = {};
+  ENTITIES.forEach(function(en){ entityNet[en] = new Map(); });
+  function addNet(en, ccy, cc, ac, prod, ico, f1, sub, f3, amt) {
+    if (!entityNet[en]) entityNet[en] = new Map();
+    var key = [ccy, cc, ac, prod, ico, f1, sub, f3].join('||');
+    entityNet[en].set(key, (entityNet[en].get(key) || 0) + amt);
+  }
 
-    // Aggregate lines across all overlays in this entity.
-    // Key = account|cost_centre|product → { dr, cr }
-    var agg = new Map();
-    function addLine(account, cc, prod, dr, cr) {
-      var key = account + '|' + cc + '|' + prod;
-      var row = agg.get(key);
-      if (!row) { row = { account:account, cc:cc, prod:prod, dr:0, cr:0 }; agg.set(key, row); }
-      row.dr += dr; row.cr += cr;
+  itemMap.forEach(function(it) {
+    var delta = it.cur - it.prev;
+    if (Math.abs(delta) < 0.005) return;
+    var en = it.entity;
+    var rcEntries = Object.keys(it.rcAlloc || {})
+      .filter(function(rc){ return rc; })
+      .map(function(rc){ return { rc: rc, amount: parseFloat(it.rcAlloc[rc]) || 0 }; });
+    var totalSplit = rcEntries.reduce(function(s, r){ return s + r.amount; }, 0);
+
+    if (!rcEntries.length) {
+      // No RC allocation — single pair at blank cost centre.
+      var bsAmt = delta > 0 ? -delta       : Math.abs(delta);
+      var plAmt = delta > 0 ? delta        : -Math.abs(delta);
+      addNet(en, CCY, '', BS_AC,    PRODUCT, INTERCO2, FUTURE1, SUB_AC, FUTURE3, bsAmt);
+      addNet(en, CCY, '', it.plAc,  PRODUCT, INTERCO2, FUTURE1, SUB_AC, FUTURE3, plAmt);
+      return;
     }
 
-    ovs.forEach(function(o) {
-      var amt = parseFloat(o.amount) || 0;
-      if (!amt) return;
-      var isPos = amt >= 0;
-      var plAc = o.type === 'Borrower' ? PL_BORROW : PL_OTHER;
-      var rcLines = Object.keys(o.rcAlloc || {}).map(function(k){ return {k:k, v:Math.abs(parseFloat(o.rcAlloc[k])||0)}; }).filter(function(x){ return x.v > 0; });
-      var lobLines = Object.keys(o.lobAlloc || {}).map(function(k){ return {k:k, v:Math.abs(parseFloat(o.lobAlloc[k])||0)}; }).filter(function(x){ return x.v > 0; });
+    rcEntries.forEach(function(r) {
+      var weight = totalSplit > 0 ? r.amount / totalSplit : 1 / rcEntries.length;
+      var split = parseFloat((delta * weight).toFixed(2));
+      var bsAmt = split > 0 ? -split       : Math.abs(split);
+      var plAmt = split > 0 ? split        : -Math.abs(split);
+      addNet(en, CCY, r.rc, BS_AC,   PRODUCT, INTERCO2, FUTURE1, SUB_AC, FUTURE3, bsAmt);
+      addNet(en, CCY, r.rc, it.plAc, PRODUCT, INTERCO2, FUTURE1, SUB_AC, FUTURE3, plAmt);
+    });
+  });
 
-      // Positive overlay: DR P&L (per RC), CR BS (per LOB).
-      // Negative overlay (release): DR BS (per LOB), CR P&L (per RC).
-      var drAccount = isPos ? plAc   : BS_AC;
-      var crAccount = isPos ? BS_AC  : plAc;
-      var drLines   = isPos ? rcLines : lobLines;
-      var crLines   = isPos ? lobLines : rcLines;
-      var drIsRC    = isPos;
+  var html = '<div style="font-size:11px;color:var(--ink3);margin-bottom:12px;">Delta: <b>' + curMonth + '</b> vs <b>' + prevMonth + '</b></div>';
+  var allExportRows = [];
 
-      drLines.forEach(function(ln) {
-        var cc   = drIsRC ? ln.k : '';
-        var prod = drIsRC ? ''   : ln.k;
-        addLine(drAccount, cc, prod, ln.v, 0);
-      });
-      crLines.forEach(function(ln) {
-        var crIsRC = !drIsRC;
-        var cc   = crIsRC ? ln.k : '';
-        var prod = crIsRC ? ''   : ln.k;
-        addLine(crAccount, cc, prod, 0, ln.v);
+  ENTITIES.forEach(function(ent) {
+    var netMap = entityNet[ent];
+    if (!netMap || !netMap.size) return;
+
+    var rows = [];
+    netMap.forEach(function(net, key) {
+      if (Math.abs(net) < 0.005) return;
+      var p = key.split('||');
+      var absAmt = parseFloat(Math.abs(net).toFixed(2));
+      var isDr = net > 0;
+      rows.push({
+        ccy: p[0], cc: p[1], account: p[2], prod: p[3],
+        ico: p[4], f1: p[5], sub: p[6], f3: p[7],
+        dr: isDr ? absAmt : 0,
+        cr: isDr ? 0 : absAmt
       });
     });
-
-    var rows = Array.from(agg.values()).filter(function(r){ return (r.dr + r.cr) > 0.005; });
-    // Sort: BS account first, then by cost centre, then product
-    rows.sort(function(a,b) {
-      if (a.account === BS_AC && b.account !== BS_AC) return -1;
-      if (b.account === BS_AC && a.account !== BS_AC) return 1;
-      if (a.account !== b.account) return a.account.localeCompare(b.account);
-      if (a.cc !== b.cc) return (a.cc||'').localeCompare(b.cc||'');
-      return (a.prod||'').localeCompare(b.prod||'');
-    });
-
     if (!rows.length) return;
 
-    var totalDr = rows.reduce(function(s,r){ return s+r.dr; }, 0);
-    var totalCr = rows.reduce(function(s,r){ return s+r.cr; }, 0);
+    // Sort: cost centre asc; within same CC → BS account first.
+    rows.sort(function(a, b) {
+      if (a.cc !== b.cc) return (a.cc || '').localeCompare(b.cc || '');
+      if (a.account === BS_AC && b.account !== BS_AC) return -1;
+      if (b.account === BS_AC && a.account !== BS_AC) return 1;
+      return 0;
+    });
+
+    var totalDr = rows.reduce(function(s, r){ return s + r.dr; }, 0);
+    var totalCr = rows.reduce(function(s, r){ return s + r.cr; }, 0);
 
     var lineRows = rows.map(function(r) {
-      // Export row
       allExportRows.push({
-        'Entity': ent, 'CCY': ccy,
+        'Entity': ent, 'CCY': r.ccy,
         'Cost Centre': r.cc || '',
         'Account': r.account,
         'Product': r.prod || '',
-        'Interco': INTERCO2, 'Future1': FUTURE1, 'Sub Account': SUB_AC, 'Future3': FUTURE3,
-        'Entered Debit': r.dr > 0 ? parseFloat(r.dr.toFixed(2)) : 0,
+        'Interco': r.ico, 'Future1': r.f1, 'Sub Account': r.sub, 'Future3': r.f3,
+        'Entered Debit':  r.dr > 0 ? parseFloat(r.dr.toFixed(2)) : 0,
         'Entered Credit': r.cr > 0 ? parseFloat(r.cr.toFixed(2)) : 0,
         'Remarks': remarks
       });
       return '<tr>'
-        + '<td class="je-mono">' + ccy + '</td>'
+        + '<td class="je-mono">' + r.ccy + '</td>'
         + '<td class="je-mono">' + (r.cc || '<span class="dim">—</span>') + '</td>'
         + '<td class="je-mono"><b>' + r.account + '</b></td>'
-        + '<td class="je-mono">' + (r.prod || '<span class="dim">—</span>') + '</td>'
-        + '<td class="je-mono dim">' + INTERCO2 + '</td>'
-        + '<td class="je-mono dim">' + FUTURE1 + '</td>'
-        + '<td class="je-mono dim">' + SUB_AC + '</td>'
-        + '<td class="je-mono dim">' + FUTURE3 + '</td>'
+        + '<td class="je-mono dim">' + r.prod + '</td>'
+        + '<td class="je-mono dim">' + r.ico + '</td>'
+        + '<td class="je-mono dim">' + r.f1 + '</td>'
+        + '<td class="je-mono dim">' + r.sub + '</td>'
+        + '<td class="je-mono dim">' + r.f3 + '</td>'
         + '<td class="num">' + (r.dr > 0 ? fmtN2(r.dr) : '<span class="dim">—</span>') + '</td>'
         + '<td class="num">' + (r.cr > 0 ? fmtN2(r.cr) : '<span class="dim">—</span>') + '</td>'
         + '<td class="je-mono">' + remarks + '</td>'
@@ -6470,8 +6493,7 @@ function buildMoaJournalHtml(entries, allMonths) {
   });
 
   moaState.journalRows = allExportRows;
-
-  if (!html) return '<div style="padding:20px;font-size:11px;color:var(--ink3);">No journal entries for ' + curMonth + '.</div>';
+  if (!allExportRows.length) return '<div style="padding:20px;font-size:11px;color:var(--ink3);">No delta entries for ' + curMonth + ' vs ' + prevMonth + '.</div>';
   return html;
 }
 
@@ -6585,9 +6607,27 @@ function renderMoa() {
   }
 
   // ===== View-mode buttons (moved up to page-head, next to Roll-forward) =====
+  // Journal entries is single-month only, so disable it when the user is in Compare.
+  var isCompare = moaState.mode === 'compare';
   var viewBtn = function(k, label) {
     var active = (view === k);
-    return '<button class="ptb-btn' + (active?' ptb-btn-active':'') + '" onclick="moaSetView(\'' + k + '\')">' + label + '</button>';
+    var disabled = (k === 'journal' && isCompare);
+    var cls = 'ptb-btn' + (active?' ptb-btn-active':'') + (disabled?' ptb-btn-disabled':'');
+    var onclick = disabled ? '' : ' onclick="moaSetView(\'' + k + '\')"';
+    var title = disabled ? ' title="Journal entries is single-month only — switch to Single month mode"' : '';
+    var disAttr = disabled ? ' disabled aria-disabled="true"' : '';
+    return '<button class="' + cls + '"' + disAttr + onclick + title + '>' + label + '</button>';
+  };
+  // Compare mode is only meaningful for List/LOB/RC — disable it when viewing Journal entries.
+  var isJournal = view === 'journal';
+  var modeBtn = function(k, label) {
+    var active = (moaState.mode === k);
+    var disabled = (k === 'compare' && isJournal);
+    var cls = (active?'active':'') + (disabled?' ptb-btn-disabled':'');
+    var onclick = disabled ? '' : ' onclick="moaSetMode(\'' + k + '\')"';
+    var title = disabled ? ' title="Compare 2 months is not available in Journal entries view"' : '';
+    var disAttr = disabled ? ' disabled aria-disabled="true"' : '';
+    return '<button class="' + cls + '"' + disAttr + onclick + title + '>' + label + '</button>';
   };
 
   // ===== Top panel (design-file layout) =====
@@ -6599,8 +6639,8 @@ function renderMoa() {
     +   '<div class="ptb-page-title"><h1>Management Overlay</h1></div>'
     +   '<div class="ptb-page-actions">'
     +     '<div class="ptb-seg" id="moa-mode-seg">'
-    +       '<button class="' + (moaState.mode==='single'?'active':'') + '" onclick="moaSetMode(\'single\')">Single month</button>'
-    +       '<button class="' + (moaState.mode==='compare'?'active':'') + '" onclick="moaSetMode(\'compare\')">Compare 2 months</button>'
+    +       modeBtn('single', 'Single month')
+    +       modeBtn('compare', 'Compare 2 months')
     +     '</div>'
     +     '<div class="ptb-seg" id="moa-view-seg">'
     +       viewBtn('type', 'List')
@@ -6649,6 +6689,8 @@ function renderMoa() {
 
 function moaSetMode(mode) {
   if (moaState.mode === mode) return;
+  // Compare 2 months is not available while viewing Journal entries.
+  if (mode === 'compare' && moaState.dashView === 'journal') return;
   moaState.mode = mode;
   if (mode === 'compare') {
     var entries = moaState.entries, seen = {}, allMonths = [];
@@ -7002,8 +7044,8 @@ function importMoaJson() { var input = document.createElement('input'); input.ty
 
 /* ============================================================
  *  ROLL-FORWARD MODAL (design spec)
- *  Copies all overlays from source month → target month.
- *  Does NOT clobber existing target-month overlays — adds on top.
+ *  Copies all overlays from source month → target month, REPLACING
+ *  any overlays that already exist in the target month.
  *  ============================================================ */
 function openMoaDuplicateModal() {
   var entries = moaState.entries, seen = {}, allMonths = [];
@@ -7045,7 +7087,7 @@ function updateRfPreview() {
   var warn = existing.length
     ? '<div class="rf-warn">&#9888; Target month already has <b>' + existing.length + '</b> overlay' + (existing.length===1?'':'s')
       + ' (SGD ' + fmtN2(existing.reduce(function(s,o){ return s + (parseFloat(o.amount)||0); }, 0))
-      + '). Roll-forward will add <b>on top</b> — existing overlays are not replaced.</div>'
+      + '). Roll-forward will <b>replace</b> these existing overlays.</div>'
     : '';
   document.getElementById('rf-preview').innerHTML = '<b>' + src.length + '</b> overlay' + (src.length===1?'':'s')
     + ' will be copied from <b>' + fmt(from) + '</b> to <b>' + fmt(to) + '</b>'
@@ -7059,6 +7101,8 @@ async function confirmRfModal() {
   if (from === to) { errEl.textContent = 'Source and target months must differ.'; return; }
   var src = moaState.entries.filter(function(e){ return e.month === from; });
   if (!src.length) { errEl.textContent = 'Source month has no overlays.'; return; }
+  // Replace existing target-month overlays: drop anything already in `to`.
+  moaState.entries = moaState.entries.filter(function(e){ return e.month !== to; });
   src.forEach(function(e) {
     var copy = JSON.parse(JSON.stringify(e));
     copy.month = to;
