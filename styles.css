@@ -202,25 +202,13 @@
     gap: 12px;
     transition: border-color 0.2s;
   }
-  .file-slot.loaded  { border-color: #9dd4b8; background: #fafffe; }
-  .file-slot.partial { border-color: #f0c97a; background: #fffcf5; }
-
-  .slot-icon {
-    width: 34px; height: 34px;
-    border-radius: var(--radius);
-    display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
-    font-size: 14px;
-  }
-  .si-idle    { background: var(--paper2); }
-  .si-loaded  { background: var(--green-bg); }
-  .si-partial { background: var(--amber-bg); }
+  .file-slot.loaded   { border-color: #a7d9bf; background: #d7f2e4; }
+  .file-slot.partial  { border-color: #f0d58c; background: #fbefc7; }
+  .file-slot.missing  { border-color: #f2b8b8; background: #fcdede; }
+  .file-slot.optional { border-color: var(--border); background: #fff; }
 
   .slot-info { flex: 1; }
   .slot-name { font-size: 12px; font-weight: 600; }
-  .slot-desc { font-size: 11px; color: var(--ink3); margin-top: 1px; }
-  .slot-file { font-family: var(--mono); font-size: 10px; color: var(--green); margin-top: 2px; }
-  .slot-partial-detail { font-size: 10px; color: var(--amber); margin-top: 2px; }
 
   .status-badge {
     display: inline-flex; align-items: center; gap: 5px;
@@ -229,10 +217,14 @@
     padding: 3px 8px;
     border-radius: 20px;
   }
-  .sb-idle  { background: var(--paper2); color: var(--ink3); }
-  .sb-ready { background: var(--amber-bg); color: var(--amber); }
-  .sb-ok    { background: var(--green-bg); color: var(--green); }
-  .sb-breaks{ background: var(--red-bg); color: var(--red); }
+  .sb-idle    { background: var(--paper2); color: var(--ink3); }
+  .sb-ready   { background: var(--amber-bg); color: var(--amber); }
+  .sb-ok      { background: var(--green-bg); color: var(--green); }
+  .sb-breaks  { background: var(--red-bg); color: var(--red); }
+  .sb-loaded  { background: #b6e6cc; color: #2d6e4e; }
+  .sb-partial { background: #f5e1a2; color: #8b6a1a; }
+  .sb-missing { background: #f4c4c4; color: #8b2a2a; }
+  .sb-optional{ background: var(--paper2); color: var(--ink3); }
 
   .progress-wrap {
     background: #fff;
