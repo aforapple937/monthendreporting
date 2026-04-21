@@ -981,7 +981,7 @@ let breakdownData = [], breakdownPage = 1;
 const BK_PER_PAGE = 100;
 
 // Forward-declare module states so SLOT_REGISTRY can reference them
-const loanReconState = { tbMapping: null, fifo: null, results: null, files: { tbMapping: false, fifo: false } };
+const loanReconState = { tbMapping: null, fifo: null, results: null, files: { tbMapping: false, fifo: false }, statusFilter: 'all' };
 const mtmState = { fvoci: null, fvociLoaded: false, disb: null, disbLoaded: false, prevFvoci: null, prevFvociLoaded: false, results: null };
 const moaState = { entries: [], dashView: 'type', journalMonth: '', journalRows: [], compareMonths: [], mode: 'single', monthA: '', monthB: '' };
 const preTbState = { results: null, effectiveDate: null, statusFilter: 'all', filters: {}, page: 1, stats: null };
@@ -1430,7 +1430,7 @@ function renderView(name) {
   // Pre-Check TB uses the design-handoff page-head as its title; hide the
   // shared main-topbar so it doesn't double up.
   const topbar = document.querySelector('.main-topbar');
-  if (topbar) topbar.style.display = (name === 'pretb' || name === 'reversal' || name === 'recon' || name === 'tb' || name === 'moa' || name === 'files' || name === 'mtmfvoci') ? 'none' : '';
+  if (topbar) topbar.style.display = (name === 'pretb' || name === 'reversal' || name === 'recon' || name === 'tb' || name === 'moa' || name === 'files' || name === 'mtmfvoci' || name === 'loanrecon' || name === 'dq' || name === 'majmov') ? 'none' : '';
   const views = {
     'pretb':     renderPreTb,
     'loanrecon': renderLoanRecon,
@@ -1903,8 +1903,6 @@ function mmAvailableMonths() {
 }
 
 function renderMajorMovement() {
-  document.getElementById('topbar-title').textContent = 'Major Movement';
-  document.getElementById('topbar-subtitle').textContent = 'ECL movement analysis by CIF — current vs previous month';
   const container = document.getElementById('view-majmov');
   if (majMovState.results) { renderMajMovResults(container); return; }
   const avail = mmAvailableMonths();
@@ -3624,8 +3622,6 @@ function dqSRow(l){const o=[];let c='',q=false;for(let i=0;i<l.length;i++){const
 //  DQ RENDER + COMPUTE
 // ============================================================
 function renderDq() {
-  document.getElementById('topbar-title').textContent    = 'Outbound DQ';
-  document.getElementById('topbar-subtitle').textContent = 'Distribution & quality check before sending to Head Office';
   const container = document.getElementById('view-dq');
   if (!dqState.AD.length) {
     if (dqState.DS.length && shouldAutoRun('dq')) {
@@ -5053,8 +5049,6 @@ const LOAN_ENTITY_MAP = { 'MSL': '252', 'MBB-SG': '128' };
 const LOAN_ENTITY_LABELS = { '128': 'MBB-SG (128)', '252': 'MSL (252)' };
 
 function renderLoanRecon() {
-  document.getElementById('topbar-title').textContent = 'Loan Recon';
-  document.getElementById('topbar-subtitle').textContent = 'Reconcile product file balances to trial balance by entity and product group';
   const container = document.getElementById('view-loanrecon');
   if (loanReconState.results) { renderLoanReconResults(container); }
   else {
@@ -5127,20 +5121,99 @@ async function runLoanRecon() {
     results.push({ ENTITY: ent, PRODUCT_GROUP: grp, PROD_AMT: prodAmtVal, FIFO_AMT: fifoForRow, TB_AMT: tbAmtVal, VARIANCE: variance, IS_BREAK: isBreak, DRILL: { blocks, hasFifo: ent === '128' && grp === 'Investment', unmappedGL, unmappedPRD } });
   }}
   setProgress('loanrecon', 1, 'Done'); await new Promise(r => setTimeout(r, 100));
-  loanReconState.results = { rows: results, latestDate };
+  // Reporting month from TB EFFECTIVE_DATE (mirrors Pre-Check TB), rendered MMM-YYYY.
+  let tbEffectiveRaw = null;
+  [S.tb.mbs, S.tb.msl].forEach(rows => {
+    if (tbEffectiveRaw || !rows) return;
+    const hit = rows.find(r => r && r.EFFECTIVE_DATE);
+    if (hit) tbEffectiveRaw = String(hit.EFFECTIVE_DATE).trim();
+  });
+  const tbDate = tbEffectiveRaw ? parseReportingDate(tbEffectiveRaw) : null;
+  const reportingMonth = fmtMMMyyyy(tbDate);
+  loanReconState.results = { rows: results, latestDate, reportingMonth };
+  loanReconState.statusFilter = 'all';
   const prog = document.getElementById('prog-loanrecon'); if (prog) prog.classList.remove('show');
   renderLoanRecon();
 }
 
 function renderLoanReconResults(container) {
-  const { rows } = loanReconState.results; const breaks = rows.filter(r => r.IS_BREAK);
-  const kpiHtml = `<div class="kpi-strip"><div class="kpi-card"><div class="kpi-label">Groups Checked</div><div class="kpi-value">${rows.length}</div></div><div class="kpi-card"><div class="kpi-label">Matched</div><div class="kpi-value green">${rows.length - breaks.length}</div></div><div class="kpi-card"><div class="kpi-label">Breaks (≥100,000)</div><div class="kpi-value ${breaks.length?'red':'green'}">${breaks.length}</div></div></div>`;
-  const rowsHtml = rows.map((r, i) => {
-    const varHtml = Math.abs(r.VARIANCE) === 0 ? `<span class="vp-zero mono-val">–</span>` : r.IS_BREAK ? renderVarianceCell(r.VARIANCE) : `<span class="mono-val" style="color:${r.VARIANCE<0?'var(--red)':'var(--green)'}">${r.VARIANCE<0?'-':''}${fmtNum(Math.abs(r.VARIANCE))}</span>`;
-    const fifoHtml = r.FIFO_AMT !== 0 ? `<td class="mono-val">${fmtNum(r.FIFO_AMT)}</td>` : `<td class="mono-val" style="color:var(--ink4)">—</td>`;
-    return `<tr class="${r.IS_BREAK?'row-break':''}" style="cursor:pointer;" onclick="openLoanDrilldown(${i})" title="Click to drill down"><td>${r.ENTITY}</td><td>${r.PRODUCT_GROUP}</td><td class="mono-val">${fmtNum(r.PROD_AMT)}</td>${fifoHtml}<td class="mono-val">${fmtNum(r.TB_AMT)}</td><td>${varHtml}</td></tr>`;
+  const { rows, reportingMonth } = loanReconState.results;
+  const breakRows = rows.filter(r => r.IS_BREAK);
+  const matchedRows = rows.length - breakRows.length;
+  const sf = loanReconState.statusFilter || 'all';
+  const display = sf === 'all' ? rows : sf === 'break' ? breakRows : rows.filter(r => !r.IS_BREAK);
+
+  const pageHeadHtml = `
+    <div class="ptb-page-head">
+      <div class="ptb-page-title">
+        <h1>Loan Recon</h1>
+        <div class="ptb-meta">
+          ${reportingMonth ? `<span>Period <b>${reportingMonth}</b></span>` : ''}
+        </div>
+      </div>
+      <div class="ptb-page-actions">
+        <button class="ptb-btn primary" onclick="loanReconExport()" title="Export (E)">
+          <svg><use href="#i-download"/></svg>Export
+        </button>
+      </div>
+    </div>`;
+
+  const kpiHtml = `<div class="ptb-grid">${stationKpiStatusHtml(matchedRows, breakRows.length, rows.length)}</div>`;
+
+  const toolbarHtml = `
+    <div class="ptb-table-toolbar">
+      <div class="ptb-seg">
+        ${stationSegBtn(sf==='all',    'All',     rows.length,       'dim', `loanReconSetStatusFilter('all')`)}
+        ${stationSegBtn(sf==='break',  'Breaks',  breakRows.length,  'neg', `loanReconSetStatusFilter('break')`)}
+        ${stationSegBtn(sf==='matched','Matched', matchedRows,       'dim', `loanReconSetStatusFilter('matched')`)}
+      </div>
+    </div>`;
+
+  const rowsHtml = display.map(r => {
+    const absIdx = rows.indexOf(r);
+    const vAbs = Math.abs(r.VARIANCE);
+    const varCell = vAbs === 0
+      ? `<span class="vp-zero mono-val">–</span>`
+      : r.IS_BREAK
+        ? renderVarianceCell(r.VARIANCE)
+        : `<span class="mono-val" style="color:${r.VARIANCE<0?'var(--red)':'var(--green)'}">${r.VARIANCE<0?'-':''}${fmtNum(vAbs)}</span>`;
+    const fifoCell = r.FIFO_AMT !== 0 ? fmtNum(r.FIFO_AMT) : '—';
+    const status = r.IS_BREAK ? 'break' : 'matched';
+    return `<tr data-status="${status}" style="cursor:pointer" onclick="openLoanDrilldown(${absIdx})" title="Click to drill down">
+      <td>${r.ENTITY}</td>
+      <td>${r.PRODUCT_GROUP}</td>
+      <td class="num d-mono">${fmtNum(r.PROD_AMT)}</td>
+      <td class="num d-mono">${fifoCell}</td>
+      <td class="num d-mono">${fmtNum(r.TB_AMT)}</td>
+      <td class="num">${varCell}</td>
+    </tr>`;
   }).join('');
-  container.innerHTML = `<div class="results-view">${kpiHtml}<div class="table-toolbar"><div class="filter-chips"></div><div style="margin-left:auto"><button class="btn btn-sm" onclick="loanReconExport()" title="Export (E)">Export XLSX</button></div></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Entity</th><th>Product Group</th><th>Product File</th><th>FIFO</th><th>Trial Balance</th><th>Variance</th></tr></thead><tbody>${rowsHtml}</tbody></table></div></div>`;
+
+  container.innerHTML = `<div class="ptb-v2">
+    ${pageHeadHtml}
+    ${kpiHtml}
+    <div class="ptb-card ptb-table-card">
+      ${toolbarHtml}
+      <div class="ptb-scroll">
+        <table class="ptb-data">
+          <thead><tr>
+            <th>Entity</th>
+            <th>Product Group</th>
+            <th class="num">Product File</th>
+            <th class="num">FIFO</th>
+            <th class="num">Trial Balance</th>
+            <th class="num">Variance</th>
+          </tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+}
+
+function loanReconSetStatusFilter(f) {
+  loanReconState.statusFilter = f;
+  renderLoanReconResults(document.getElementById('view-loanrecon'));
 }
 
 function loanReconExport() { if (!loanReconState.results) return; const { rows } = loanReconState.results; const exportRows = rows.map(r => ({ 'Entity': r.ENTITY, 'Product Group': r.PRODUCT_GROUP, 'Product File Amount': r.PROD_AMT, 'FIFO': r.FIFO_AMT, 'TB Amount': r.TB_AMT, 'Variance': r.VARIANCE })); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(exportRows), 'Loan Recon'); XLSX.writeFile(wb, 'loan_recon.xlsx'); }
