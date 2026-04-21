@@ -1546,78 +1546,101 @@
     border-top: 2px solid var(--d-line, #e5e5e2); border-bottom: 0;
   }
 
-  /* ============ STORED FILES MODAL (design-file layout) ============ */
-  .sf-modal { width: 760px; max-width: calc(100vw - 32px); }
-  .sf-head-sub { color: var(--ink4); font-weight: 400; font-size: 12px; letter-spacing: -0.01em; margin-left: 6px; }
-  .sf-search-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-  .sf-search {
-    display: flex; align-items: center; gap: 6px;
-    border: 1px solid var(--border); border-radius: 6px;
-    padding: 6px 10px; background: #fff; width: 340px;
+  /* ============ STORED FILES VIEW (design-file layout, scoped under .ptb-v2) ============ */
+  .ptb-v2.sf-v .sf-head-sub {
+    color: var(--d-ink-4); font-weight: 400; font-size: 16px;
+    letter-spacing: -0.01em; margin-left: 6px;
+  }
+  .ptb-v2.sf-v .sf-meta { font-size: 12px; color: var(--d-ink-3); }
+  .ptb-v2.sf-v .sf-meta b { color: var(--d-ink-2); font-weight: 500; }
+  .ptb-v2.sf-v .sf-clear-btn {
+    color: var(--d-neg); border-color: color-mix(in srgb, var(--d-neg) 30%, transparent);
+    background: var(--d-neg-soft);
+  }
+  .ptb-v2.sf-v .sf-clear-btn:hover {
+    color: var(--d-neg); border-color: var(--d-neg);
+    background: color-mix(in srgb, var(--d-neg) 12%, transparent);
+  }
+  .ptb-v2.sf-v .sf-search-row {
+    display: flex; align-items: center; gap: 10px; margin: 18px 0 10px;
+  }
+  .ptb-v2.sf-v .sf-search {
+    display: flex; align-items: center; gap: 8px;
+    border: 1px solid var(--d-line); border-radius: 8px;
+    padding: 6px 10px; background: var(--d-surface); width: 340px;
     transition: border-color 0.15s;
   }
-  .sf-search:focus-within { border-color: var(--ink3); }
-  .sf-search input {
+  .ptb-v2.sf-v .sf-search:focus-within { border-color: var(--d-ink-3); }
+  .ptb-v2.sf-v .sf-search svg { color: var(--d-ink-3); flex-shrink: 0; }
+  .ptb-v2.sf-v .sf-search input {
     border: 0; outline: 0; background: transparent;
-    font-size: 12px; color: var(--ink); font-family: inherit;
+    font-size: 12px; color: var(--d-ink); font-family: inherit;
     flex: 1; min-width: 0;
   }
-  .sf-search input::placeholder { color: var(--ink4); }
-  .sf-count { font-size: 11px; color: var(--ink3); }
-  .sf-card {
-    border: 1px solid var(--border); border-radius: 8px;
-    overflow: hidden; background: #fff;
+  .ptb-v2.sf-v .sf-search input::placeholder { color: var(--d-ink-4); }
+  .ptb-v2.sf-v .sf-card {
+    border: 1px solid var(--d-line); border-radius: var(--d-radius);
+    overflow: hidden; background: var(--d-surface);
   }
-  table.sf-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  table.sf-table th {
-    text-align: left; font-weight: 500; color: var(--ink3);
+  .ptb-v2.sf-v table.sf-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .ptb-v2.sf-v table.sf-table th {
+    text-align: left; font-weight: 500; color: var(--d-ink-3);
     text-transform: uppercase; letter-spacing: 0.08em;
     font-size: 10px; padding: 10px 12px;
-    border-bottom: 1px solid var(--border); background: var(--paper2);
+    border-bottom: 1px solid var(--d-line); background: var(--d-line-2);
   }
-  table.sf-table td {
-    padding: 8px 12px; vertical-align: middle;
-    border-bottom: 1px solid var(--paper2);
-    color: var(--ink2);
+  .ptb-v2.sf-v table.sf-table td {
+    padding: 0 12px; height: var(--d-row-h);
+    border-bottom: 1px solid var(--d-line-2);
+    color: var(--d-ink-2); vertical-align: middle;
   }
-  table.sf-table tbody tr:last-child td { border-bottom: 0; }
-  table.sf-table tbody tr:hover td { background: var(--paper2); }
-  .sf-table .sf-col-name { width: auto; }
-  .sf-table .sf-col-type { width: 80px; }
-  .sf-table .sf-col-up { width: 150px; }
-  .sf-table .sf-col-act { width: 110px; text-align: right; }
-  .sf-dot {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: var(--gold); display: inline-block;
-    margin-right: 8px; vertical-align: middle;
+  .ptb-v2.sf-v table.sf-table tbody tr:last-child td { border-bottom: 0; }
+  .ptb-v2.sf-v table.sf-table tbody tr:hover td { background: var(--d-line-2); }
+  .ptb-v2.sf-v .sf-table .sf-col-name { width: auto; padding-left: 16px; }
+  .ptb-v2.sf-v .sf-table .sf-col-type { width: 88px; }
+  .ptb-v2.sf-v .sf-table .sf-col-up { width: 170px; }
+  .ptb-v2.sf-v .sf-table .sf-col-act { width: 120px; text-align: right; padding-right: 16px; }
+  .ptb-v2.sf-v .sf-name-wrap { max-width: 100%; }
+  .ptb-v2.sf-v .sf-name {
+    font-size: 12.5px; font-weight: 600; color: var(--d-ink);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .sf-name-wrap { display: inline-block; vertical-align: middle; max-width: calc(100% - 20px); }
-  .sf-name { font-size: 12px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .sf-sub { font-size: 10.5px; color: var(--ink3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .sf-sub.sf-legacy { color: var(--amber); }
-  .sf-badge {
-    font-family: var(--mono); font-size: 10px;
-    padding: 2px 6px; border-radius: 4px;
-    background: var(--paper2); color: var(--ink2);
+  .ptb-v2.sf-v .sf-sub {
+    font-size: 11px; color: var(--d-ink-3); margin-top: 1px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .ptb-v2.sf-v .sf-sub.sf-legacy { color: var(--d-warn); }
+  .ptb-v2.sf-v .sf-badge {
+    font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+    font-size: 10px; padding: 2px 6px; border-radius: 4px;
+    background: var(--d-line-2); color: var(--d-ink-2);
     text-transform: uppercase; font-weight: 500;
     letter-spacing: 0.04em; white-space: nowrap;
   }
-  .sf-badge.html { background: #fdf6d2; color: #8a6d00; }
-  .sf-badge.csv,
-  .sf-badge.xlsx { background: var(--green-bg); color: var(--green); }
-  .sf-badge.json,
-  .sf-badge.txt  { background: var(--paper2); color: var(--ink2); }
-  .sf-badge.pdf  { background: var(--red-bg); color: var(--red); }
-  .sf-date { font-family: var(--mono); font-size: 11px; color: var(--ink3); }
-  .sf-row-act { display: inline-flex; gap: 4px; justify-content: flex-end; width: 100%; }
-  .sf-act {
+  .ptb-v2.sf-v .sf-badge.html { background: color-mix(in srgb, var(--d-accent) 32%, transparent); color: #8A6D00; }
+  .ptb-v2.sf-v .sf-badge.csv,
+  .ptb-v2.sf-v .sf-badge.xlsx { background: var(--d-pos-soft); color: var(--d-pos); }
+  .ptb-v2.sf-v .sf-badge.json,
+  .ptb-v2.sf-v .sf-badge.txt  { background: var(--d-line-2); color: var(--d-ink-2); }
+  .ptb-v2.sf-v .sf-badge.pdf  { background: var(--d-neg-soft); color: var(--d-neg); }
+  .ptb-v2.sf-v .sf-date {
+    font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+    font-size: 11px; color: var(--d-ink-3);
+  }
+  .ptb-v2.sf-v .sf-row-act { display: inline-flex; gap: 4px; justify-content: flex-end; width: 100%; }
+  .ptb-v2.sf-v .sf-act {
     padding: 4px 10px; border-radius: 6px;
-    border: 1px solid var(--border); background: transparent;
-    font-size: 11px; cursor: pointer; color: var(--ink2);
+    border: 1px solid var(--d-line); background: transparent;
+    font-size: 11px; cursor: pointer; color: var(--d-ink-2);
     font-family: inherit;
   }
-  .sf-act:hover { border-color: var(--ink4); color: var(--ink); }
-  .sf-act.danger:hover { color: var(--red); border-color: var(--red); }
-  .sf-empty { padding: 40px 20px; text-align: center; }
-  .sf-empty-title { font-size: 13px; font-weight: 500; color: var(--ink2); }
-  .sf-empty-sub { font-size: 12px; color: var(--ink3); margin-top: 4px; }
+  .ptb-v2.sf-v .sf-act:hover { border-color: var(--d-ink-4); color: var(--d-ink); }
+  .ptb-v2.sf-v .sf-act.danger:hover { color: var(--d-neg); border-color: var(--d-neg); }
+  .ptb-v2.sf-v .sf-empty { padding: 50px 20px; text-align: center; }
+  .ptb-v2.sf-v .sf-empty-title { font-size: 14px; font-weight: 500; color: var(--d-ink-2); }
+  .ptb-v2.sf-v .sf-empty-sub { font-size: 12px; color: var(--d-ink-3); margin-top: 4px; }
+  .ptb-v2.sf-v .sf-loading {
+    text-align: center; color: var(--d-ink-3);
+    font-size: 12px; padding: 24px !important; height: auto !important;
+  }
+  .ptb-v2.sf-v .sf-loading.sf-err { color: var(--d-neg); }
