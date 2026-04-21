@@ -2761,22 +2761,83 @@ async function runReversal(name) {
     }
   }
 
+  // Aggregate by 8-field key, collapsing the DR/CR write-off tag so e.g.
+  // "…|C|ECL_WO" and "…|C" are merged. Uses for-in to avoid the tuple-array
+  // allocation that Object.entries incurs on large dictionaries.
+  //
+  // Key structure from parseEGL: `ent|rc|gl|prod|interco|islamic|ccy|DRCR[|TAG]`
+  // (7 pipes for untagged, 8 for tagged). We need to truncate at the 8th pipe
+  // (if any) — that drops the optional |TAG suffix while keeping the DRCR.
+  const PIPE = 124; // '|'.charCodeAt(0)
   const agg = src => {
     const tar = {};
-    ['mbs','msl'].forEach(ent => Object.entries(src[ent]).forEach(([k,val]) => {
-      if (k.startsWith('__')) return;
-      const p=k.split('|'), ck=`${p[0]}|${p[1]}|${p[2]}|${p[3]}|${p[4]}|${p[5]}|${p[6]}|${p[7].charAt(0)}`; tar[ck]=(tar[ck]||0)+val;
-    }));
+    for (const ent of ['mbs','msl']) {
+      const dict = src[ent];
+      for (const k in dict) {
+        if (k.charCodeAt(0) === 95) continue; // skip '__reportingDate' etc.
+        const val = dict[k];
+        let pipeCount = 0, cut = k.length;
+        for (let i = 0; i < k.length; i++) {
+          if (k.charCodeAt(i) === PIPE) {
+            if (++pipeCount === 8) { cut = i; break; }
+          }
+        }
+        const ck = cut === k.length ? k : k.substring(0, cut);
+        tar[ck] = (tar[ck] || 0) + val;
+      }
+    }
     return tar;
   };
   setProgress(name, 0.5, 'Matching reversals…');
   await new Promise(r => setTimeout(r, 30));
-  const prevAgg=agg(S.prev_egl), revAgg=agg(S.rev_egl), res=[], seen=new Set();
-  Object.entries(prevAgg).forEach(([k,pVal]) => { const p=k.split('|'),rS=p[7]==='D'?'C':'D',rK=`${p[0]}|${p[1]}|${p[2]}|${p[3]}|${p[4]}|${p[5]}|${p[6]}|${rS}`,rV=revAgg[rK]||0; res.push({ENTITY:p[0],RC:p[1],GL_NUMBER:p[2],PRODUCT_CODE:p[3],INTERCO:p[4],ISLAMIC_INDICATOR:p[5],CURRENCY:p[6],PREV_DRCR:p[7],PREV_AMT:roundCents(pVal),REV_DRCR:rS,REV_AMT:roundCents(rV),VARIANCE:roundCents(pVal-rV)}); seen.add(rK); });
-  Object.entries(revAgg).forEach(([k,rV]) => { if (k.startsWith('__')) return; if (!seen.has(k)) { const p=k.split('|'),pS=p[7]==='D'?'C':'D'; res.push({ENTITY:p[0],RC:p[1],GL_NUMBER:p[2],PRODUCT_CODE:p[3],INTERCO:p[4],ISLAMIC_INDICATOR:p[5],CURRENCY:p[6],PREV_DRCR:pS,PREV_AMT:0,REV_DRCR:p[7],REV_AMT:roundCents(rV),VARIANCE:roundCents(-rV)}); } });
+
+  const prevAgg = agg(S.prev_egl), revAgg = agg(S.rev_egl), res = [], seen = new Set();
+  let breakRows = 0;
+
+  // Pass 1 — for every prior posting, find its reversal (flipped DR/CR).
+  for (const k in prevAgg) {
+    const pVal = prevAgg[k];
+    const p = k.split('|');
+    const rS = p[7] === 'D' ? 'C' : 'D';
+    const rK = `${p[0]}|${p[1]}|${p[2]}|${p[3]}|${p[4]}|${p[5]}|${p[6]}|${rS}`;
+    const rV = revAgg[rK] || 0;
+    const variance = roundCents(pVal - rV);
+    if (Math.abs(variance) > 0) breakRows++;
+    res.push({
+      ENTITY: p[0], RC: p[1], GL_NUMBER: p[2], PRODUCT_CODE: p[3],
+      INTERCO: p[4], ISLAMIC_INDICATOR: p[5], CURRENCY: p[6],
+      PREV_DRCR: p[7], PREV_AMT: roundCents(pVal),
+      REV_DRCR: rS, REV_AMT: roundCents(rV),
+      VARIANCE: variance
+    });
+    seen.add(rK);
+  }
+
+  // Pass 2 — unexpected reversals (reversal entries with no matching prior posting).
+  // agg() already stripped __-keys, so no need to re-check here.
+  for (const k in revAgg) {
+    if (seen.has(k)) continue;
+    const rV = revAgg[k];
+    const p = k.split('|');
+    const pS = p[7] === 'D' ? 'C' : 'D';
+    const variance = roundCents(-rV);
+    if (Math.abs(variance) > 0) breakRows++;
+    res.push({
+      ENTITY: p[0], RC: p[1], GL_NUMBER: p[2], PRODUCT_CODE: p[3],
+      INTERCO: p[4], ISLAMIC_INDICATOR: p[5], CURRENCY: p[6],
+      PREV_DRCR: pS, PREV_AMT: 0,
+      REV_DRCR: p[7], REV_AMT: roundCents(rV),
+      VARIANCE: variance
+    });
+  }
+
   setProgress(name, 1, 'Done'); await new Promise(r => setTimeout(r, 100));
   res.__revMonth  = fmtMMMyyyy(revDate);
   res.__dateWarning = dateWarning;
+  res.__stats = { breakRows, matchedRows: res.length - breakRows };
+  // Block auto-run on date warning so the Back button doesn't loop straight back
+  // into the same failing run (same pattern as runRecon / runTb).
+  if (dateWarning) blockAutoRun('reversal');
   S.results[name] = res;
 }
 
@@ -4184,30 +4245,11 @@ function revBuildPagerHtml(totalPages, currentPage) {
   return `<div class="ptb-pager">${btns.join('')}</div>`;
 }
 
-function renderReversalResults(container) {
-  const data = S.results.reversal || [];
-
-  // Date-mismatch gate (unchanged behaviour, re-skinned on the design background)
-  if (data.__dateWarning) {
-    container.innerHTML = `<div class="ptb-v2"><div class="ptb-page-head"><div class="ptb-page-title"><h1>Reversal Check</h1></div></div>
-      <div class="ptb-card" style="max-width:600px;background:var(--d-neg-soft);border-color:color-mix(in srgb, var(--d-neg) 22%, transparent);">
-        <div style="font-size:13px;font-weight:600;color:var(--d-neg);margin-bottom:8px">⚠ Date Mismatch</div>
-        <div style="font-size:12px;color:var(--d-ink);line-height:1.6">${data.__dateWarning}</div>
-        <button class="ptb-btn" style="margin-top:14px" onclick="S.results['reversal']=null;renderStation('reversal')">Back</button>
-      </div></div>`;
-    return;
-  }
-
-  const results = Array.isArray(data) ? data : [];
-  const breakRows = results.filter(r => Math.abs(r.VARIANCE||0) > 0);
-  const matchedRows = results.length - breakRows.length;
-  const revMonth = data.__revMonth || null;
-  if (!revState.filters) revState.filters = {};
-  if (!revState.statusFilter) revState.statusFilter = 'all';
-  if (!revState.page) revState.page = 1;
-  const statusFilter = revState.statusFilter;
-
-  // Apply status seg, then per-column filters
+/** Compute the filtered + paginated view of S.results.reversal. Shared
+ *  between full render and partial-table render. */
+function revComputeView() {
+  const results = Array.isArray(S.results.reversal) ? S.results.reversal : [];
+  const statusFilter = revState.statusFilter || 'all';
   const afterStatus = statusFilter === 'all' ? results : results.filter(r => revStatusOf(r) === statusFilter);
   const display = afterStatus.filter(r => {
     for (const k of REV_COLS) {
@@ -4216,75 +4258,18 @@ function renderReversalResults(container) {
     }
     return true;
   });
-
-  // Pagination
   const totalPages = Math.max(1, Math.ceil(display.length / REV_PAGE_SIZE));
   if (revState.page > totalPages) revState.page = totalPages;
   if (revState.page < 1) revState.page = 1;
   const page = revState.page;
   const startIdx = (page - 1) * REV_PAGE_SIZE;
   const endIdx = Math.min(startIdx + REV_PAGE_SIZE, display.length);
-  const pageRows = display.slice(startIdx, endIdx);
+  return { results, display, page, totalPages, startIdx, endIdx, pageRows: display.slice(startIdx, endIdx) };
+}
 
-  const matchedPct = results.length ? (matchedRows / results.length * 100) : 0;
-  const pageHeadHtml = `
-    <div class="ptb-page-head">
-      <div class="ptb-page-title">
-        <h1>Reversal Check</h1>
-        <div class="ptb-meta">
-          ${revMonth ? `<span>Period <b>${revMonth}</b></span>` : ''}
-        </div>
-      </div>
-      <div class="ptb-page-actions">
-        <button class="ptb-btn primary" onclick="revExport()" title="Export (E)">
-          <svg><use href="#i-download"/></svg>Export
-        </button>
-      </div>
-    </div>`;
-
-  const kpiHtml = `
-    <div class="ptb-grid">
-      <div class="ptb-card ptb-kpi ptb-col-3">
-        <div class="ptb-label">Reconciliation Status</div>
-        <div class="ptb-value" style="font-size:22px;letter-spacing:-0.02em">
-          <span style="color:var(--d-pos)">${matchedRows.toLocaleString()}</span>
-          <span class="dim" style="font-size:14px">matched</span>
-          <span style="color:${breakRows.length?'var(--d-neg)':'var(--d-ink-4)'};margin-left:6px">${breakRows.length.toLocaleString()}</span>
-          <span class="dim" style="font-size:14px">breaks</span>
-        </div>
-        <div class="ptb-footline">
-          <div class="ptb-bar-track"><div class="ptb-bar-fill" style="width:${matchedPct.toFixed(1)}%"></div></div>
-          <span class="mono">${matchedPct.toFixed(1)}%</span>
-        </div>
-      </div>
-    </div>`;
-
-  const segBtn = (f, label, count, tone) => {
-    const active = statusFilter === f;
-    let cntColor = '';
-    if (tone === 'neg' && count > 0) cntColor = 'style="color:var(--d-neg)"';
-    else if (!active) cntColor = 'style="color:var(--d-ink-4)"';
-    return `<button class="${active?'active':''}" onclick="revSetStatusFilter('${f}')">${label}<span class="ptb-count" ${cntColor}>${count.toLocaleString()}</span></button>`;
-  };
-  const toolbarHtml = `
-    <div class="ptb-table-toolbar">
-      <div class="ptb-seg">
-        ${segBtn('all','All', results.length, 'dim')}
-        ${segBtn('break','Breaks', breakRows.length, 'neg')}
-        ${segBtn('matched','Matched', matchedRows, 'dim')}
-      </div>
-    </div>`;
-
-  const chipsHtml = revBuildChipsHtml();
-
-  const thHtml = REV_COLS.map(k => {
-    const cf = revState.filters[k];
-    const active = fdIsActive(cf);
-    const numCls = REV_NUM_COLS.has(k) ? ' num' : '';
-    return `<th class="${active?'filtered':''}${numCls}" data-col="${k}" onclick="openReversalFilter('${k}',this)">${REV_COL_LABELS[k]}<span class="fcol"></span></th>`;
-  }).join('');
-
-  const rowsHtml = pageRows.map(r => {
+function revBuildRowsHtml(pageRows) {
+  if (!pageRows.length) return `<tr><td colspan="${REV_COLS.length}" style="text-align:center;padding:40px;color:var(--d-ink-4)">No rows match the current filters</td></tr>`;
+  return pageRows.map(r => {
     const st = revStatusOf(r);
     const chip = st === 'break'
       ? `<span class="status-chip break"><span class="dot"></span>Break</span>`
@@ -4309,14 +4294,114 @@ function renderReversalResults(container) {
       <td class="num">${varCell}</td>
     </tr>`;
   }).join('');
+}
 
+function revBuildFooterHtml(display, startIdx, endIdx, totalPages, page) {
   const showingFrom = display.length === 0 ? 0 : startIdx + 1;
-  const showingTo = endIdx;
-  const footerHtml = `
-    <div class="ptb-table-foot">
-      <span>Showing <b>${showingFrom.toLocaleString()}–${showingTo.toLocaleString()}</b> of <b>${display.length.toLocaleString()}</b> rows</span>
+  return `<div class="ptb-table-foot" id="rev-foot">
+      <span>Showing <b>${showingFrom.toLocaleString()}–${endIdx.toLocaleString()}</b> of <b>${display.length.toLocaleString()}</b> rows</span>
       ${revBuildPagerHtml(totalPages, page)}
     </div>`;
+}
+
+/** Partial re-render: only updates the tbody + footer/pager. Used for page
+ *  changes where the page head, KPI, seg buttons and chips don't change. */
+function partialRenderRevTable() {
+  const tbody = document.getElementById('rev-tbody');
+  const foot  = document.getElementById('rev-foot');
+  if (!tbody || !foot) { renderReversalResults(document.getElementById('view-reversal')); return; }
+  const { display, page, totalPages, startIdx, endIdx, pageRows } = revComputeView();
+  tbody.innerHTML = revBuildRowsHtml(pageRows);
+  foot.outerHTML = revBuildFooterHtml(display, startIdx, endIdx, totalPages, page);
+}
+
+function renderReversalResults(container) {
+  const data = S.results.reversal || [];
+
+  // Date-mismatch gate (unchanged behaviour, re-skinned on the design background)
+  if (data.__dateWarning) {
+    container.innerHTML = `<div class="ptb-v2"><div class="ptb-page-head"><div class="ptb-page-title"><h1>Reversal Check</h1></div></div>
+      <div class="ptb-card" style="max-width:600px;background:var(--d-neg-soft);border-color:color-mix(in srgb, var(--d-neg) 22%, transparent);">
+        <div style="font-size:13px;font-weight:600;color:var(--d-neg);margin-bottom:8px">⚠ Date Mismatch</div>
+        <div style="font-size:12px;color:var(--d-ink);line-height:1.6">${data.__dateWarning}</div>
+        <button class="ptb-btn" style="margin-top:14px" onclick="S.results['reversal']=null;renderStation('reversal')">Back</button>
+      </div></div>`;
+    return;
+  }
+
+  const results = Array.isArray(data) ? data : [];
+  // Stats are cached on the result array at run-time; recompute if missing (defensive).
+  if (!data.__stats) {
+    let b = 0;
+    for (const r of results) if (Math.abs(r.VARIANCE||0) > 0) b++;
+    data.__stats = { breakRows: b, matchedRows: results.length - b };
+  }
+  const { breakRows: breakCount, matchedRows: matchedCount } = data.__stats;
+  const revMonth = data.__revMonth || null;
+  if (!revState.filters) revState.filters = {};
+  if (!revState.statusFilter) revState.statusFilter = 'all';
+  if (!revState.page) revState.page = 1;
+  const statusFilter = revState.statusFilter;
+
+  const { display, page, totalPages, startIdx, endIdx, pageRows } = revComputeView();
+
+  const matchedPct = results.length ? (matchedCount / results.length * 100) : 0;
+  const pageHeadHtml = `
+    <div class="ptb-page-head">
+      <div class="ptb-page-title">
+        <h1>Reversal Check</h1>
+        <div class="ptb-meta">
+          ${revMonth ? `<span>Period <b>${revMonth}</b></span>` : ''}
+        </div>
+      </div>
+      <div class="ptb-page-actions">
+        <button class="ptb-btn primary" onclick="revExport()" title="Export (E)">
+          <svg><use href="#i-download"/></svg>Export
+        </button>
+      </div>
+    </div>`;
+
+  const kpiHtml = `
+    <div class="ptb-grid">
+      <div class="ptb-card ptb-kpi ptb-col-3">
+        <div class="ptb-label">Reconciliation Status</div>
+        <div class="ptb-value" style="font-size:22px;letter-spacing:-0.02em">
+          <span style="color:var(--d-pos)">${matchedCount.toLocaleString()}</span>
+          <span class="dim" style="font-size:14px">matched</span>
+          <span style="color:${breakCount?'var(--d-neg)':'var(--d-ink-4)'};margin-left:6px">${breakCount.toLocaleString()}</span>
+          <span class="dim" style="font-size:14px">breaks</span>
+        </div>
+        <div class="ptb-footline">
+          <div class="ptb-bar-track"><div class="ptb-bar-fill" style="width:${matchedPct.toFixed(1)}%"></div></div>
+          <span class="mono">${matchedPct.toFixed(1)}%</span>
+        </div>
+      </div>
+    </div>`;
+
+  const segBtn = (f, label, count, tone) => {
+    const active = statusFilter === f;
+    let cntColor = '';
+    if (tone === 'neg' && count > 0) cntColor = 'style="color:var(--d-neg)"';
+    else if (!active) cntColor = 'style="color:var(--d-ink-4)"';
+    return `<button class="${active?'active':''}" onclick="revSetStatusFilter('${f}')">${label}<span class="ptb-count" ${cntColor}>${count.toLocaleString()}</span></button>`;
+  };
+  const toolbarHtml = `
+    <div class="ptb-table-toolbar">
+      <div class="ptb-seg">
+        ${segBtn('all','All', results.length, 'dim')}
+        ${segBtn('break','Breaks', breakCount, 'neg')}
+        ${segBtn('matched','Matched', matchedCount, 'dim')}
+      </div>
+    </div>`;
+
+  const chipsHtml = revBuildChipsHtml();
+
+  const thHtml = REV_COLS.map(k => {
+    const cf = revState.filters[k];
+    const active = fdIsActive(cf);
+    const numCls = REV_NUM_COLS.has(k) ? ' num' : '';
+    return `<th class="${active?'filtered':''}${numCls}" data-col="${k}" onclick="openReversalFilter('${k}',this)">${REV_COL_LABELS[k]}<span class="fcol"></span></th>`;
+  }).join('');
 
   container.innerHTML = `<div class="ptb-v2">
     ${pageHeadHtml}
@@ -4327,10 +4412,10 @@ function renderReversalResults(container) {
       <div class="ptb-scroll">
         <table class="ptb-data">
           <thead><tr>${thHtml}</tr></thead>
-          <tbody>${rowsHtml || `<tr><td colspan="${REV_COLS.length}" style="text-align:center;padding:40px;color:var(--d-ink-4)">No rows match the current filters</td></tr>`}</tbody>
+          <tbody id="rev-tbody">${revBuildRowsHtml(pageRows)}</tbody>
         </table>
       </div>
-      ${footerHtml}
+      ${revBuildFooterHtml(display, startIdx, endIdx, totalPages, page)}
     </div>
   </div>`;
 }
@@ -4369,7 +4454,8 @@ function revSetStatusFilter(f) {
 }
 function revSetPage(p) {
   revState.page = p;
-  renderReversalResults(document.getElementById('view-reversal'));
+  // Page change only updates tbody + pager; avoids rebuilding KPI / headers / chips.
+  partialRenderRevTable();
 }
 function revClearColFilter(k) {
   if (revState.filters) delete revState.filters[k];
@@ -4388,17 +4474,20 @@ function revResetAll() {
   renderReversalResults(document.getElementById('view-reversal'));
 }
 function revExport() {
-  const results = S.results.reversal || [];
-  if (!Array.isArray(results)) return;
+  const results = Array.isArray(S.results.reversal) ? S.results.reversal : [];
   const statusFilter = revState.statusFilter || 'all';
-  const afterStatus = statusFilter === 'all' ? results : results.filter(r => revStatusOf(r) === statusFilter);
-  const display = afterStatus.filter(r => {
-    for (const k of REV_COLS) {
-      const f = revState.filters[k];
-      if (fdIsActive(f) && !fdMatch(revRowField(r, k), f)) return false;
-    }
-    return true;
-  });
+  const hasColFilter = REV_COLS.some(k => fdIsActive(revState.filters[k]));
+  // Short-circuit: when nothing is filtered, skip the two filter passes entirely.
+  const display = (statusFilter === 'all' && !hasColFilter)
+    ? results
+    : results.filter(r => {
+        if (statusFilter !== 'all' && revStatusOf(r) !== statusFilter) return false;
+        for (const k of REV_COLS) {
+          const f = revState.filters[k];
+          if (fdIsActive(f) && !fdMatch(revRowField(r, k), f)) return false;
+        }
+        return true;
+      });
   const rows = display.map(r => {
     const o = { 'Status': REV_STATUS_LABELS[revStatusOf(r)] };
     REV_COLS.forEach(k => { if (k !== 'STATUS') o[REV_COL_LABELS[k]] = r[k]; });
