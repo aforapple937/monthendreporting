@@ -431,6 +431,18 @@ function downloadXlsx(rows, sheetName, filename) {
   XLSX.writeFile(wb, filename);
 }
 
+/** "⚠ N unmapped" span rendered inside a clickable KPI card (stops propagation). */
+function unmappedKpiSpan(stationName, count) {
+  if (!count) return '';
+  return `<span onclick="event.stopPropagation();openUnmappedModal('${stationName}')" style="margin-left:10px;font-size:10px;color:var(--amber);cursor:pointer;font-family:var(--mono);vertical-align:middle;text-decoration:underline" title="Click to view unmapped accounts">⚠ ${count.toLocaleString()} unmapped</span>`;
+}
+
+/** "⚠ N unmapped" chip rendered as a meta item under a page-head title. */
+function unmappedFootChip(stationName, count) {
+  if (!count) return '';
+  return `<span>·</span><span style="cursor:pointer;color:var(--d-warn,#B8740E);text-decoration:underline;text-underline-offset:2px;" onclick="openUnmappedModal('${stationName}')" title="View unmapped accounts">⚠ ${count.toLocaleString()} unmapped</span>`;
+}
+
 // ============================================================
 //  SHARED RDL CLASSIFICATION (eliminates 3x duplication)
 // ============================================================
@@ -885,6 +897,34 @@ function getMappingDict() {
   _mappingDictCache = m;
   _mappingDictSource = S.mapping;
   return m;
+}
+
+// Memoised derived lookups from S.mapping. Each getter rebuilds its structure
+// only when S.mapping is replaced (detected by reference identity).
+let _tbGlLookupsCache = null, _tbGlLookupsSource = null;
+function getTbGlLookups() {
+  if (_tbGlLookupsCache && _tbGlLookupsSource === S.mapping) return _tbGlLookupsCache;
+  const validCols = ['ECL_CHARGE','ECL_WRITEBACK','ECL_WRITEOFF','UWI_CHARGE','UWI_WRITEBACK','UWI_WRITEOFF','EIR_BS','ECL_OPENING','UWI_OPENING'];
+  const nmap = {ECL_CHARGE:'ECL CHARGE',ECL_WRITEBACK:'ECL WRITEBACK',ECL_WRITEOFF:'ECL WRITEOFF',UWI_WRITEOFF:'UWI WRITEOFF',UWI_CHARGE:'UWI BS',UWI_WRITEBACK:'UWI BS',EIR_BS:'EIR BS',ECL_OPENING:'ECL OPENING',UWI_OPENING:'UWI OPENING'};
+  const validGLs = new Set(), glToNature = {};
+  S.mapping.forEach(row => {
+    validCols.forEach(col => { if (row[col]) validGLs.add(String(row[col]).trim()); });
+    Object.entries(nmap).forEach(([c,n]) => { if (row[c]) glToNature[String(row[c]).trim()] = n; });
+  });
+  _tbGlLookupsCache = { validGLs, glToNature };
+  _tbGlLookupsSource = S.mapping;
+  return _tbGlLookupsCache;
+}
+
+let _preTbRelevantGlsCache = null, _preTbRelevantGlsSource = null;
+function getPreTbRelevantGls() {
+  if (_preTbRelevantGlsCache && _preTbRelevantGlsSource === S.mapping) return _preTbRelevantGlsCache;
+  const GL_COLS = ['ECL_OPENING','ECL_CHARGE','ECL_WRITEBACK','ECL_WRITEOFF','ECL_PNL_CHARGE','ECL_PNL_WRITEBACK','UWI_OPENING','UWI_CHARGE','UWI_WRITEBACK','UWI_WRITEOFF','UWI_PNL_CHARGE','UWI_PNL_WRITEBACK','EIR_BS','EIR_PNL','FVOCI_BS','FVOCI_OCI'];
+  const relevantGLs = new Set();
+  S.mapping.forEach(row => { GL_COLS.forEach(col => { const v = String(row[col]||'').trim(); if (v) relevantGLs.add(v); }); });
+  _preTbRelevantGlsCache = relevantGLs;
+  _preTbRelevantGlsSource = S.mapping;
+  return _preTbRelevantGlsCache;
 }
 
 
@@ -1793,7 +1833,7 @@ function renderResultsPanel(name, container, cfg) {
     // TB Recon: KPI-as-filter pattern (same as reversal/recon), plus clickable Net Variance
     const stHasColFilter = Object.keys(stationFilters[name]||{}).some(k => fdIsActive(stationFilters[name][k]));
     const stTotalRowsActive = !breaksActive && !stHasColFilter;
-    const unmappedIndicator = unmappedCount ? `<span onclick="event.stopPropagation();openUnmappedModal('${name}')" style="margin-left:10px;font-size:10px;color:var(--amber);cursor:pointer;font-family:var(--mono);vertical-align:middle;text-decoration:underline" title="Click to view unmapped accounts">⚠ ${unmappedCount.toLocaleString()} unmapped</span>` : '';
+    const unmappedIndicator = unmappedKpiSpan(name, unmappedCount);
     kpiHtml = `
       <div class="kpi-strip">
         ${data.__reportingMonth ? `<div class="kpi-card"><div class="kpi-label">Reporting Month</div><div class="kpi-value">${data.__reportingMonth}</div></div>` : ''}
@@ -1804,7 +1844,7 @@ function renderResultsPanel(name, container, cfg) {
   } else {
     // reversal or recon — KPI-as-filter
     const reportingMonth = name === 'reversal' ? revMonth : data.__reportingMonth;
-    const unmappedIndicator = (name === 'recon' && unmappedCount) ? `<span onclick="event.stopPropagation();openUnmappedModal('${name}')" style="margin-left:10px;font-size:10px;color:var(--amber);cursor:pointer;font-family:var(--mono);vertical-align:middle;text-decoration:underline" title="Click to view unmapped accounts">⚠ ${unmappedCount.toLocaleString()} unmapped</span>` : '';
+    const unmappedIndicator = name === 'recon' ? unmappedKpiSpan(name, unmappedCount) : '';
     const stHasColFilter = Object.keys(stationFilters[name]||{}).some(k => fdIsActive(stationFilters[name][k]));
     const stTotalRowsActive = !breaksActive && !stHasColFilter;
     kpiHtml = `
@@ -2119,10 +2159,15 @@ function renderMajMovResults(container) {
 
 function buildMajMovDataTab() {
   const results = majMovState.results;
-  let filtered = results.filter(r => {
-    for (const c of MM_COLS) {
-      const f = majMovState.filters[c.id];
-      if (!fdIsActive(f)) continue;
+  // Collect only the columns that actually have an active filter so the
+  // per-row inner loop iterates k active filters instead of all MM_COLS.
+  const activeFilters = [];
+  for (const c of MM_COLS) {
+    const f = majMovState.filters[c.id];
+    if (fdIsActive(f)) activeFilters.push({ c, f });
+  }
+  const filtered = activeFilters.length === 0 ? results.slice() : results.filter(r => {
+    for (const { c, f } of activeFilters) {
       if (!fdMatch(c.type === 'number' ? fmtN2(r[c.id]) : String(r[c.id]||''), f)) return false;
     }
     return true;
@@ -2495,7 +2540,20 @@ function applyMajMovMonth() {
 function openMajMovFilter(colId, triggerEl) {
   const results = majMovState.results || [];
   const col = MM_COLS.find(c => c.id === colId);
-  const otherFiltered = results.filter(r => { for (const c of MM_COLS) { if (c.id===colId) continue; const f = majMovState.filters[c.id]; if (fdIsActive(f) && !fdMatch(c.type==='number'?fmtN2(r[c.id]):String(r[c.id]||''),f)) return false; } return true; });
+  // Pre-collect active filters from columns OTHER than this one, so the
+  // cascading filter preview iterates k filters instead of all MM_COLS.
+  const activeOther = [];
+  for (const c of MM_COLS) {
+    if (c.id === colId) continue;
+    const f = majMovState.filters[c.id];
+    if (fdIsActive(f)) activeOther.push({ c, f });
+  }
+  const otherFiltered = activeOther.length === 0 ? results : results.filter(r => {
+    for (const { c, f } of activeOther) {
+      if (!fdMatch(c.type==='number'?fmtN2(r[c.id]):String(r[c.id]||''), f)) return false;
+    }
+    return true;
+  });
   const allValues = [...new Set(otherFiltered.map(r => col.type==='number' ? fmtN2(r[colId]) : String(r[colId]||'')))].filter(Boolean).sort();
   fdOpen(triggerEl, allValues, majMovState.filters[colId] || null, (newFilter) => {
     majMovState.filters[colId] = fdIsActive(newFilter) ? newFilter : undefined;
@@ -2931,12 +2989,7 @@ async function runTb(name) {
   const parseTbEffDate = rows => {
     if (!rows || !rows.length) return null;
     const first = rows.find(r => r.EFFECTIVE_DATE);
-    if (!first) return null;
-    const dm = String(first.EFFECTIVE_DATE).trim().match(/^(\d{2})-([A-Z]{3})-(\d{2})$/i);
-    if (dm) return new Date(2000 + parseInt(dm[3]), MONTH_MAP[dm[2].toUpperCase()], parseInt(dm[1]));
-    const dm4 = String(first.EFFECTIVE_DATE).trim().match(/^(\d{2})-([A-Z]{3})-(\d{4})$/i);
-    if (dm4) return new Date(parseInt(dm4[3]), MONTH_MAP[dm4[2].toUpperCase()], parseInt(dm4[1]));
-    return null;
+    return first ? parseReportingDate(first.EFFECTIVE_DATE) : null;
   };
   const mbsTbDate = parseTbEffDate(S.tb.mbs);
   const mslTbDate = parseTbEffDate(S.tb.msl);
@@ -2991,12 +3044,7 @@ async function runTb(name) {
     return;
   }
 
-  const glToNature={}, validCols=['ECL_CHARGE','ECL_WRITEBACK','ECL_WRITEOFF','UWI_CHARGE','UWI_WRITEBACK','UWI_WRITEOFF','EIR_BS','ECL_OPENING','UWI_OPENING'], validGLs=new Set();
-  S.mapping.forEach(row => {
-    validCols.forEach(col => { if (row[col]) validGLs.add(String(row[col]).trim()); });
-    const nmap={ECL_CHARGE:'ECL CHARGE',ECL_WRITEBACK:'ECL WRITEBACK',ECL_WRITEOFF:'ECL WRITEOFF',UWI_WRITEOFF:'UWI WRITEOFF',UWI_CHARGE:'UWI BS',UWI_WRITEBACK:'UWI BS',EIR_BS:'EIR BS',ECL_OPENING:'ECL OPENING',UWI_OPENING:'UWI OPENING'};
-    Object.entries(nmap).forEach(([c,n]) => { if (row[c]) glToNature[String(row[c]).trim()]=n; });
-  });
+  const { validGLs, glToNature } = getTbGlLookups();
 
   const rdlAggr={}, mapDict=getMappingDict();
   const unmapped = [];
@@ -3575,10 +3623,16 @@ function renderGlteResults(container) {
   });
   glteState.results = rows;
   const PART_COLS = ['CCY','Cost Centre','Account','Product','Interco','Future 1','Sub Account','Future 3'];
-  // Apply filters using fdMatch
-  let filtered = glteState.isFiltered ? rows.filter(r => r.isBreak) : [...rows];
-  PART_COLS.forEach((col, i) => { const f = glteFilters['p_' + i]; if (fdIsActive(f)) filtered = filtered.filter(r => fdMatch(r.parts[i]||'', f)); });
-  ['tNet','vNet','variance'].forEach(k => { const f = glteFilters[k]; if (fdIsActive(f)) filtered = filtered.filter(r => fdMatch(String(r[k]), f)); });
+  // Apply filters using fdMatch. Collect active (getter, filter) pairs first
+  // so we only do ONE pass over the rows instead of one pass per column.
+  const baseRowsForFilter = glteState.isFiltered ? rows.filter(r => r.isBreak) : rows;
+  const activeFilters = [];
+  PART_COLS.forEach((col, i) => { const f = glteFilters['p_' + i]; if (fdIsActive(f)) activeFilters.push({ get: r => r.parts[i]||'', f }); });
+  ['tNet','vNet','variance'].forEach(k => { const f = glteFilters[k]; if (fdIsActive(f)) activeFilters.push({ get: r => String(r[k]), f }); });
+  const filtered = activeFilters.length === 0 ? baseRowsForFilter.slice() : baseRowsForFilter.filter(r => {
+    for (const af of activeFilters) if (!fdMatch(af.get(r), af.f)) return false;
+    return true;
+  });
   const kpiHtml = `<div class="kpi-strip"><div class="kpi-card"><div class="kpi-label">Total Lines</div><div class="kpi-value">${rows.length.toLocaleString()}</div></div><div class="kpi-card"><div class="kpi-label">Matched</div><div class="kpi-value green">${(rows.length - breaksCount).toLocaleString()}</div><div class="kpi-sub">${rows.length ? (((rows.length-breaksCount)/rows.length)*100).toFixed(1)+'%' : '-'}</div></div><div class="kpi-card"><div class="kpi-label">Breaks</div><div class="kpi-value ${breaksCount ? 'red' : 'green'}">${breaksCount.toLocaleString()}</div><div class="kpi-sub">${rows.length ? ((breaksCount/rows.length)*100).toFixed(1)+'%' : '-'}</div></div><div class="kpi-card"><div class="kpi-label">Net Variance</div><div class="kpi-value ${Math.abs(rows.reduce((s,r)=>s+r.variance,0))>0.001?'red':'green'}">${fmtNum(rows.reduce((s,r)=>s+r.variance,0))}</div></div></div>`;
   const toolbarHtml = `<div class="table-toolbar"><div class="filter-chips"><div class="filter-chip ${glteState.isFiltered ? 'active-red' : ''}" onclick="toggleGlteBreaks()">${glteState.isFiltered ? '✕ ' : ''}Breaks only${breaksCount ? ' (' + breaksCount + ')' : ''}</div></div><button class="btn btn-sm" onclick="resetGlteFilters()">Reset filters</button><button class="btn btn-sm" onclick="exportGlteCSV()" title="Export (E)">Export XLSX</button></div>`;
   const baseRows = glteState.isFiltered ? rows.filter(r => r.isBreak) : rows;
@@ -3602,9 +3656,16 @@ function openGlteFilter(key, triggerEl) {
   const getterMap = {};
   PART_COLS.forEach((_, i) => { getterMap['p_' + i] = r => r.parts[i]||''; });
   ['tNet','vNet','variance'].forEach(k => { getterMap[k] = r => String(r[k]); });
-  // Cascade
-  const otherFiltered = baseRows.filter(r => {
-    for (const fk of allFilterKeys) { if (fk === key) continue; const f = glteFilters[fk]; if (fdIsActive(f) && !fdMatch(getterMap[fk](r), f)) return false; }
+  // Cascade — pre-collect only the active filter keys (other than this one)
+  // so the inner loop iterates k active filters instead of all 11 keys.
+  const activeOther = [];
+  for (const fk of allFilterKeys) {
+    if (fk === key) continue;
+    const f = glteFilters[fk];
+    if (fdIsActive(f)) activeOther.push({ get: getterMap[fk], f });
+  }
+  const otherFiltered = activeOther.length === 0 ? baseRows : baseRows.filter(r => {
+    for (const af of activeOther) if (!fdMatch(af.get(r), af.f)) return false;
     return true;
   });
   const allValues = [...new Set(otherFiltered.map(getterMap[key]))].filter(Boolean).sort();
@@ -3843,9 +3904,7 @@ function renderPreTbUpload(container) {
 
 function runPreTb() {
   const btn = document.getElementById('run-btn-pretb'); if (btn) btn.disabled = true;
-  const GL_COLS = ['ECL_OPENING','ECL_CHARGE','ECL_WRITEBACK','ECL_WRITEOFF','ECL_PNL_CHARGE','ECL_PNL_WRITEBACK','UWI_OPENING','UWI_CHARGE','UWI_WRITEBACK','UWI_WRITEOFF','UWI_PNL_CHARGE','UWI_PNL_WRITEBACK','EIR_BS','EIR_PNL','FVOCI_BS','FVOCI_OCI'];
-  const relevantGLs = new Set();
-  S.mapping.forEach(row => { GL_COLS.forEach(col => { const v = String(row[col]||'').trim(); if (v) relevantGLs.add(v); }); });
+  const relevantGLs = getPreTbRelevantGls();
   if (!relevantGLs.size) { alert('No GL accounts found in EGL Mapping for the specified columns.'); if (btn) btn.disabled = false; return; }
   const results = [];
   let firstDateRaw = null;
@@ -4562,9 +4621,7 @@ function renderReconResults(container) {
 
   const { results, display, page, totalPages, startIdx, endIdx, pageRows } = rcnComputeView();
 
-  const unmappedMetaHtml = unmappedCount
-    ? `<span>·</span><span style="cursor:pointer;color:var(--d-warn,#B8740E);text-decoration:underline;text-underline-offset:2px;" onclick="openUnmappedModal('recon')" title="View unmapped accounts">⚠ ${unmappedCount.toLocaleString()} unmapped</span>`
-    : '';
+  const unmappedMetaHtml = unmappedFootChip('recon', unmappedCount);
   const pageHeadHtml = `
     <div class="ptb-page-head">
       <div class="ptb-page-title">
@@ -4816,9 +4873,7 @@ function renderTbReconResults(container) {
   const endIdx = Math.min(startIdx + TBR_PAGE_SIZE, display.length);
   const pageRows = display.slice(startIdx, endIdx);
 
-  const unmappedMetaHtml = unmappedCount
-    ? `<span>·</span><span style="cursor:pointer;color:var(--d-warn,#B8740E);text-decoration:underline;text-underline-offset:2px;" onclick="openUnmappedModal('tb')" title="View unmapped accounts">⚠ ${unmappedCount.toLocaleString()} unmapped</span>`
-    : '';
+  const unmappedMetaHtml = unmappedFootChip('tb', unmappedCount);
   const pageHeadHtml = `
     <div class="ptb-page-head">
       <div class="ptb-page-title">
@@ -5481,19 +5536,7 @@ function mtmrClearColFilter(k) { delete mtmFilters[k]; _mtmPage = 1; renderMtmRe
 function mtmrClearAllColFilters() { Object.keys(mtmFilters).forEach(k => delete mtmFilters[k]); _mtmPage = 1; renderMtmResults(document.getElementById('view-mtmfvoci')); }
 function mtmrSetPage(p) { _mtmPage = p; renderMtmResults(document.getElementById('view-mtmfvoci')); }
 function mtmrBuildPagerHtml(totalPages, currentPage) {
-  if (totalPages <= 1) return '';
-  const btns = []; const disabled = d => d ? ' disabled' : '';
-  btns.push(`<button${disabled(currentPage === 1)} onclick="mtmrSetPage(${currentPage - 1})" title="Previous">‹</button>`);
-  const pages = new Set([1, totalPages, currentPage, currentPage - 1, currentPage + 1]);
-  const sorted = [...pages].filter(p => p >= 1 && p <= totalPages).sort((a,b) => a - b);
-  let prev = 0;
-  for (const p of sorted) {
-    if (p - prev > 1) btns.push(`<span class="ptb-pager-ellipsis">…</span>`);
-    btns.push(`<button class="${p === currentPage ? 'active' : ''}" onclick="mtmrSetPage(${p})">${p}</button>`);
-    prev = p;
-  }
-  btns.push(`<button${disabled(currentPage === totalPages)} onclick="mtmrSetPage(${currentPage + 1})" title="Next">›</button>`);
-  return `<div class="ptb-pager">${btns.join('')}</div>`;
+  return stationPagerHtml(totalPages, currentPage, 'mtmrSetPage');
 }
 
 function renderMtmResults(container) {
@@ -6121,6 +6164,9 @@ function moaMovementTd(later, earlier, opts) {
 function buildMoaDashHtml(entries, visMonths, groupKeys, groupMap) {
   if (!visMonths.length) return '<div style="padding:20px;font-size:11px;color:var(--ink3);">No entries yet. Click + New MOA to add an entry.</div>';
   var latestMonth = visMonths[visMonths.length - 1];
+  // Pre-build identity-index so inner cell loops don't do O(N) indexOf scans.
+  var entryIdx = new Map();
+  entries.forEach(function(e, i){ entryIdx.set(e, i); });
   // Colors a number cell based on delta vs the previous visible month
   function moaDeltaStyle(monthIdx, curSum, prevSum) {
     if (monthIdx === 0 || prevSum === undefined) return '';
@@ -6148,7 +6194,7 @@ function buildMoaDashHtml(entries, visMonths, groupKeys, groupMap) {
         prevSum = sum;
         if (cmpOn && cmp.indexOf(m) >= 0) cmpSums[m] = sum;
         if (sum === 0) return '<td class="mono-val" style="text-align:right">&mdash;</td>';
-        if (type === 'Sector') { var idx = entries.indexOf(monthEntries[0]); return '<td class="mono-val" style="text-align:right;cursor:pointer;' + deltaStyle + '" onclick="openMoaEntryModal(' + idx + ')" title="Click to edit">' + fmtN2(sum) + '</td>'; }
+        if (type === 'Sector') { var idx = entryIdx.get(monthEntries[0]); return '<td class="mono-val" style="text-align:right;cursor:pointer;' + deltaStyle + '" onclick="openMoaEntryModal(' + idx + ')" title="Click to edit">' + fmtN2(sum) + '</td>'; }
         return '<td class="mono-val" style="text-align:right;' + deltaStyle + '">' + fmtN2(sum) + '</td>';
       }).join('');
       var moveCell = cmpOn ? moaMovementTd(cmpSums[cmp[1]], cmpSums[cmp[0]]) : '';
@@ -6158,11 +6204,11 @@ function buildMoaDashHtml(entries, visMonths, groupKeys, groupMap) {
         grpEntries.forEach(function(e) { var subKey = (e.cif||'') + '||' + (e.borrower||''); var g = e.group || ('__solo__' + subKey); if (!groupBuckets.has(g)) groupBuckets.set(g, new Map()); var bucket = groupBuckets.get(g); if (!bucket.has(subKey)) { var prefix = e.group ? e.group + ' &middot; ' : ''; bucket.set(subKey, { label: prefix + (e.cif||'&mdash;') + ' &middot; ' + (e.borrower||'&mdash;'), byMonth: {} }); } bucket.get(subKey).byMonth[e.month] = e; });
         var groupList = []; groupBuckets.forEach(function(bucket, g) { var groupLatest = 0; bucket.forEach(function(sub){ groupLatest += parseFloat((sub.byMonth[latestMonth]||{}).amount||0); }); var cifList = []; bucket.forEach(function(sub){ cifList.push({sub:sub, latestAmt: parseFloat((sub.byMonth[latestMonth]||{}).amount||0)}); }); cifList.sort(function(a,b){ return b.latestAmt - a.latestAmt; }); groupList.push({cifList:cifList, groupLatest:groupLatest}); });
         groupList.sort(function(a,b){ return b.groupLatest - a.groupLatest; });
-        groupList.forEach(function(gl) { gl.cifList.forEach(function(c) { var prevAmt = undefined, subCmp = {}; var cols2 = visMonths.map(function(m, mi){ var e = c.sub.byMonth[m]; var amt = e ? (parseFloat(e.amount)||0) : 0; if (cmpOn && cmp.indexOf(m) >= 0) subCmp[m] = amt; if (!e) { prevAmt = 0; return '<td></td>'; } var idx2 = entries.indexOf(e); var ds = moaDeltaStyle(mi, amt, prevAmt); prevAmt = amt; return '<td class="mono-val" style="text-align:right;font-size:11px;padding:4px 8px;cursor:pointer;' + ds + '" onclick="openMoaEntryModal(' + idx2 + ')" title="Click to edit">' + fmtN2(amt) + '</td>'; }).join(''); var subMove = cmpOn ? moaMovementTd(subCmp[cmp[1]], subCmp[cmp[0]], {style:'font-size:11px;padding:4px 8px;'}) : ''; detailRows += '<tr class="moa-detail-row" data-group="' + rowId + '" style="background:var(--paper);"><td colspan="2" style="padding:4px 8px 4px 28px;font-size:11px;color:var(--ink3);">' + c.sub.label + '</td>' + cols2 + subMove + '</tr>'; }); });
+        groupList.forEach(function(gl) { gl.cifList.forEach(function(c) { var prevAmt = undefined, subCmp = {}; var cols2 = visMonths.map(function(m, mi){ var e = c.sub.byMonth[m]; var amt = e ? (parseFloat(e.amount)||0) : 0; if (cmpOn && cmp.indexOf(m) >= 0) subCmp[m] = amt; if (!e) { prevAmt = 0; return '<td></td>'; } var idx2 = entryIdx.get(e); var ds = moaDeltaStyle(mi, amt, prevAmt); prevAmt = amt; return '<td class="mono-val" style="text-align:right;font-size:11px;padding:4px 8px;cursor:pointer;' + ds + '" onclick="openMoaEntryModal(' + idx2 + ')" title="Click to edit">' + fmtN2(amt) + '</td>'; }).join(''); var subMove = cmpOn ? moaMovementTd(subCmp[cmp[1]], subCmp[cmp[0]], {style:'font-size:11px;padding:4px 8px;'}) : ''; detailRows += '<tr class="moa-detail-row" data-group="' + rowId + '" style="background:var(--paper);"><td colspan="2" style="padding:4px 8px 4px 28px;font-size:11px;color:var(--ink3);">' + c.sub.label + '</td>' + cols2 + subMove + '</tr>'; }); });
       } else if (type === 'Model') {
         var modelMap = new Map(); grpEntries.forEach(function(e) { var sk = e.modelDesc||'&mdash;'; if (!modelMap.has(sk)) modelMap.set(sk, {label: sk, byMonth: {}}); modelMap.get(sk).byMonth[e.month] = e; });
         var modelList = []; modelMap.forEach(function(sub){ modelList.push({sub:sub, latestAmt: parseFloat((sub.byMonth[latestMonth]||{}).amount||0)}); }); modelList.sort(function(a,b){ return b.latestAmt - a.latestAmt; });
-        modelList.forEach(function(ml) { var prevAmt = undefined, subCmp = {}; var cols2 = visMonths.map(function(m, mi){ var e = ml.sub.byMonth[m]; var amt = e ? (parseFloat(e.amount)||0) : 0; if (cmpOn && cmp.indexOf(m) >= 0) subCmp[m] = amt; if (!e) { prevAmt = 0; return '<td></td>'; } var idx2 = entries.indexOf(e); var ds = moaDeltaStyle(mi, amt, prevAmt); prevAmt = amt; return '<td class="mono-val" style="text-align:right;font-size:11px;padding:4px 8px;cursor:pointer;' + ds + '" onclick="openMoaEntryModal(' + idx2 + ')" title="Click to edit">' + fmtN2(amt) + '</td>'; }).join(''); var subMove = cmpOn ? moaMovementTd(subCmp[cmp[1]], subCmp[cmp[0]], {style:'font-size:11px;padding:4px 8px;'}) : ''; detailRows += '<tr class="moa-detail-row" data-group="' + rowId + '" style="background:var(--paper);"><td colspan="2" style="padding:4px 8px 4px 28px;font-size:11px;color:var(--ink3);">' + ml.sub.label + '</td>' + cols2 + subMove + '</tr>'; });
+        modelList.forEach(function(ml) { var prevAmt = undefined, subCmp = {}; var cols2 = visMonths.map(function(m, mi){ var e = ml.sub.byMonth[m]; var amt = e ? (parseFloat(e.amount)||0) : 0; if (cmpOn && cmp.indexOf(m) >= 0) subCmp[m] = amt; if (!e) { prevAmt = 0; return '<td></td>'; } var idx2 = entryIdx.get(e); var ds = moaDeltaStyle(mi, amt, prevAmt); prevAmt = amt; return '<td class="mono-val" style="text-align:right;font-size:11px;padding:4px 8px;cursor:pointer;' + ds + '" onclick="openMoaEntryModal(' + idx2 + ')" title="Click to edit">' + fmtN2(amt) + '</td>'; }).join(''); var subMove = cmpOn ? moaMovementTd(subCmp[cmp[1]], subCmp[cmp[0]], {style:'font-size:11px;padding:4px 8px;'}) : ''; detailRows += '<tr class="moa-detail-row" data-group="' + rowId + '" style="background:var(--paper);"><td colspan="2" style="padding:4px 8px 4px 28px;font-size:11px;color:var(--ink3);">' + ml.sub.label + '</td>' + cols2 + subMove + '</tr>'; });
       }
       var typeCell = hasDetail ? '<span data-rowid="' + rowId + '" data-open="1" style="cursor:pointer;user-select:none" onclick="moaDashToggle(this)">&#9660; ' + type + '</span>' : type;
       allBodyRows += '<tr style="border-bottom:1px solid var(--border);"><td style="padding:8px 10px;font-weight:600;font-size:12px">' + entity + '</td><td style="padding:8px 10px;font-size:12px">' + typeCell + '</td>' + cells + moveCell + '</tr>' + detailRows;
@@ -6928,6 +6974,9 @@ function buildMoaRcHtml(entries, visMonths, rcField) {
   var rowKeys = [], rowMap = new Map();
   // rcField = 'rcMgt' → use lobAlloc; rcField = 'rcTb' → use rcAlloc
   var allocField = rcField === 'rcMgt' ? 'lobAlloc' : 'rcAlloc';
+  // Pre-build identity-index so we don't indexOf every entry once per allocation.
+  var entryIdx = new Map();
+  entries.forEach(function(e, i){ entryIdx.set(e, i); });
   entries.forEach(function(e) {
     moaMigrateEntry(e);
     var alloc = e[allocField] || {};
@@ -6938,7 +6987,7 @@ function buildMoaRcHtml(entries, visMonths, rcField) {
       if (!rowMap.has(gk)) { rowMap.set(gk, {entity:e.entity||'', rc:rc, byMonth:{}}); rowKeys.push(gk); }
       var row = rowMap.get(gk);
       if (!row.byMonth[e.month]) row.byMonth[e.month] = [];
-      row.byMonth[e.month].push({ei:entries.indexOf(e), entry:e, allocAmt: amt});
+      row.byMonth[e.month].push({ei:entryIdx.get(e), entry:e, allocAmt: amt});
     });
   });
   rowKeys.sort(function(a,b){ var ap=a.split('||'), bp=b.split('||'); if(ap[0]!==bp[0]) return ap[0]==='MBB-SG'?-1:1; return (ap[1]||'').localeCompare(bp[1]||''); });
