@@ -65,7 +65,7 @@
 
     <div class="sb-section-title">Files</div>
     <nav class="sb-nav" style="padding-bottom:18px">
-      <button class="nav-item" id="nav-files" onclick="openCacheModal()"><svg class="sb-icon"><use href="#i-folder"/></svg><span class="sb-label">Stored Files</span><span class="sb-badge" id="files-badge">0</span></button>
+      <button class="nav-item" id="nav-files" onclick="showView('files')"><svg class="sb-icon"><use href="#i-folder"/></svg><span class="sb-label">Stored Files</span><span class="sb-badge" id="files-badge">0</span></button>
       <button class="nav-item" id="nav-upload" onclick="triggerSidebarUpload()"><svg class="sb-icon"><use href="#i-upload"/></svg><span class="sb-label">Upload / Reload</span></button>
     </nav>
     <input type="file" id="sidebar-file-input" multiple hidden />
@@ -94,6 +94,7 @@
       <div id="view-tb"       style="flex:1;flex-direction:column;overflow:hidden;min-height:0;display:none;"></div>
       <div id="view-query"    style="flex:1;flex-direction:column;overflow:hidden;min-height:0;display:none;"></div>
       <div id="view-glte"     style="flex:1;flex-direction:column;overflow:hidden;min-height:0;display:none;"></div>
+      <div id="view-files"    style="flex:1;flex-direction:column;overflow:hidden;min-height:0;display:none;"></div>
     </div>
   </div>
 </div>
@@ -289,44 +290,6 @@
   </div>
 </div>
 
-<!-- Cache Inspector Modal (Stored Files) -->
-<div class="modal-bg" id="cache-modal-bg" onclick="closeCacheModal(event)">
-  <div class="modal sf-modal" onclick="event.stopPropagation()">
-    <div class="modal-head">
-      <h3>Stored Files <span class="sf-head-sub">· Local IndexedDB</span></h3>
-      <span class="modal-close" onclick="closeCacheModal()">&times;</span>
-    </div>
-    <div class="modal-body" id="cache-modal-body" style="padding:16px 20px;">
-      <div class="sf-search-row">
-        <div class="sf-search">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color:var(--ink3);flex-shrink:0"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-          <input id="sf-search-input" placeholder="Search filename…" oninput="sfOnSearchInput(this.value)" />
-        </div>
-        <span class="sf-count" id="sf-count"></span>
-      </div>
-      <div class="sf-card" id="sf-card">
-        <table class="sf-table" id="sf-table">
-          <thead>
-            <tr>
-              <th class="sf-col-name">Filename</th>
-              <th class="sf-col-type">Type</th>
-              <th class="sf-col-up">Uploaded</th>
-              <th class="sf-col-act">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="sf-rows"></tbody>
-        </table>
-        <div id="sf-empty" class="sf-empty" style="display:none">
-          <div class="sf-empty-title">No files stored yet</div>
-          <div class="sf-empty-sub">Upload files via the sidebar or reload a pipeline to cache its source files here.</div>
-        </div>
-      </div>
-    </div>
-    <div class="modal-foot" style="justify-content:flex-end;">
-      <button class="btn btn-sm" style="color:var(--red);border-color:#f5c4c0;background:var(--red-bg);" onclick="clearIDBFromModal()">Clear all cache</button>
-    </div>
-  </div>
-</div>
 
 <!-- Field Info Modal -->
 <div class="modal-bg" id="finfo-modal-bg" onclick="closeFinfoModal(event)">
@@ -1387,7 +1350,7 @@ function promptFileType(filename, title, question, optionA, optionB) {
 // ============================================================
 //  VIEW ROUTING
 // ============================================================
-const ALL_VIEWS = ['pretb', 'loanrecon', 'dq', 'mtmfvoci', 'reversal', 'recon', 'moa', 'majmov', 'tb', 'query', 'glte'];
+const ALL_VIEWS = ['pretb', 'loanrecon', 'dq', 'mtmfvoci', 'reversal', 'recon', 'moa', 'majmov', 'tb', 'query', 'glte', 'files'];
 
 function showView(name) {
   ALL_VIEWS.forEach(v => {
@@ -1509,7 +1472,7 @@ function renderView(name) {
   // Pre-Check TB uses the design-handoff page-head as its title; hide the
   // shared main-topbar so it doesn't double up.
   const topbar = document.querySelector('.main-topbar');
-  if (topbar) topbar.style.display = (name === 'pretb' || name === 'reversal' || name === 'recon' || name === 'tb' || name === 'moa') ? 'none' : '';
+  if (topbar) topbar.style.display = (name === 'pretb' || name === 'reversal' || name === 'recon' || name === 'tb' || name === 'moa' || name === 'files') ? 'none' : '';
   const views = {
     'pretb':     renderPreTb,
     'loanrecon': renderLoanRecon,
@@ -1521,7 +1484,8 @@ function renderView(name) {
     'majmov':    renderMajorMovement,
     'tb':        () => renderStation('tb'),
     'query':     renderQuery,
-    'glte':      renderGlte
+    'glte':      renderGlte,
+    'files':     () => renderFilesView(document.getElementById('view-files'))
   };
   if (views[name]) views[name]();
 }
@@ -3211,14 +3175,12 @@ function sfOnSearchInput(v) {
 function sfRenderRows() {
   const rowsEl = document.getElementById('sf-rows');
   const emptyEl = document.getElementById('sf-empty');
-  const countEl = document.getElementById('sf-count');
   if (!rowsEl) return;
   const q = _sfSearch.trim().toLowerCase();
   const list = _sfEntries.filter(it => {
     if (!q) return true;
     return (it.filename || '').toLowerCase().includes(q) || (it.slotLabel || '').toLowerCase().includes(q);
   });
-  if (countEl) countEl.textContent = list.length ? `${list.length} of ${_sfEntries.length} file${_sfEntries.length === 1 ? '' : 's'}` : (_sfEntries.length ? 'No matches' : '');
   if (!list.length) {
     rowsEl.innerHTML = '';
     if (emptyEl) {
@@ -3244,7 +3206,6 @@ function sfRenderRows() {
     const secondaryCls = it.filename ? 'sf-sub' : (it.isLegacy ? 'sf-sub sf-legacy' : 'sf-sub');
     return `<tr data-key="${it.key}">
       <td class="sf-col-name">
-        <span class="sf-dot"></span>
         <div class="sf-name-wrap">
           <div class="sf-name" title="${primary.replace(/"/g, '&quot;')}">${primary}</div>
           ${secondary ? `<div class="${secondaryCls}">${secondary}</div>` : ''}
@@ -3262,21 +3223,65 @@ function sfRenderRows() {
   rowsEl.innerHTML = html;
 }
 
-async function openCacheModal() {
-  const bg = document.getElementById('cache-modal-bg');
-  bg.classList.add('show');
-  const rowsEl = document.getElementById('sf-rows');
-  const emptyEl = document.getElementById('sf-empty');
-  if (rowsEl) rowsEl.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--ink3);font-size:12px;padding:24px">Loading…</td></tr>`;
-  if (emptyEl) emptyEl.style.display = 'none';
+async function renderFilesView(container) {
+  if (!container) return;
+  const searchVal = (_sfSearch || '').replace(/"/g, '&quot;');
+  container.innerHTML = `
+    <div class="ptb-v2 sf-v">
+      <div class="ptb-page-head">
+        <div class="ptb-page-title">
+          <h1>Stored Files <span class="sf-head-sub">· Local IndexedDB</span></h1>
+          <div class="ptb-meta sf-meta">
+            <span>All files are stored locally in your browser · never leave this device</span>
+            <span>·</span>
+            <span><b class="mono" id="sf-count-badge">0</b> files</span>
+          </div>
+        </div>
+        <div class="ptb-page-actions">
+          <button class="ptb-btn sf-clear-btn" onclick="sfClearAll()" title="Remove every cached file">Clear all</button>
+        </div>
+      </div>
+      <div class="sf-search-row">
+        <div class="sf-search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="sf-search-input" placeholder="Search filename…" value="${searchVal}" oninput="sfOnSearchInput(this.value)" />
+        </div>
+      </div>
+      <div class="sf-card" id="sf-card">
+        <table class="sf-table" id="sf-table">
+          <thead>
+            <tr>
+              <th class="sf-col-name">Filename</th>
+              <th class="sf-col-type">Type</th>
+              <th class="sf-col-up">Uploaded</th>
+              <th class="sf-col-act">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="sf-rows">
+            <tr><td colspan="4" class="sf-loading">Loading…</td></tr>
+          </tbody>
+        </table>
+        <div id="sf-empty" class="sf-empty" style="display:none">
+          <div class="sf-empty-title">No files stored yet</div>
+          <div class="sf-empty-sub">Upload files via the sidebar or reload a pipeline to cache its source files here.</div>
+        </div>
+      </div>
+    </div>`;
+
   let keys = [], meta = {};
   try { const inv = await idbGetInventory(); keys = inv.keys.filter(k => k !== '_meta'); meta = inv.meta; }
-  catch(e) { if (rowsEl) rowsEl.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--red);font-size:12px;padding:24px">Could not read cache.</td></tr>`; return; }
+  catch(e) {
+    const rows = document.getElementById('sf-rows');
+    if (rows) rows.innerHTML = `<tr><td colspan="4" class="sf-loading sf-err">Could not read cache.</td></tr>`;
+    return;
+  }
   _sfEntries = keys.map(k => {
     const m = meta[k] || {};
     const isLegacy = !IDB_KEY_LABELS[k] && !k.startsWith('dq_') && !k.startsWith('rdl_post_') && !k.startsWith('file_');
     return { key: k, filename: m.filename || null, savedAt: m.savedAt || 0, slotLabel: sfSlotLabel(k), isLegacy };
   }).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+  const countEl = document.getElementById('sf-count-badge');
+  if (countEl) countEl.textContent = _sfEntries.length;
   sfRenderRows();
 }
 
@@ -3296,13 +3301,16 @@ async function deleteCacheKey(key) {
   }
   try { const m = await idbGet('_meta'); if (m) { delete m[key]; await idbPut('_meta', m); } } catch(e) {}
   idbSetStatus('ready', 'Entry removed');
-  await openCacheModal();
   refreshFilesBadge();
-  if (currentView) renderView(currentView);
+  if (currentView === 'files') await renderFilesView(document.getElementById('view-files'));
 }
 
-function closeCacheModal(e) { if (e && e.target !== document.getElementById('cache-modal-bg')) return; document.getElementById('cache-modal-bg').classList.remove('show'); }
-async function clearIDBFromModal() { if (!confirm('Clear all cached file data? You will need to re-upload everything.')) return; document.getElementById('cache-modal-bg').classList.remove('show'); await clearIDB(); refreshFilesBadge(); }
+async function sfClearAll() {
+  if (!confirm('Clear all cached file data? You will need to re-upload everything.')) return;
+  await clearIDB();
+  refreshFilesBadge();
+  if (currentView === 'files') await renderFilesView(document.getElementById('view-files'));
+}
 
 // ============================================================
 //  SIDEBAR FILES — badge count + generic upload
@@ -3341,7 +3349,7 @@ function triggerSidebarUpload() {
       } catch(e) { console.error('Upload failed for', f.name, e); }
     }
     await refreshFilesBadge();
-    openCacheModal();
+    showView('files');
   };
   input.click();
 }
@@ -7461,7 +7469,6 @@ document.addEventListener('keydown', e => {
     document.getElementById('breakdown-modal-bg').classList.remove('show');
     document.getElementById('dq-modal-bg').classList.remove('show');
     document.getElementById('finfo-modal-bg').classList.remove('show');
-    document.getElementById('cache-modal-bg').classList.remove('show');
     document.getElementById('unmapped-modal-bg').classList.remove('show');
     document.getElementById('loan-drill-bg').classList.remove('show');
     document.getElementById('mtm-sim-bg').classList.remove('show');
