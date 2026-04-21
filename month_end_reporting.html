@@ -1428,7 +1428,7 @@ function renderView(name) {
   // Pre-Check TB uses the design-handoff page-head as its title; hide the
   // shared main-topbar so it doesn't double up.
   const topbar = document.querySelector('.main-topbar');
-  if (topbar) topbar.style.display = (name === 'pretb' || name === 'reversal' || name === 'recon' || name === 'tb' || name === 'moa' || name === 'files') ? 'none' : '';
+  if (topbar) topbar.style.display = (name === 'pretb' || name === 'reversal' || name === 'recon' || name === 'tb' || name === 'moa' || name === 'files' || name === 'mtmfvoci') ? 'none' : '';
   const views = {
     'pretb':     renderPreTb,
     'loanrecon': renderLoanRecon,
@@ -5529,6 +5529,7 @@ async function runMtmFvoci() {
 let _mtmTab = 'listing';
 const mtmFilters = {};
 let mtmOnlyBreaks = false;
+let mtmStatusFilter = 'all';
 let _mtmPage = 1;
 const MTM_PAGE_SIZE = 50;
 const MTM_BREAK_THRESHOLD = 1_000_000;
@@ -5609,8 +5610,11 @@ function renderMtmResults(container) {
   const dataCols = Object.keys(rows[0]);
   const tableCols = ['STATUS', ...dataCols];
 
-  // Apply filters (across all columns incl. synthetic STATUS)
-  let filtered = rows.filter(r => {
+  // Apply status filter (All / Above 1M / Below 1M), then column filters
+  const afterStatus = mtmStatusFilter === 'all'
+    ? rows
+    : rows.filter(r => mtmrStatusOf(r) === mtmStatusFilter);
+  let filtered = afterStatus.filter(r => {
     for (const c of tableCols) {
       const f = mtmFilters[c];
       if (fdIsActive(f) && !fdMatch(mtmrRowField(r, c), f)) return false;
@@ -5646,7 +5650,7 @@ function renderMtmResults(container) {
       </div>
       <div class="ptb-page-actions">
         <div class="ptb-seg" id="mtm-view-seg">
-          ${tabBtn('listing', 'FVOCI Listing')}
+          ${tabBtn('listing', 'List')}
           ${tabBtn('journal', 'Journal entries')}
           ${tabBtn('wair', 'WAIR')}
         </div>
@@ -5694,14 +5698,14 @@ function renderMtmResults(container) {
     </div>`;
 
   let bodyHtml;
-  if (isListing)      bodyHtml = buildMtmListingCard(rows, filtered, tableCols, dataCols, isNumRight, formatCell);
+  if (isListing)      bodyHtml = buildMtmListingCard(rows, filtered, tableCols, dataCols, isNumRight, formatCell, aboveThresholdCount, belowThresholdCount);
   else if (isJournal) bodyHtml = buildMtmJournalCards(rows);
   else                bodyHtml = buildMtmWairCard();
 
   container.innerHTML = `<div class="ptb-v2">${pageHeadHtml}${kpiHtml}${bodyHtml}</div>`;
 }
 
-function buildMtmListingCard(rows, filtered, tableCols, dataCols, isNumRight, formatCell) {
+function buildMtmListingCard(rows, filtered, tableCols, dataCols, isNumRight, formatCell, aboveThresholdCount, belowThresholdCount) {
   const totalPages = Math.max(1, Math.ceil(filtered.length / MTM_PAGE_SIZE));
   if (_mtmPage > totalPages) _mtmPage = totalPages;
   if (_mtmPage < 1) _mtmPage = 1;
@@ -5740,7 +5744,24 @@ function buildMtmListingCard(rows, filtered, tableCols, dataCols, isNumRight, fo
       ${mtmrBuildPagerHtml(totalPages, _mtmPage)}
     </div>`;
 
+  const segBtn = (f, label, count, tone) => {
+    const active = mtmStatusFilter === f;
+    let cntColor = '';
+    if (tone === 'neg' && count > 0) cntColor = 'style="color:var(--d-neg)"';
+    else if (!active) cntColor = 'style="color:var(--d-ink-4)"';
+    return `<button class="${active?'active':''}" onclick="mtmSetStatusFilter('${f}')">${label}<span class="ptb-count" ${cntColor}>${count.toLocaleString()}</span></button>`;
+  };
+  const toolbarHtml = `
+    <div class="ptb-table-toolbar">
+      <div class="ptb-seg">
+        ${segBtn('all','All', rows.length, 'dim')}
+        ${segBtn('break','Above 1M', aboveThresholdCount, 'neg')}
+        ${segBtn('matched','Below 1M', belowThresholdCount, 'dim')}
+      </div>
+    </div>`;
+
   return `<div class="ptb-card ptb-table-card">
+    ${toolbarHtml}
     ${chipsHtml}
     <div class="ptb-scroll">
       <table class="ptb-data">
@@ -5766,25 +5787,25 @@ function buildMtmJournalCards(rows) {
     prevRemarkLabel = `ER ${MONTH_NAMES[prevMon]}${String(prevYear).slice(2)} MTM - LOANS FVOCI`;
   }
 
-  // Group rows by entity then currency — current month
+  const MTM_JE_ENTITY = 'MBB-SG';
+
+  // Journal entries are assumed to be MBB-SG — aggregate all rows under a
+  // single entity block regardless of LEGAL_ENTITY_CODE in the source file.
   const byEntityCurr = new Map();
+  byEntityCurr.set(MTM_JE_ENTITY, new Map());
   rows.forEach(r => {
-    const ent = String(r.LEGAL_ENTITY_CODE || '').trim() || '—';
     const ccy = String(r.CURCY_CODE || '').trim().toUpperCase();
-    if (!byEntityCurr.has(ent)) byEntityCurr.set(ent, new Map());
-    const m = byEntityCurr.get(ent);
+    const m = byEntityCurr.get(MTM_JE_ENTITY);
     m.set(ccy, (m.get(ccy) || 0) + parseFloat(r.RCY_MKT_VALUE_CHG || 0));
   });
 
-  // Reversal lines use previous month FVOCI listing; if entity is not
-  // present on prev file, fall back to the only entity in current data.
+  // Reversal lines also assumed to be MBB-SG.
   const byEntityPrev = new Map();
   if (mtmState.prevFvoci) {
+    byEntityPrev.set(MTM_JE_ENTITY, new Map());
     mtmState.prevFvoci.forEach(r => {
-      const ent = String(r.LEGAL_ENTITY_CODE || '').trim() || '—';
       const ccy = String(r.CURCY_CODE || '').trim().toUpperCase();
-      if (!byEntityPrev.has(ent)) byEntityPrev.set(ent, new Map());
-      const m = byEntityPrev.get(ent);
+      const m = byEntityPrev.get(MTM_JE_ENTITY);
       m.set(ccy, (m.get(ccy) || 0) + parseFloat(r.RCY_FAIR_VALUE || 0));
     });
   }
@@ -5886,7 +5907,16 @@ function buildMtmWairCard() {
 
 function mtmSetFilter(onlyBreaks) {
   mtmOnlyBreaks = !!onlyBreaks;
-  if (!onlyBreaks) Object.keys(mtmFilters).forEach(k => delete mtmFilters[k]);
+  if (!onlyBreaks) {
+    Object.keys(mtmFilters).forEach(k => delete mtmFilters[k]);
+    mtmStatusFilter = 'all';
+  }
+  _mtmPage = 1;
+  renderMtmResults(document.getElementById('view-mtmfvoci'));
+}
+
+function mtmSetStatusFilter(f) {
+  mtmStatusFilter = f;
   _mtmPage = 1;
   renderMtmResults(document.getElementById('view-mtmfvoci'));
 }
@@ -5895,7 +5925,10 @@ function openMtmFilter(colId, triggerEl) {
   const rows = mtmState.results; if (!rows || !rows.length) return;
   const dataCols = Object.keys(rows[0]);
   const tableCols = ['STATUS', ...dataCols];
-  const otherFiltered = rows.filter(r => {
+  const baseRows = mtmStatusFilter === 'all'
+    ? rows
+    : rows.filter(r => mtmrStatusOf(r) === mtmStatusFilter);
+  const otherFiltered = baseRows.filter(r => {
     for (const c of tableCols) {
       if (c === colId) continue;
       const f = mtmFilters[c];
@@ -5931,7 +5964,10 @@ function exportMtmXlsx() {
 
   const dataCols = Object.keys(results[0]);
   const tableCols = ['STATUS', ...dataCols];
-  const filtered = results.filter(r => {
+  const afterStatus = mtmStatusFilter === 'all'
+    ? results
+    : results.filter(r => mtmrStatusOf(r) === mtmStatusFilter);
+  const filtered = afterStatus.filter(r => {
     for (const c of tableCols) {
       const f = mtmFilters[c];
       if (fdIsActive(f) && !fdMatch(mtmrRowField(r, c), f)) return false;
