@@ -843,13 +843,17 @@ function fdIsActive(filter) {
   return false;
 }
 
-/** Test if a cell value passes a filter */
+/** Test if a cell value passes a filter. `filter._tl` caches the lowercased
+ *  search text so callers invoking this in a tight loop don't re-lowercase it
+ *  for every row. */
 function fdMatch(cellVal, filter) {
   if (!filter) return true;
   const { text, selected } = filter;
-  const cv = String(cellVal || '').toLowerCase();
-  // Text search (substring)
-  if (text && !cv.includes(text.toLowerCase())) return false;
+  // Text search (substring) — lowercase the cell value only if needed.
+  if (text) {
+    const tl = filter._tl || (filter._tl = text.toLowerCase());
+    if (!String(cellVal || '').toLowerCase().includes(tl)) return false;
+  }
   // Set membership (exact match)
   if (selected !== null && selected !== undefined) {
     if (!selected.has(String(cellVal || ''))) return false;
@@ -879,9 +883,15 @@ function clearAutoRunBlock(name) {
 }
 
 
+// Memoised mapping dictionary. Rebuilt only when S.mapping is replaced (detected
+// by reference identity). Several run*() paths call this per invocation.
+let _mappingDictCache = null, _mappingDictSource = null;
 function getMappingDict() {
+  if (_mappingDictCache && _mappingDictSource === S.mapping) return _mappingDictCache;
   const m = new Map();
   S.mapping.forEach(x => m.set(`${String(x.LEVEL_3).trim()}|${String(x.SEC_CLS_CD).trim()}|${String(x.F_SHORT_TERM_IND||'').trim()}|${String(x.F_SHORT_TERM_INCEP_IND||'').trim()}`, x));
+  _mappingDictCache = m;
+  _mappingDictSource = S.mapping;
   return m;
 }
 
@@ -1017,6 +1027,17 @@ async function loadFromIDB() {
   try {
     const all = await idbGetAll();
 
+    // Legacy migration: old caches stored TB as raw CSV text. Re-parse into
+    // rows and persist the new shape so we don't pay the parse cost again.
+    for (const tbKey of ['tb_mbs', 'tb_msl']) {
+      if (typeof all[tbKey] === 'string') {
+        const parsed = parseCSV(all[tbKey]);
+        all[tbKey] = parsed;
+        const meta = (all['_meta'] || {})[tbKey];
+        await persistSlot(tbKey, parsed, meta?.filename || 'legacy');
+      }
+    }
+
     // Load registered slots (excludes rdl_post which is now month-keyed)
     for (const [key, reg] of Object.entries(SLOT_REGISTRY)) {
       if (all[key] !== undefined) reg.set(all[key]);
@@ -1048,7 +1069,14 @@ async function loadFromIDB() {
       if (all['dq_'+p] !== undefined) dqState.DS.push(all['dq_'+p]);
     });
     if (!dqState.DS.length && all['dq_ds'] !== undefined && Array.isArray(all['dq_ds'])) {
+      // Legacy migration: older caches stored DQ as a single aggregated blob.
+      // Split it back out into per-product keys and delete the aggregate so
+      // we don't re-read it on every subsequent launch.
       dqState.DS = all['dq_ds'];
+      for (const ds of dqState.DS) {
+        if (ds && ds.dn) await persistSlot('dq_' + ds.dn, ds, (all['_meta'] || {})['dq_ds']?.filename || ds.dn);
+      }
+      await idbDelete('dq_ds');
     }
 
     const n = Object.keys(all).length;
@@ -1233,8 +1261,10 @@ async function processFiles(files) {
         await new Promise(r => setTimeout(r, 0));
         const d = parseCSV(txt);
         if (validateCols(d, reqCols.tb, file.name)) {
-          if (name.includes('MBS')) { S.tb.mbs = txt; S.files['mbs-tb'] = true; await persistSlot('tb_mbs', txt, file.name); ok = true; }
-          else if (name.includes('MSL')) { S.tb.msl = txt; S.files['msl-tb'] = true; await persistSlot('tb_msl', txt, file.name); ok = true; }
+          // Store parsed rows, not raw text — consumers iterate the array
+          // and the raw CSV isn't needed after parsing.
+          if (name.includes('MBS')) { S.tb.mbs = d; S.files['mbs-tb'] = true; await persistSlot('tb_mbs', d, file.name); ok = true; }
+          else if (name.includes('MSL')) { S.tb.msl = d; S.files['msl-tb'] = true; await persistSlot('tb_msl', d, file.name); ok = true; }
         }
       }
     }
@@ -1305,17 +1335,35 @@ function promptFileType(filename, title, question, optionA, optionB) {
 // ============================================================
 const ALL_VIEWS = ['pretb', 'loanrecon', 'dq', 'mtmfvoci', 'reversal', 'recon', 'moa', 'majmov', 'tb', 'query', 'glte', 'files'];
 
+// Cached view/nav element lookups so showView doesn't re-query the DOM
+// (and doesn't scan every .nav-item globally on every switch).
+const _viewEls = {}, _navEls = {};
+let _activeNavEl = null;
+function _getViewEl(name) { return _viewEls[name] || (_viewEls[name] = document.getElementById('view-' + name)); }
+function _getNavEl(name)  { return _navEls[name]  || (_navEls[name]  = document.getElementById('nav-' + name));  }
+
 function showView(name) {
-  ALL_VIEWS.forEach(v => {
-    const el = document.getElementById('view-' + v);
-    if (el) { el.style.display = 'none'; el.classList.remove('animate-in'); }
-  });
-  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  if (currentView && currentView !== name) {
+    const prev = _getViewEl(currentView);
+    if (prev) { prev.style.display = 'none'; prev.classList.remove('animate-in'); }
+  } else if (!currentView) {
+    // First render: hide any view that may still be showing from initial HTML.
+    ALL_VIEWS.forEach(v => {
+      const el = _getViewEl(v);
+      if (el) { el.style.display = 'none'; el.classList.remove('animate-in'); }
+    });
+  }
+  if (_activeNavEl) _activeNavEl.classList.remove('active');
   currentView = name;
-  const el = document.getElementById('view-' + name);
-  if (el) { el.style.display = 'flex'; void el.offsetWidth; el.classList.add('animate-in'); }
-  const nav = document.getElementById('nav-' + name);
+  const el = _getViewEl(name);
+  if (el) {
+    el.style.display = 'flex';
+    // Use rAF to trigger the CSS animation without a synchronous layout read.
+    requestAnimationFrame(() => el.classList.add('animate-in'));
+  }
+  const nav = _getNavEl(name);
   if (nav) nav.classList.add('active');
+  _activeNavEl = nav || null;
   renderView(name);
 }
 
@@ -1323,25 +1371,16 @@ function showView(name) {
 const RELOAD_HANDLERS = {
   pretb:     () => { preTbState.results = null; preTbState.filters = {}; preTbState.statusFilter = 'all'; preTbState.page = 1; preTbState.stats = null; blockAutoRun('pretb'); renderPreTb(); },
   loanrecon: () => { loanReconState.results = null; blockAutoRun('loanrecon'); renderLoanRecon(); },
-  dq:        () => { if (typeof dqReload === 'function') dqReload(); },
+  dq:        () => dqReload(),
   mtmfvoci:  () => { mtmState.results = null; blockAutoRun('mtmfvoci'); renderMtmFvoci(); },
   reversal:  () => { revState.statusFilter = 'all'; revState.filters = {}; revState.page = 1; reupload('reversal'); },
-  recon:     () => { if (typeof reconState !== 'undefined') { reconState.statusFilter = 'all'; reconState.filters = {}; reconState.page = 1; } reupload('recon'); },
-  tb:        () => { if (typeof tbReconState !== 'undefined') { tbReconState.statusFilter = 'all'; tbReconState.filters = {}; tbReconState.page = 1; tbReconState.groupMode = null; } reupload('tb'); },
+  recon:     () => { reconState.statusFilter = 'all'; reconState.filters = {}; reconState.page = 1; reupload('recon'); },
+  tb:        () => { tbReconState.statusFilter = 'all'; tbReconState.filters = {}; tbReconState.page = 1; tbReconState.groupMode = null; reupload('tb'); },
   majmov:    () => { majMovState.results = null; majMovState.presentation = null; blockAutoRun('majmov'); renderMajorMovement(); },
-  moa:       () => { if (typeof importMoaJson === 'function') importMoaJson(); },
+  moa:       () => importMoaJson(),
   query:     () => renderQueryUpload(document.getElementById('view-query')),
-  glte:      () => { if (typeof resetGlte === 'function') resetGlte(); }
+  glte:      () => resetGlte()
 };
-
-/** Populate the topbar reload button for a given view.
- *  The sidebar "Upload / Reload" item now handles reload for every pipeline,
- *  so the topbar reload button is suppressed universally. */
-function setTopbarReload(viewName) {
-  const actions = document.getElementById('topbar-actions');
-  if (!actions) return;
-  actions.innerHTML = '';
-}
 
 /** Per-view action handlers for keyboard shortcuts */
 const SHORTCUT_HANDLERS = {
@@ -1353,11 +1392,9 @@ const SHORTCUT_HANDLERS = {
     recon:     () => rcnResetAll(),
     tb:        () => tbrResetAll(),
     majmov:    () => { majMovState.filters = {}; majMovState.page = 0; renderMajMovResults(document.getElementById('view-majmov')); },
-    glte:      () => { if (typeof resetGlteFilters === 'function') resetGlteFilters(); },
+    glte:      () => resetGlteFilters(),
     moa:       () => {
-      if (typeof moaFilters === 'object' && moaFilters) {
-        Object.keys(moaFilters).forEach(function(v){ Object.keys(moaFilters[v]).forEach(function(k){ moaFilters[v][k].clear(); }); });
-      }
+      Object.keys(moaFilters).forEach(function(v){ Object.keys(moaFilters[v]).forEach(function(k){ moaFilters[v][k].clear(); }); });
       var seen = {}, allMonths = [];
       (moaState.entries || []).forEach(function(e){ if (e.month && !seen[e.month]) { seen[e.month] = 1; allMonths.push(e.month); } });
       allMonths.sort();
@@ -1372,15 +1409,15 @@ const SHORTCUT_HANDLERS = {
   },
   // E = export
   exportData: {
-    pretb:     () => { if (typeof preTbExport === 'function') preTbExport(); },
-    loanrecon: () => { if (typeof loanReconExport === 'function') loanReconExport(); },
-    mtmfvoci:  () => { if (typeof exportMtmXlsx === 'function') exportMtmXlsx(); },
-    reversal:  () => { if (typeof revExport === 'function') revExport(); },
-    recon:     () => { if (typeof rcnExport === 'function') rcnExport(); },
-    tb:        () => { if (typeof tbrExport === 'function') tbrExport(); },
-    moa:       () => { if (moaState.dashView === 'journal') { if (typeof exportMoaJournalXlsx === 'function') exportMoaJournalXlsx(); } else { if (typeof exportMoaXlsx === 'function') exportMoaXlsx(); } },
-    majmov:    () => { if (typeof exportMajMov === 'function') exportMajMov(); },
-    glte:      () => { if (typeof exportGlteCSV === 'function') exportGlteCSV(); }
+    pretb:     () => preTbExport(),
+    loanrecon: () => loanReconExport(),
+    mtmfvoci:  () => exportMtmXlsx(),
+    reversal:  () => revExport(),
+    recon:     () => rcnExport(),
+    tb:        () => tbrExport(),
+    moa:       () => { if (moaState.dashView === 'journal') exportMoaJournalXlsx(); else exportMoaXlsx(); },
+    majmov:    () => exportMajMov(),
+    glte:      () => exportGlteCSV()
   },
   // [ / ] = cycle tabs within the current view
   cycleTab: {
@@ -1420,7 +1457,6 @@ function handleGlobalShortcut(e) {
 document.addEventListener('keydown', handleGlobalShortcut);
 
 function renderView(name) {
-  setTopbarReload(name);
   // Pre-Check TB uses the design-handoff page-head as its title; hide the
   // shared main-topbar so it doesn't double up.
   const topbar = document.querySelector('.main-topbar');
@@ -2949,9 +2985,8 @@ async function runRecon(name) {
 // ============================================================
 async function runTb(name) {
   // ── Auto-select RDL month from TB EFFECTIVE_DATE ──
-  const parseTbEffDate = txt => {
-    if (!txt) return null;
-    const rows = parseCSV(txt);
+  const parseTbEffDate = rows => {
+    if (!rows || !rows.length) return null;
     const first = rows.find(r => r.EFFECTIVE_DATE);
     if (!first) return null;
     const dm = String(first.EFFECTIVE_DATE).trim().match(/^(\d{2})-([A-Z]{3})-(\d{2})$/i);
@@ -3041,7 +3076,7 @@ async function runTb(name) {
 
   setProgress(name, 0.9, 'Matching trial balance…'); await new Promise(r=>setTimeout(r,30));
   const tbData=[], seen=new Set();
-  const processTB = txt => { if (!txt) return; parseCSV(txt).forEach(row => { if (!row.ACCOUNTS) return; const p=row.ACCOUNTS.split('-'); if (p.length<8) return; if (!validGLs.has(p[2])) return; const cur=row.CURRENCY||'', matchKey=`${row.ACCOUNTS}|${cur}`; seen.add(matchKey); const ytd=roundCents(parseFloat(row.YTD_NET_ENTERED||0)), rdlVal=roundCents(rdlAggr[matchKey]?rdlAggr[matchKey].amount:0); tbData.push({ACCOUNTS:row.ACCOUNTS,ACCOUNT_NAME:row.ACCOUNT_NAME||'',ENTITY:p[0],RC:p[1],GL_NUMBER:p[2],GL_NATURE:glToNature[p[2]]||'-',PRODUCT_CODE:p[3],INTERCO:p[4],ISLAMIC_INDICATOR:p[6],CURRENCY:cur,YTD_ENTERED:ytd,PER_RDL:rdlVal,VARIANCE:roundCents(ytd-rdlVal),ACCOUNTS_LIST:rdlAggr[matchKey]?Object.entries(rdlAggr[matchKey].accounts).map(([id,amt])=>({id,amt})):[]}); }); };
+  const processTB = rows => { if (!rows || !rows.length) return; rows.forEach(row => { if (!row.ACCOUNTS) return; const p=row.ACCOUNTS.split('-'); if (p.length<8) return; if (!validGLs.has(p[2])) return; const cur=row.CURRENCY||'', matchKey=`${row.ACCOUNTS}|${cur}`; seen.add(matchKey); const ytd=roundCents(parseFloat(row.YTD_NET_ENTERED||0)), rdlVal=roundCents(rdlAggr[matchKey]?rdlAggr[matchKey].amount:0); tbData.push({ACCOUNTS:row.ACCOUNTS,ACCOUNT_NAME:row.ACCOUNT_NAME||'',ENTITY:p[0],RC:p[1],GL_NUMBER:p[2],GL_NATURE:glToNature[p[2]]||'-',PRODUCT_CODE:p[3],INTERCO:p[4],ISLAMIC_INDICATOR:p[6],CURRENCY:cur,YTD_ENTERED:ytd,PER_RDL:rdlVal,VARIANCE:roundCents(ytd-rdlVal),ACCOUNTS_LIST:rdlAggr[matchKey]?Object.entries(rdlAggr[matchKey].accounts).map(([id,amt])=>({id,amt})):[]}); }); };
   processTB(S.tb.mbs); processTB(S.tb.msl);
   Object.keys(rdlAggr).forEach(matchKey => { if (!seen.has(matchKey)) { const r=rdlAggr[matchKey]; const rdlRounded=roundCents(r.amount); tbData.push({ACCOUNTS:r.acctStr,ACCOUNT_NAME:'-',ENTITY:r.ent,RC:r.rc,GL_NUMBER:r.gl,GL_NATURE:r.nature,PRODUCT_CODE:r.prod,INTERCO:r.interco,ISLAMIC_INDICATOR:r.islamic,CURRENCY:r.cur,YTD_ENTERED:0,PER_RDL:rdlRounded,VARIANCE:roundCents(0-rdlRounded),ACCOUNTS_LIST:Object.entries(r.accounts).map(([id,amt])=>({id,amt}))}); } });
   setProgress(name, 1, 'Done'); await new Promise(r=>setTimeout(r,100));
@@ -3103,9 +3138,6 @@ function renderQuerySearch(container) {
           style="font-family:var(--mono);font-size:13px;font-weight:500;border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;width:220px;outline:none;color:var(--ink);"
           onkeydown="if(event.key==='Enter') runQuery()">
         <button class="btn btn-primary" onclick="runQuery()">Search</button>
-        <div style="margin-left:auto;">
-
-        </div>
       </div>
       <div id="query-result-area" style="flex:1;overflow:auto;padding:12px 20px;display:flex;flex-direction:column;gap:12px;">
         <div style="padding:60px;text-align:center;color:var(--ink3);font-size:13px">Enter an account number above and press Search.</div>
@@ -3168,7 +3200,13 @@ function renderBreakdownPage() {
   document.getElementById('breakdown-next').style.display = pages>1?'':'none';
 }
 function changeBreakdownPage(d) { breakdownPage += d; renderBreakdownPage(); }
-function closeBreakdownModal(e) { if (e && e.target !== document.getElementById('breakdown-modal-bg')) return; document.getElementById('breakdown-modal-bg').classList.remove('show'); }
+function closeBreakdownModal(e) {
+  if (e && e.target !== document.getElementById('breakdown-modal-bg')) return;
+  document.getElementById('breakdown-modal-bg').classList.remove('show');
+  // Release row data so closed modals don't keep large ACCOUNTS_LIST arrays alive.
+  breakdownData = [];
+  breakdownPage = 1;
+}
 
 // ============================================================
 //  CACHE INSPECTOR MODAL (uses SLOT_REGISTRY for delete)
@@ -3743,7 +3781,7 @@ function dqCompute() {
     if(dates.length<2){alert('Need at least 2 months of data in each file.');setUploadBar(false);return;}
     dqState.LA=dqFmtD(dates[0]);dqState.LB=dqFmtD(dates[1]);dqState.AD=[];
     for(const ds of dqState.DS){
-      const dA=ds.data.filter(r=>r.PROC_DTE===dates[0]),dB=ds.data.filter(r=>r.PROC_DTE===dates[1]);
+      const dA=[], dB=[]; for (const r of ds.data) { if (r.PROC_DTE===dates[0]) dA.push(r); else if (r.PROC_DTE===dates[1]) dB.push(r); }
       const cs=new Set(ds.hdrs),px=ds.dn;
       const cc=px==='CC',od=px==='OD',gu=px==='GUARANTEE',iv=px==='INVMT',cg=cc||gu,cog=cc||od||gu,og=od||gu;
       const cfgs=[];
@@ -3894,9 +3932,9 @@ function runPreTb() {
   const results = [];
   let firstDateRaw = null;
   let withEntries = 0;
-  const processTB = (txt) => {
-    if (!txt) return;
-    parseCSV(txt).forEach(row => {
+  const processTB = (rows) => {
+    if (!rows || !rows.length) return;
+    rows.forEach(row => {
       if (!firstDateRaw && row.EFFECTIVE_DATE) firstDateRaw = String(row.EFFECTIVE_DATE).trim();
       if (!row.ACCOUNTS) return;
       const parts = row.ACCOUNTS.split('-');
@@ -3940,49 +3978,115 @@ function ptbRowField(r, col) {
 const PTB_PAGE_SIZE = 50;
 
 function ptbBuildChipsHtml() {
-  const filters = preTbState.filters || {};
-  const active = PTB_COLS.filter(k => fdIsActive(filters[k]));
-  if (!active.length) return '';
-  const chips = active.map(k => {
-    const f = filters[k];
-    const sel = f.selected ? [...f.selected] : [];
-    let disp;
-    if (f.text && sel.length === 0) {
-      disp = `contains "${f.text}"`;
-    } else if (sel.length === 0) {
-      disp = '—';
-    } else if (sel.length <= 2) {
-      disp = sel.map(v => escapeHtmlAttr(v)).join(', ');
-    } else {
-      disp = `${escapeHtmlAttr(sel[0])} <span class="dim">+${sel.length - 1}</span>`;
-    }
-    return `<span class="ptb-filter-chip">${PTB_COL_LABELS[k]} <span class="dim">is</span> <span class="fc-vals">${disp}</span><button class="fc-x" onclick="preTbClearColFilter('${k}')" title="Remove">×</button></span>`;
-  }).join('');
-  return `<div class="ptb-filter-chips active">${chips}<button class="ptb-filter-chip-clear" onclick="preTbClearAllColFilters()">Clear all</button></div>`;
+  return stationChipsHtml(preTbState.filters || {}, PTB_COLS, PTB_COL_LABELS, 'preTbClearColFilter', 'preTbClearAllColFilters');
 }
 
 function escapeHtmlAttr(s) {
   return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-function ptbBuildPagerHtml(totalPages, currentPage) {
+// ============================================================
+//  SHARED STATION HELPERS (used by preTb, reversal, recon, tb)
+//  Consolidates what were three+ near-identical implementations.
+// ============================================================
+const STATION_EMPTY_CELL = `<span style="color:var(--d-ink-4)">—</span>`;
+
+function stationStatusOfVariance(r) { return Math.abs(r.VARIANCE||0) > 0 ? 'break' : 'matched'; }
+
+function stationStatusChip(status) {
+  return status === 'break'
+    ? `<span class="status-chip break"><span class="dot"></span>Break</span>`
+    : `<span class="status-chip matched"><span class="dot"></span>Matched</span>`;
+}
+
+function stationVarCell(v) {
+  if (Math.abs(v||0) === 0) return STATION_EMPTY_CELL;
+  return `${v < 0 ? '-' : ''}${fmtNum(Math.abs(v))}`;
+}
+
+function stationChipDisp(f) {
+  const sel = f.selected ? [...f.selected] : [];
+  if (f.text && sel.length === 0) return `contains "${f.text}"`;
+  if (sel.length === 0) return '—';
+  if (sel.length <= 2) return sel.map(v => escapeHtmlAttr(v)).join(', ');
+  return `${escapeHtmlAttr(sel[0])} <span class="dim">+${sel.length - 1}</span>`;
+}
+
+function stationChipsHtml(filters, cols, colLabels, clearColFn, clearAllFn) {
+  const active = cols.filter(k => fdIsActive(filters[k]));
+  if (!active.length) return '';
+  const chips = active.map(k =>
+    `<span class="ptb-filter-chip">${colLabels[k]} <span class="dim">is</span> <span class="fc-vals">${stationChipDisp(filters[k])}</span><button class="fc-x" onclick="${clearColFn}('${k}')" title="Remove">×</button></span>`
+  ).join('');
+  return `<div class="ptb-filter-chips active">${chips}<button class="ptb-filter-chip-clear" onclick="${clearAllFn}()">Clear all</button></div>`;
+}
+
+function stationPagerHtml(totalPages, currentPage, setPageFn) {
   if (totalPages <= 1) return '';
   const btns = [];
   const disabled = (d) => d ? ' disabled' : '';
-  btns.push(`<button${disabled(currentPage === 1)} onclick="preTbSetPage(${currentPage - 1})" title="Previous">‹</button>`);
-
-  // Page list with ellipsis: always show 1, current-1..current+1, totalPages
+  btns.push(`<button${disabled(currentPage === 1)} onclick="${setPageFn}(${currentPage - 1})" title="Previous">‹</button>`);
   const pages = new Set([1, totalPages, currentPage, currentPage - 1, currentPage + 1]);
   const sorted = [...pages].filter(p => p >= 1 && p <= totalPages).sort((a, b) => a - b);
   let prev = 0;
   for (const p of sorted) {
     if (p - prev > 1) btns.push(`<span class="ptb-pager-ellipsis">…</span>`);
-    btns.push(`<button class="${p === currentPage ? 'active' : ''}" onclick="preTbSetPage(${p})">${p}</button>`);
+    btns.push(`<button class="${p === currentPage ? 'active' : ''}" onclick="${setPageFn}(${p})">${p}</button>`);
     prev = p;
   }
-
-  btns.push(`<button${disabled(currentPage === totalPages)} onclick="preTbSetPage(${currentPage + 1})" title="Next">›</button>`);
+  btns.push(`<button${disabled(currentPage === totalPages)} onclick="${setPageFn}(${currentPage + 1})" title="Next">›</button>`);
   return `<div class="ptb-pager">${btns.join('')}</div>`;
+}
+
+function stationSegBtn(active, label, count, tone, onClick) {
+  let cntColor = '';
+  if (tone === 'neg' && count > 0) cntColor = 'style="color:var(--d-neg)"';
+  else if (!active) cntColor = 'style="color:var(--d-ink-4)"';
+  return `<button class="${active?'active':''}" onclick="${onClick}">${label}<span class="ptb-count" ${cntColor}>${count.toLocaleString()}</span></button>`;
+}
+
+function stationKpiStatusHtml(matchedCount, breakCount, total) {
+  const matchedPct = total ? (matchedCount / total * 100) : 0;
+  return `<div class="ptb-card ptb-kpi ptb-col-3">
+    <div class="ptb-label">Reconciliation Status</div>
+    <div class="ptb-value" style="font-size:22px;letter-spacing:-0.02em">
+      <span style="color:var(--d-pos)">${matchedCount.toLocaleString()}</span>
+      <span class="dim" style="font-size:14px">matched</span>
+      <span style="color:${breakCount?'var(--d-neg)':'var(--d-ink-4)'};margin-left:6px">${breakCount.toLocaleString()}</span>
+      <span class="dim" style="font-size:14px">breaks</span>
+    </div>
+    <div class="ptb-footline">
+      <div class="ptb-bar-track"><div class="ptb-bar-fill" style="width:${matchedPct.toFixed(1)}%"></div></div>
+      <span class="mono">${matchedPct.toFixed(1)}%</span>
+    </div>
+  </div>`;
+}
+
+/** Filter + status-filter + export for a standard station result array. */
+function stationExport({ data, cols, colLabels, statusLabels, statusOf, rowField, statusFilter, filters, sheetName, fileName }) {
+  const hasColFilter = cols.some(k => fdIsActive(filters[k]));
+  const display = (statusFilter === 'all' && !hasColFilter)
+    ? data
+    : data.filter(r => {
+        if (statusFilter !== 'all' && statusOf(r) !== statusFilter) return false;
+        for (const k of cols) {
+          const f = filters[k];
+          if (fdIsActive(f) && !fdMatch(rowField(r, k), f)) return false;
+        }
+        return true;
+      });
+  const rows = display.map(r => {
+    const o = { 'Status': statusLabels[statusOf(r)] };
+    cols.forEach(k => { if (k !== 'STATUS') o[colLabels[k]] = r[k]; });
+    return o;
+  });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), sheetName);
+  XLSX.writeFile(wb, fileName);
+}
+
+function ptbBuildPagerHtml(totalPages, currentPage) {
+  return stationPagerHtml(totalPages, currentPage, 'preTbSetPage');
 }
 
 /** Compute the filtered + paginated view of preTbState.results. Shared
@@ -4011,14 +4115,11 @@ function ptbBuildRowsHtml(pageRows) {
   if (!pageRows.length) return `<tr><td colspan="${PTB_COLS.length}" style="text-align:center;padding:40px;color:var(--d-ink-4)">No rows match the current filters</td></tr>`;
   return pageRows.map(r => {
     const st = ptbStatusOf(r);
-    const chip = st === 'break'
-      ? `<span class="status-chip break"><span class="dot"></span>Break</span>`
-      : `<span class="status-chip matched"><span class="dot"></span>Matched</span>`;
-    const ptd = r.HAS_ENTRY ? (r.PTD<0?'-':'')+fmtNum(Math.abs(r.PTD)) : '<span style="color:var(--d-ink-4)">—</span>';
+    const ptd = r.HAS_ENTRY ? (r.PTD<0?'-':'')+fmtNum(Math.abs(r.PTD)) : STATION_EMPTY_CELL;
     return `<tr data-status="${st}">
-      <td>${chip}</td>
+      <td>${stationStatusChip(st)}</td>
       <td class="d-mono">${r.ACCOUNTS}</td>
-      <td>${r.ACCOUNT_NAME||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+      <td>${r.ACCOUNT_NAME||STATION_EMPTY_CELL}</td>
       <td class="d-mono">${r.GL_NUMBER}</td>
       <td class="d-mono" style="color:var(--d-ink-3)">${r.CURRENCY}</td>
       <td class="num">${ptd}</td>
@@ -4061,7 +4162,6 @@ function renderPreTbResults(container) {
 
   const { display, page, totalPages, startIdx, endIdx, pageRows } = ptbComputeView();
 
-  const matchedPct = results.length ? (cleanCount / results.length * 100) : 0;
   const pageHeadHtml = `
     <div class="ptb-page-head">
       <div class="ptb-page-title">
@@ -4077,36 +4177,14 @@ function renderPreTbResults(container) {
       </div>
     </div>`;
 
-  const kpiHtml = `
-    <div class="ptb-grid">
-      <div class="ptb-card ptb-kpi ptb-col-3">
-        <div class="ptb-label">Reconciliation Status</div>
-        <div class="ptb-value" style="font-size:22px;letter-spacing:-0.02em">
-          <span style="color:var(--d-pos)">${cleanCount.toLocaleString()}</span>
-          <span class="dim" style="font-size:14px">matched</span>
-          <span style="color:${withEntriesCount?'var(--d-neg)':'var(--d-ink-4)'};margin-left:6px">${withEntriesCount.toLocaleString()}</span>
-          <span class="dim" style="font-size:14px">breaks</span>
-        </div>
-        <div class="ptb-footline">
-          <div class="ptb-bar-track"><div class="ptb-bar-fill" style="width:${matchedPct.toFixed(1)}%"></div></div>
-          <span class="mono">${matchedPct.toFixed(1)}%</span>
-        </div>
-      </div>
-    </div>`;
+  const kpiHtml = `<div class="ptb-grid">${stationKpiStatusHtml(cleanCount, withEntriesCount, results.length)}</div>`;
 
-  const segBtn = (f, label, count, tone) => {
-    const active = statusFilter === f;
-    let cntColor = '';
-    if (tone === 'neg' && count > 0) cntColor = 'style="color:var(--d-neg)"';
-    else if (!active) cntColor = 'style="color:var(--d-ink-4)"';
-    return `<button class="${active?'active':''}" onclick="preTbSetStatusFilter('${f}')">${label}<span class="ptb-count" ${cntColor}>${count.toLocaleString()}</span></button>`;
-  };
   const toolbarHtml = `
     <div class="ptb-table-toolbar">
       <div class="ptb-seg">
-        ${segBtn('all','All', results.length, 'dim')}
-        ${segBtn('break','Breaks', withEntriesCount, 'neg')}
-        ${segBtn('matched','Matched', cleanCount, 'dim')}
+        ${stationSegBtn(statusFilter==='all',    'All',     results.length,    'dim', `preTbSetStatusFilter('all')`)}
+        ${stationSegBtn(statusFilter==='break',  'Breaks',  withEntriesCount,  'neg', `preTbSetStatusFilter('break')`)}
+        ${stationSegBtn(statusFilter==='matched','Matched', cleanCount,        'dim', `preTbSetStatusFilter('matched')`)}
       </div>
     </div>`;
 
@@ -4193,27 +4271,13 @@ function preTbSetFilter() {
   renderPreTbResults(document.getElementById('view-pretb'));
 }
 function preTbExport() {
-  const results = preTbState.results || [];
-  const statusFilter = preTbState.statusFilter || 'all';
-  const afterStatus = statusFilter === 'all' ? results : results.filter(r => ptbStatusOf(r) === statusFilter);
-  const display = afterStatus.filter(r => {
-    for (const k of PTB_COLS) {
-      const f = preTbState.filters[k];
-      if (fdIsActive(f) && !fdMatch(ptbRowField(r, k), f)) return false;
-    }
-    return true;
+  stationExport({
+    data: preTbState.results || [],
+    cols: PTB_COLS, colLabels: PTB_COL_LABELS, statusLabels: PTB_STATUS_LABELS,
+    statusOf: ptbStatusOf, rowField: ptbRowField,
+    statusFilter: preTbState.statusFilter || 'all', filters: preTbState.filters || {},
+    sheetName: 'Pre-Check TB', fileName: 'pre_check_tb.xlsx'
   });
-  const rows = display.map(r => ({
-    'Status': PTB_STATUS_LABELS[ptbStatusOf(r)],
-    'Account String': r.ACCOUNTS,
-    'Account Name': r.ACCOUNT_NAME,
-    'GL Number': r.GL_NUMBER,
-    'Currency': r.CURRENCY,
-    'PTD Net Entered': r.PTD
-  }));
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Pre-Check TB');
-  XLSX.writeFile(wb, 'pre_check_tb.xlsx');
 }
 
 // ============================================================
@@ -4232,7 +4296,7 @@ const REV_PAGE_SIZE = 50;
 
 const revState = { statusFilter: 'all', filters: {}, page: 1 };
 
-function revStatusOf(r) { return Math.abs(r.VARIANCE||0) > 0 ? 'break' : 'matched'; }
+const revStatusOf = stationStatusOfVariance;
 function revRowField(r, col) {
   if (col === 'STATUS') return REV_STATUS_LABELS[revStatusOf(r)];
   if (REV_NUM_COLS.has(col)) {
@@ -4244,42 +4308,11 @@ function revRowField(r, col) {
 }
 
 function revBuildChipsHtml() {
-  const filters = revState.filters || {};
-  const active = REV_COLS.filter(k => fdIsActive(filters[k]));
-  if (!active.length) return '';
-  const chips = active.map(k => {
-    const f = filters[k];
-    const sel = f.selected ? [...f.selected] : [];
-    let disp;
-    if (f.text && sel.length === 0) {
-      disp = `contains "${f.text}"`;
-    } else if (sel.length === 0) {
-      disp = '—';
-    } else if (sel.length <= 2) {
-      disp = sel.map(v => escapeHtmlAttr(v)).join(', ');
-    } else {
-      disp = `${escapeHtmlAttr(sel[0])} <span class="dim">+${sel.length - 1}</span>`;
-    }
-    return `<span class="ptb-filter-chip">${REV_COL_LABELS[k]} <span class="dim">is</span> <span class="fc-vals">${disp}</span><button class="fc-x" onclick="revClearColFilter('${k}')" title="Remove">×</button></span>`;
-  }).join('');
-  return `<div class="ptb-filter-chips active">${chips}<button class="ptb-filter-chip-clear" onclick="revClearAllColFilters()">Clear all</button></div>`;
+  return stationChipsHtml(revState.filters || {}, REV_COLS, REV_COL_LABELS, 'revClearColFilter', 'revClearAllColFilters');
 }
 
 function revBuildPagerHtml(totalPages, currentPage) {
-  if (totalPages <= 1) return '';
-  const btns = [];
-  const disabled = (d) => d ? ' disabled' : '';
-  btns.push(`<button${disabled(currentPage === 1)} onclick="revSetPage(${currentPage - 1})" title="Previous">‹</button>`);
-  const pages = new Set([1, totalPages, currentPage, currentPage - 1, currentPage + 1]);
-  const sorted = [...pages].filter(p => p >= 1 && p <= totalPages).sort((a, b) => a - b);
-  let prev = 0;
-  for (const p of sorted) {
-    if (p - prev > 1) btns.push(`<span class="ptb-pager-ellipsis">…</span>`);
-    btns.push(`<button class="${p === currentPage ? 'active' : ''}" onclick="revSetPage(${p})">${p}</button>`);
-    prev = p;
-  }
-  btns.push(`<button${disabled(currentPage === totalPages)} onclick="revSetPage(${currentPage + 1})" title="Next">›</button>`);
-  return `<div class="ptb-pager">${btns.join('')}</div>`;
+  return stationPagerHtml(totalPages, currentPage, 'revSetPage');
 }
 
 /** Compute the filtered + paginated view of S.results.reversal. Shared
@@ -4308,27 +4341,20 @@ function revBuildRowsHtml(pageRows) {
   if (!pageRows.length) return `<tr><td colspan="${REV_COLS.length}" style="text-align:center;padding:40px;color:var(--d-ink-4)">No rows match the current filters</td></tr>`;
   return pageRows.map(r => {
     const st = revStatusOf(r);
-    const chip = st === 'break'
-      ? `<span class="status-chip break"><span class="dot"></span>Break</span>`
-      : `<span class="status-chip matched"><span class="dot"></span>Matched</span>`;
-    const varV = r.VARIANCE || 0;
-    const varCell = Math.abs(varV) === 0
-      ? `<span style="color:var(--d-ink-4)">—</span>`
-      : `${varV < 0 ? '-' : ''}${fmtNum(Math.abs(varV))}`;
     return `<tr data-status="${st}">
-      <td>${chip}</td>
-      <td>${r.ENTITY||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td>${r.RC||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td class="d-mono">${r.GL_NUMBER||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td>${r.PRODUCT_CODE||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td>${r.INTERCO||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td>${r.ISLAMIC_INDICATOR||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+      <td>${stationStatusChip(st)}</td>
+      <td>${r.ENTITY||STATION_EMPTY_CELL}</td>
+      <td>${r.RC||STATION_EMPTY_CELL}</td>
+      <td class="d-mono">${r.GL_NUMBER||STATION_EMPTY_CELL}</td>
+      <td>${r.PRODUCT_CODE||STATION_EMPTY_CELL}</td>
+      <td>${r.INTERCO||STATION_EMPTY_CELL}</td>
+      <td>${r.ISLAMIC_INDICATOR||STATION_EMPTY_CELL}</td>
       <td class="d-mono" style="color:var(--d-ink-3)">${r.CURRENCY||''}</td>
       <td class="d-mono">${r.PREV_DRCR||''}</td>
       <td class="num">${fmtNum(r.PREV_AMT||0)}</td>
       <td class="d-mono">${r.REV_DRCR||''}</td>
       <td class="num">${fmtNum(r.REV_AMT||0)}</td>
-      <td class="num">${varCell}</td>
+      <td class="num">${stationVarCell(r.VARIANCE||0)}</td>
     </tr>`;
   }).join('');
 }
@@ -4382,7 +4408,6 @@ function renderReversalResults(container) {
 
   const { display, page, totalPages, startIdx, endIdx, pageRows } = revComputeView();
 
-  const matchedPct = results.length ? (matchedCount / results.length * 100) : 0;
   const pageHeadHtml = `
     <div class="ptb-page-head">
       <div class="ptb-page-title">
@@ -4398,36 +4423,14 @@ function renderReversalResults(container) {
       </div>
     </div>`;
 
-  const kpiHtml = `
-    <div class="ptb-grid">
-      <div class="ptb-card ptb-kpi ptb-col-3">
-        <div class="ptb-label">Reconciliation Status</div>
-        <div class="ptb-value" style="font-size:22px;letter-spacing:-0.02em">
-          <span style="color:var(--d-pos)">${matchedCount.toLocaleString()}</span>
-          <span class="dim" style="font-size:14px">matched</span>
-          <span style="color:${breakCount?'var(--d-neg)':'var(--d-ink-4)'};margin-left:6px">${breakCount.toLocaleString()}</span>
-          <span class="dim" style="font-size:14px">breaks</span>
-        </div>
-        <div class="ptb-footline">
-          <div class="ptb-bar-track"><div class="ptb-bar-fill" style="width:${matchedPct.toFixed(1)}%"></div></div>
-          <span class="mono">${matchedPct.toFixed(1)}%</span>
-        </div>
-      </div>
-    </div>`;
+  const kpiHtml = `<div class="ptb-grid">${stationKpiStatusHtml(matchedCount, breakCount, results.length)}</div>`;
 
-  const segBtn = (f, label, count, tone) => {
-    const active = statusFilter === f;
-    let cntColor = '';
-    if (tone === 'neg' && count > 0) cntColor = 'style="color:var(--d-neg)"';
-    else if (!active) cntColor = 'style="color:var(--d-ink-4)"';
-    return `<button class="${active?'active':''}" onclick="revSetStatusFilter('${f}')">${label}<span class="ptb-count" ${cntColor}>${count.toLocaleString()}</span></button>`;
-  };
   const toolbarHtml = `
     <div class="ptb-table-toolbar">
       <div class="ptb-seg">
-        ${segBtn('all','All', results.length, 'dim')}
-        ${segBtn('break','Breaks', breakCount, 'neg')}
-        ${segBtn('matched','Matched', matchedCount, 'dim')}
+        ${stationSegBtn(statusFilter==='all',    'All',     results.length, 'dim', `revSetStatusFilter('all')`)}
+        ${stationSegBtn(statusFilter==='break',  'Breaks',  breakCount,     'neg', `revSetStatusFilter('break')`)}
+        ${stationSegBtn(statusFilter==='matched','Matched', matchedCount,   'dim', `revSetStatusFilter('matched')`)}
       </div>
     </div>`;
 
@@ -4511,28 +4514,13 @@ function revResetAll() {
   renderReversalResults(document.getElementById('view-reversal'));
 }
 function revExport() {
-  const results = Array.isArray(S.results.reversal) ? S.results.reversal : [];
-  const statusFilter = revState.statusFilter || 'all';
-  const hasColFilter = REV_COLS.some(k => fdIsActive(revState.filters[k]));
-  // Short-circuit: when nothing is filtered, skip the two filter passes entirely.
-  const display = (statusFilter === 'all' && !hasColFilter)
-    ? results
-    : results.filter(r => {
-        if (statusFilter !== 'all' && revStatusOf(r) !== statusFilter) return false;
-        for (const k of REV_COLS) {
-          const f = revState.filters[k];
-          if (fdIsActive(f) && !fdMatch(revRowField(r, k), f)) return false;
-        }
-        return true;
-      });
-  const rows = display.map(r => {
-    const o = { 'Status': REV_STATUS_LABELS[revStatusOf(r)] };
-    REV_COLS.forEach(k => { if (k !== 'STATUS') o[REV_COL_LABELS[k]] = r[k]; });
-    return o;
+  stationExport({
+    data: Array.isArray(S.results.reversal) ? S.results.reversal : [],
+    cols: REV_COLS, colLabels: REV_COL_LABELS, statusLabels: REV_STATUS_LABELS,
+    statusOf: revStatusOf, rowField: revRowField,
+    statusFilter: revState.statusFilter || 'all', filters: revState.filters || {},
+    sheetName: 'Reversal Check', fileName: 'reversal_check.xlsx'
   });
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Reversal Check');
-  XLSX.writeFile(wb, 'reversal_check.xlsx');
 }
 
 // ============================================================
@@ -4550,7 +4538,7 @@ const RCN_PAGE_SIZE = 50;
 
 const reconState = { statusFilter: 'all', filters: {}, page: 1 };
 
-function rcnStatusOf(r) { return Math.abs(r.VARIANCE||0) > 0 ? 'break' : 'matched'; }
+const rcnStatusOf = stationStatusOfVariance;
 function rcnRowField(r, col) {
   if (col === 'STATUS') return RCN_STATUS_LABELS[rcnStatusOf(r)];
   if (RCN_NUM_COLS.has(col)) {
@@ -4562,42 +4550,11 @@ function rcnRowField(r, col) {
 }
 
 function rcnBuildChipsHtml() {
-  const filters = reconState.filters || {};
-  const active = RCN_COLS.filter(k => fdIsActive(filters[k]));
-  if (!active.length) return '';
-  const chips = active.map(k => {
-    const f = filters[k];
-    const sel = f.selected ? [...f.selected] : [];
-    let disp;
-    if (f.text && sel.length === 0) {
-      disp = `contains "${f.text}"`;
-    } else if (sel.length === 0) {
-      disp = '—';
-    } else if (sel.length <= 2) {
-      disp = sel.map(v => escapeHtmlAttr(v)).join(', ');
-    } else {
-      disp = `${escapeHtmlAttr(sel[0])} <span class="dim">+${sel.length - 1}</span>`;
-    }
-    return `<span class="ptb-filter-chip">${RCN_COL_LABELS[k]} <span class="dim">is</span> <span class="fc-vals">${disp}</span><button class="fc-x" onclick="rcnClearColFilter('${k}')" title="Remove">×</button></span>`;
-  }).join('');
-  return `<div class="ptb-filter-chips active">${chips}<button class="ptb-filter-chip-clear" onclick="rcnClearAllColFilters()">Clear all</button></div>`;
+  return stationChipsHtml(reconState.filters || {}, RCN_COLS, RCN_COL_LABELS, 'rcnClearColFilter', 'rcnClearAllColFilters');
 }
 
 function rcnBuildPagerHtml(totalPages, currentPage) {
-  if (totalPages <= 1) return '';
-  const btns = [];
-  const disabled = (d) => d ? ' disabled' : '';
-  btns.push(`<button${disabled(currentPage === 1)} onclick="rcnSetPage(${currentPage - 1})" title="Previous">‹</button>`);
-  const pages = new Set([1, totalPages, currentPage, currentPage - 1, currentPage + 1]);
-  const sorted = [...pages].filter(p => p >= 1 && p <= totalPages).sort((a, b) => a - b);
-  let prev = 0;
-  for (const p of sorted) {
-    if (p - prev > 1) btns.push(`<span class="ptb-pager-ellipsis">…</span>`);
-    btns.push(`<button class="${p === currentPage ? 'active' : ''}" onclick="rcnSetPage(${p})">${p}</button>`);
-    prev = p;
-  }
-  btns.push(`<button${disabled(currentPage === totalPages)} onclick="rcnSetPage(${currentPage + 1})" title="Next">›</button>`);
-  return `<div class="ptb-pager">${btns.join('')}</div>`;
+  return stationPagerHtml(totalPages, currentPage, 'rcnSetPage');
 }
 
 /** Compute the filtered + paginated view of S.results.recon. Shared between
@@ -4626,32 +4583,25 @@ function rcnBuildRowsHtml(pageRows) {
   if (!pageRows.length) return `<tr><td colspan="${RCN_COLS.length}" style="text-align:center;padding:40px;color:var(--d-ink-4)">No rows match the current filters</td></tr>`;
   return pageRows.map(r => {
     const st = rcnStatusOf(r);
-    const chip = st === 'break'
-      ? `<span class="status-chip break"><span class="dot"></span>Break</span>`
-      : `<span class="status-chip matched"><span class="dot"></span>Matched</span>`;
-    const varV = r.VARIANCE || 0;
-    const varCell = Math.abs(varV) === 0
-      ? `<span style="color:var(--d-ink-4)">—</span>`
-      : `${varV < 0 ? '-' : ''}${fmtNum(Math.abs(varV))}`;
     // r.__idx is attached at build time so we don't rebuild a Map per render.
     const perRdlCell = r.__accounts
       ? `<span class="clickable-cell" onclick="rcnOpenBreakdown(event,${r.__idx})">${fmtNum(r.CALCULATED||0)}</span>`
       : fmtNum(r.CALCULATED||0);
     return `<tr data-status="${st}">
-      <td>${chip}</td>
-      <td>${r.ENTITY||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td>${r.RC||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td class="d-mono">${r.GL_ACC||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td>${r.GL_NATURE||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td>${r.BS_PL||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td>${r.PRODUCT_CODE||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td>${r.INTERCO||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td>${r.ISLAMIC_INDICATOR||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+      <td>${stationStatusChip(st)}</td>
+      <td>${r.ENTITY||STATION_EMPTY_CELL}</td>
+      <td>${r.RC||STATION_EMPTY_CELL}</td>
+      <td class="d-mono">${r.GL_ACC||STATION_EMPTY_CELL}</td>
+      <td>${r.GL_NATURE||STATION_EMPTY_CELL}</td>
+      <td>${r.BS_PL||STATION_EMPTY_CELL}</td>
+      <td>${r.PRODUCT_CODE||STATION_EMPTY_CELL}</td>
+      <td>${r.INTERCO||STATION_EMPTY_CELL}</td>
+      <td>${r.ISLAMIC_INDICATOR||STATION_EMPTY_CELL}</td>
       <td class="d-mono" style="color:var(--d-ink-3)">${r.CURRENCY||''}</td>
       <td class="d-mono">${r.DEBIT_CREDIT||''}</td>
       <td class="num">${perRdlCell}</td>
       <td class="num">${fmtNum(r.POSTING_FILE||0)}</td>
-      <td class="num">${varCell}</td>
+      <td class="num">${stationVarCell(r.VARIANCE||0)}</td>
     </tr>`;
   }).join('');
 }
@@ -4694,7 +4644,6 @@ function renderReconResults(container) {
 
   const { results, display, page, totalPages, startIdx, endIdx, pageRows } = rcnComputeView();
 
-  const matchedPct = results.length ? (matchedCount / results.length * 100) : 0;
   const unmappedMetaHtml = unmappedCount
     ? `<span>·</span><span style="cursor:pointer;color:var(--d-warn,#B8740E);text-decoration:underline;text-underline-offset:2px;" onclick="openUnmappedModal('recon')" title="View unmapped accounts">⚠ ${unmappedCount.toLocaleString()} unmapped</span>`
     : '';
@@ -4714,36 +4663,14 @@ function renderReconResults(container) {
       </div>
     </div>`;
 
-  const kpiHtml = `
-    <div class="ptb-grid">
-      <div class="ptb-card ptb-kpi ptb-col-3">
-        <div class="ptb-label">Reconciliation Status</div>
-        <div class="ptb-value" style="font-size:22px;letter-spacing:-0.02em">
-          <span style="color:var(--d-pos)">${matchedCount.toLocaleString()}</span>
-          <span class="dim" style="font-size:14px">matched</span>
-          <span style="color:${breakCount?'var(--d-neg)':'var(--d-ink-4)'};margin-left:6px">${breakCount.toLocaleString()}</span>
-          <span class="dim" style="font-size:14px">breaks</span>
-        </div>
-        <div class="ptb-footline">
-          <div class="ptb-bar-track"><div class="ptb-bar-fill" style="width:${matchedPct.toFixed(1)}%"></div></div>
-          <span class="mono">${matchedPct.toFixed(1)}%</span>
-        </div>
-      </div>
-    </div>`;
+  const kpiHtml = `<div class="ptb-grid">${stationKpiStatusHtml(matchedCount, breakCount, results.length)}</div>`;
 
-  const segBtn = (f, label, count, tone) => {
-    const active = statusFilter === f;
-    let cntColor = '';
-    if (tone === 'neg' && count > 0) cntColor = 'style="color:var(--d-neg)"';
-    else if (!active) cntColor = 'style="color:var(--d-ink-4)"';
-    return `<button class="${active?'active':''}" onclick="rcnSetStatusFilter('${f}')">${label}<span class="ptb-count" ${cntColor}>${count.toLocaleString()}</span></button>`;
-  };
   const toolbarHtml = `
     <div class="ptb-table-toolbar">
       <div class="ptb-seg">
-        ${segBtn('all','All', results.length, 'dim')}
-        ${segBtn('break','Breaks', breakCount, 'neg')}
-        ${segBtn('matched','Matched', matchedCount, 'dim')}
+        ${stationSegBtn(statusFilter==='all',    'All',     results.length, 'dim', `rcnSetStatusFilter('all')`)}
+        ${stationSegBtn(statusFilter==='break',  'Breaks',  breakCount,     'neg', `rcnSetStatusFilter('break')`)}
+        ${stationSegBtn(statusFilter==='matched','Matched', matchedCount,   'dim', `rcnSetStatusFilter('matched')`)}
       </div>
     </div>`;
 
@@ -4842,28 +4769,13 @@ function rcnOpenBreakdown(e, absIdx) {
 }
 
 function rcnExport() {
-  const results = S.results.recon || [];
-  const statusFilter = reconState.statusFilter || 'all';
-  const hasColFilter = RCN_COLS.some(k => fdIsActive(reconState.filters[k]));
-  // Short-circuit when nothing is filtered: skip both filter passes.
-  const display = (statusFilter === 'all' && !hasColFilter)
-    ? results
-    : results.filter(r => {
-        if (statusFilter !== 'all' && rcnStatusOf(r) !== statusFilter) return false;
-        for (const k of RCN_COLS) {
-          const f = reconState.filters[k];
-          if (fdIsActive(f) && !fdMatch(rcnRowField(r, k), f)) return false;
-        }
-        return true;
-      });
-  const rows = display.map(r => {
-    const o = { 'Status': RCN_STATUS_LABELS[rcnStatusOf(r)] };
-    RCN_COLS.forEach(k => { if (k !== 'STATUS') o[RCN_COL_LABELS[k]] = r[k]; });
-    return o;
+  stationExport({
+    data: S.results.recon || [],
+    cols: RCN_COLS, colLabels: RCN_COL_LABELS, statusLabels: RCN_STATUS_LABELS,
+    statusOf: rcnStatusOf, rowField: rcnRowField,
+    statusFilter: reconState.statusFilter || 'all', filters: reconState.filters || {},
+    sheetName: 'Posting Validation', fileName: 'posting_validation.xlsx'
   });
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Posting Validation');
-  XLSX.writeFile(wb, 'posting_validation.xlsx');
 }
 
 // ============================================================
@@ -4898,7 +4810,7 @@ function tbrActiveCols() {
        : TBR_COLS;
 }
 
-function tbrStatusOf(r) { return Math.abs(r.VARIANCE||0) > 0 ? 'break' : 'matched'; }
+const tbrStatusOf = stationStatusOfVariance;
 function tbrRowField(r, col) {
   if (col === 'STATUS') return TBR_STATUS_LABELS[tbrStatusOf(r)];
   if (TBR_NUM_COLS.has(col)) {
@@ -4935,43 +4847,11 @@ function tbrGrouped(mode, results) {
 }
 
 function tbrBuildChipsHtml() {
-  const filters = tbReconState.filters || {};
-  const cols = tbrActiveCols();
-  const active = cols.filter(k => fdIsActive(filters[k]));
-  if (!active.length) return '';
-  const chips = active.map(k => {
-    const f = filters[k];
-    const sel = f.selected ? [...f.selected] : [];
-    let disp;
-    if (f.text && sel.length === 0) {
-      disp = `contains "${f.text}"`;
-    } else if (sel.length === 0) {
-      disp = '—';
-    } else if (sel.length <= 2) {
-      disp = sel.map(v => escapeHtmlAttr(v)).join(', ');
-    } else {
-      disp = `${escapeHtmlAttr(sel[0])} <span class="dim">+${sel.length - 1}</span>`;
-    }
-    return `<span class="ptb-filter-chip">${TBR_COL_LABELS[k]} <span class="dim">is</span> <span class="fc-vals">${disp}</span><button class="fc-x" onclick="tbrClearColFilter('${k}')" title="Remove">×</button></span>`;
-  }).join('');
-  return `<div class="ptb-filter-chips active">${chips}<button class="ptb-filter-chip-clear" onclick="tbrClearAllColFilters()">Clear all</button></div>`;
+  return stationChipsHtml(tbReconState.filters || {}, tbrActiveCols(), TBR_COL_LABELS, 'tbrClearColFilter', 'tbrClearAllColFilters');
 }
 
 function tbrBuildPagerHtml(totalPages, currentPage) {
-  if (totalPages <= 1) return '';
-  const btns = [];
-  const disabled = (d) => d ? ' disabled' : '';
-  btns.push(`<button${disabled(currentPage === 1)} onclick="tbrSetPage(${currentPage - 1})" title="Previous">‹</button>`);
-  const pages = new Set([1, totalPages, currentPage, currentPage - 1, currentPage + 1]);
-  const sorted = [...pages].filter(p => p >= 1 && p <= totalPages).sort((a, b) => a - b);
-  let prev = 0;
-  for (const p of sorted) {
-    if (p - prev > 1) btns.push(`<span class="ptb-pager-ellipsis">…</span>`);
-    btns.push(`<button class="${p === currentPage ? 'active' : ''}" onclick="tbrSetPage(${p})">${p}</button>`);
-    prev = p;
-  }
-  btns.push(`<button${disabled(currentPage === totalPages)} onclick="tbrSetPage(${currentPage + 1})" title="Next">›</button>`);
-  return `<div class="ptb-pager">${btns.join('')}</div>`;
+  return stationPagerHtml(totalPages, currentPage, 'tbrSetPage');
 }
 
 function renderTbReconResults(container) {
@@ -5018,7 +4898,6 @@ function renderTbReconResults(container) {
   const endIdx = Math.min(startIdx + TBR_PAGE_SIZE, display.length);
   const pageRows = display.slice(startIdx, endIdx);
 
-  const matchedPct = results.length ? (matchedRows / results.length * 100) : 0;
   const unmappedMetaHtml = unmappedCount
     ? `<span>·</span><span style="cursor:pointer;color:var(--d-warn,#B8740E);text-decoration:underline;text-underline-offset:2px;" onclick="openUnmappedModal('tb')" title="View unmapped accounts">⚠ ${unmappedCount.toLocaleString()} unmapped</span>`
     : '';
@@ -5046,34 +4925,16 @@ function renderTbReconResults(container) {
         <div class="ptb-label">Net Variance</div>
         <div class="ptb-value" style="font-family:'JetBrains Mono','IBM Plex Mono',monospace;color:${netVarColor};">${netVarDisplay}</div>
       </div>
-      <div class="ptb-card ptb-kpi ptb-col-3">
-        <div class="ptb-label">Reconciliation Status</div>
-        <div class="ptb-value" style="font-size:22px;letter-spacing:-0.02em">
-          <span style="color:var(--d-pos)">${matchedRows.toLocaleString()}</span>
-          <span class="dim" style="font-size:14px">matched</span>
-          <span style="color:${breakRows.length?'var(--d-neg)':'var(--d-ink-4)'};margin-left:6px">${breakRows.length.toLocaleString()}</span>
-          <span class="dim" style="font-size:14px">breaks</span>
-        </div>
-        <div class="ptb-footline">
-          <div class="ptb-bar-track"><div class="ptb-bar-fill" style="width:${matchedPct.toFixed(1)}%"></div></div>
-          <span class="mono">${matchedPct.toFixed(1)}%</span>
-        </div>
-      </div>
+      ${stationKpiStatusHtml(matchedRows, breakRows.length, results.length)}
     </div>`;
 
-  const segBtn = (f, label, count, tone) => {
-    const active = tbReconState.statusFilter === f;
-    let cntColor = '';
-    if (tone === 'neg' && count > 0) cntColor = 'style="color:var(--d-neg)"';
-    else if (!active) cntColor = 'style="color:var(--d-ink-4)"';
-    return `<button class="${active?'active':''}" onclick="tbrSetStatusFilter('${f}')">${label}<span class="ptb-count" ${cntColor}>${count.toLocaleString()}</span></button>`;
-  };
+  const sf = tbReconState.statusFilter;
   // Status seg is hidden in grouped mode; only the Group-by button remains.
   const segHtml = isGrouped ? '' : `
       <div class="ptb-seg">
-        ${segBtn('all','All', results.length, 'dim')}
-        ${segBtn('break','Breaks', breakRows.length, 'neg')}
-        ${segBtn('matched','Matched', matchedRows, 'dim')}
+        ${stationSegBtn(sf==='all',    'All',     results.length,     'dim', `tbrSetStatusFilter('all')`)}
+        ${stationSegBtn(sf==='break',  'Breaks',  breakRows.length,   'neg', `tbrSetStatusFilter('break')`)}
+        ${stationSegBtn(sf==='matched','Matched', matchedRows,        'dim', `tbrSetStatusFilter('matched')`)}
       </div>`;
   const groupBtnClass = isGrouped ? 'ptb-btn ptb-btn-active' : 'ptb-btn';
   const groupBtnLabel = isGrouped ? TBR_GROUP_LABEL[groupMode] : 'Group by';
@@ -5098,15 +4959,11 @@ function renderTbReconResults(container) {
   let rowsHtml;
   if (isGrouped) {
     rowsHtml = pageRows.map(r => {
-      const varV = r.VARIANCE || 0;
-      const varCell = Math.abs(varV) === 0
-        ? `<span style="color:var(--d-ink-4)">—</span>`
-        : `${varV < 0 ? '-' : ''}${fmtNum(Math.abs(varV))}`;
       const tds = cols.map(c => {
-        if (c === 'VARIANCE') return `<td class="num">${varCell}</td>`;
+        if (c === 'VARIANCE') return `<td class="num">${stationVarCell(r.VARIANCE||0)}</td>`;
         if (c === 'GL_NUMBER') return `<td class="d-mono">${r.GL_NUMBER||''}</td>`;
         if (c === 'CURRENCY') return `<td class="d-mono" style="color:var(--d-ink-3)">${r.CURRENCY||''}</td>`;
-        return `<td>${r[c]||'<span style="color:var(--d-ink-4)">—</span>'}</td>`;
+        return `<td>${r[c]||STATION_EMPTY_CELL}</td>`;
       }).join('');
       return `<tr>${tds}</tr>`;
     }).join('');
@@ -5118,32 +4975,25 @@ function renderTbReconResults(container) {
 
     rowsHtml = pageRows.map(r => {
       const st = tbrStatusOf(r);
-      const chip = st === 'break'
-        ? `<span class="status-chip break"><span class="dot"></span>Break</span>`
-        : `<span class="status-chip matched"><span class="dot"></span>Matched</span>`;
-      const varV = r.VARIANCE || 0;
-      const varCell = Math.abs(varV) === 0
-        ? `<span style="color:var(--d-ink-4)">—</span>`
-        : `${varV < 0 ? '-' : ''}${fmtNum(Math.abs(varV))}`;
       const absIdx = idxByRef.get(r);
       const perRdlCell = (r.ACCOUNTS_LIST && r.ACCOUNTS_LIST.length > 0)
         ? `<span class="clickable-cell" onclick="tbrOpenBreakdown(event,${absIdx})">${fmtNum(r.PER_RDL||0)}</span>`
         : fmtNum(r.PER_RDL||0);
       return `<tr data-status="${st}">
-        <td>${chip}</td>
+        <td>${stationStatusChip(st)}</td>
         <td class="d-mono">${r.ACCOUNTS||''}</td>
-        <td>${r.ACCOUNT_NAME||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-        <td>${r.ENTITY||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-        <td>${r.RC||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+        <td>${r.ACCOUNT_NAME||STATION_EMPTY_CELL}</td>
+        <td>${r.ENTITY||STATION_EMPTY_CELL}</td>
+        <td>${r.RC||STATION_EMPTY_CELL}</td>
         <td class="d-mono">${r.GL_NUMBER||''}</td>
-        <td>${r.GL_NATURE||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-        <td>${r.PRODUCT_CODE||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-        <td>${r.INTERCO||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-        <td>${r.ISLAMIC_INDICATOR||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+        <td>${r.GL_NATURE||STATION_EMPTY_CELL}</td>
+        <td>${r.PRODUCT_CODE||STATION_EMPTY_CELL}</td>
+        <td>${r.INTERCO||STATION_EMPTY_CELL}</td>
+        <td>${r.ISLAMIC_INDICATOR||STATION_EMPTY_CELL}</td>
         <td class="d-mono" style="color:var(--d-ink-3)">${r.CURRENCY||''}</td>
         <td class="num">${fmtNum(r.YTD_ENTERED||0)}</td>
         <td class="num">${perRdlCell}</td>
-        <td class="num">${varCell}</td>
+        <td class="num">${stationVarCell(r.VARIANCE||0)}</td>
       </tr>`;
     }).join('');
   }
@@ -5259,40 +5109,37 @@ function tbrExport() {
   const results = S.results.tb;
   if (!Array.isArray(results)) return;
   const groupMode = tbReconState.groupMode || null;
-  const cols = tbrActiveCols();
-  let baseRows;
+  // Grouped mode has its own column set and no Status column, so it doesn't
+  // fit stationExport's shape — keep the local export path for that branch.
   if (groupMode) {
-    baseRows = tbrGrouped(groupMode, results);
-  } else {
-    const statusFilter = tbReconState.statusFilter || 'all';
-    baseRows = statusFilter === 'all' ? results : results.filter(r => tbrStatusOf(r) === statusFilter);
-  }
-  const display = baseRows.filter(r => {
-    for (const k of cols) {
-      const f = tbReconState.filters[k];
-      if (fdIsActive(f) && !fdMatch(tbrRowField(r, k), f)) return false;
-    }
-    return true;
-  });
-  const rows = display.map(r => {
-    if (groupMode) {
+    const cols = tbrActiveCols();
+    const baseRows = tbrGrouped(groupMode, results);
+    const display = baseRows.filter(r => {
+      for (const k of cols) {
+        const f = tbReconState.filters[k];
+        if (fdIsActive(f) && !fdMatch(tbrRowField(r, k), f)) return false;
+      }
+      return true;
+    });
+    const rows = display.map(r => {
       const o = {};
       cols.forEach(k => { o[TBR_COL_LABELS[k]] = r[k]; });
       return o;
-    }
-    const o = { 'Status': TBR_STATUS_LABELS[tbrStatusOf(r)] };
-    TBR_COLS.forEach(k => { if (k !== 'STATUS') o[TBR_COL_LABELS[k]] = r[k]; });
-    return o;
+    });
+    const sheetName = groupMode === 'high' ? 'TB Recon — Grouped' : 'TB Recon — Detailed';
+    const fileName  = groupMode === 'high' ? 'tb_reconciliation_grouped.xlsx' : 'tb_reconciliation_grouped_detail.xlsx';
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), sheetName);
+    XLSX.writeFile(wb, fileName);
+    return;
+  }
+  stationExport({
+    data: results,
+    cols: TBR_COLS, colLabels: TBR_COL_LABELS, statusLabels: TBR_STATUS_LABELS,
+    statusOf: tbrStatusOf, rowField: tbrRowField,
+    statusFilter: tbReconState.statusFilter || 'all', filters: tbReconState.filters || {},
+    sheetName: 'TB Reconciliation', fileName: 'tb_reconciliation.xlsx'
   });
-  const sheetName = groupMode === 'high' ? 'TB Recon — Grouped'
-                  : groupMode === 'detail' ? 'TB Recon — Detailed'
-                  : 'TB Reconciliation';
-  const fileName  = groupMode === 'high' ? 'tb_reconciliation_grouped.xlsx'
-                  : groupMode === 'detail' ? 'tb_reconciliation_grouped_detail.xlsx'
-                  : 'tb_reconciliation.xlsx';
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), sheetName);
-  XLSX.writeFile(wb, fileName);
 }
 
 // ============================================================
@@ -5344,7 +5191,7 @@ async function runLoanRecon() {
   LOAN_PRODUCTS.forEach(p => { const ds = dqState.DS.find(d => d.dn === p); if (!ds) return; ds.data.filter(r => r.PROC_DTE === latestDate).forEach(r => { const entityCode = String(r.LEGAL_ENTITY_CODE||'').trim(), ent = LOAN_ENTITY_MAP[entityCode] || entityCode, amt = parseFloat(r.LEDGER_BALANCE_AMT||0), grp = p === 'GUARANTEE' ? 'Guarantee' : p === 'INVMT' ? 'Investment' : 'Loan', prd = String(r.PRD_CODE||'').trim(), gKey = `${ent}||${grp}`, pKey = `${ent}||${grp}||${prd}`; prodAgg.set(gKey, (prodAgg.get(gKey)||0) + amt); if (prd) prdCodeAgg.set(pKey, (prdCodeAgg.get(pKey)||0) + amt); }); });
   setProgress('loanrecon', 0.6, 'Aggregating trial balance…'); await new Promise(r => setTimeout(r, 20));
   const tbAgg = new Map(), glProdAgg = new Map();
-  const processTBLoan = (txt) => { if (!txt) return; parseCSV(txt).forEach(row => { if (!row.ACCOUNTS) return; const parts = row.ACCOUNTS.split('-'); if (parts.length < 4) return; const ent = parts[0], glNum = parts[2], pCode = parts[3], glProd = `${glNum}-${pCode}`, ptype = glProdMap.get(glProd); if (!ptype) return; const amt = parseFloat(row.YTD_NET_ACCOUNTED||0), gKey = `${ent}||${ptype}`, dKey = `${ent}||${ptype}||${glProd}`; tbAgg.set(gKey, (tbAgg.get(gKey)||0) + amt); glProdAgg.set(dKey, (glProdAgg.get(dKey)||0) + amt); }); };
+  const processTBLoan = (rows) => { if (!rows || !rows.length) return; rows.forEach(row => { if (!row.ACCOUNTS) return; const parts = row.ACCOUNTS.split('-'); if (parts.length < 4) return; const ent = parts[0], glNum = parts[2], pCode = parts[3], glProd = `${glNum}-${pCode}`, ptype = glProdMap.get(glProd); if (!ptype) return; const amt = parseFloat(row.YTD_NET_ACCOUNTED||0), gKey = `${ent}||${ptype}`, dKey = `${ent}||${ptype}||${glProd}`; tbAgg.set(gKey, (tbAgg.get(gKey)||0) + amt); glProdAgg.set(dKey, (glProdAgg.get(dKey)||0) + amt); }); };
   processTBLoan(S.tb.mbs); processTBLoan(S.tb.msl);
   setProgress('loanrecon', 0.75, 'Aggregating FIFO…'); await new Promise(r => setTimeout(r, 20));
   let fifoAmt = 0;
@@ -7936,7 +7783,8 @@ document.addEventListener('change', function(e) {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     fdClose();
-    document.getElementById('breakdown-modal-bg').classList.remove('show');
+    // Route through closeBreakdownModal so breakdownData is released.
+    closeBreakdownModal();
     document.getElementById('dq-modal-bg').classList.remove('show');
     document.getElementById('finfo-modal-bg').classList.remove('show');
     document.getElementById('unmapped-modal-bg').classList.remove('show');
@@ -7948,8 +7796,6 @@ document.addEventListener('keydown', e => {
     closeMoaActionModal();
     closeMoaRcBreakdownModal();
     moaCloseFilterPop();
-    var dupModal = document.getElementById('moa-dup-modal');
-    if (dupModal) dupModal.remove();
   }
 });
 
