@@ -387,10 +387,6 @@
         <div class="kbd-row"><span class="desc">Save &amp; export JSON</span><span class="keys"><span class="k">S</span></span></div>
       </div>
       <div class="kbd-group">
-        <h4>MTM FVOCI</h4>
-        <div class="kbd-row"><span class="desc">Cycle tabs (Listing &rarr; Journal &rarr; WAIR)</span><span class="keys"><span class="k">[</span><span class="k">]</span></span></div>
-      </div>
-      <div class="kbd-group">
         <h4>Major Movement</h4>
         <div class="kbd-row"><span class="desc">Cycle tabs (Presentation &harr; Data)</span><span class="keys"><span class="k">[</span><span class="k">]</span></span></div>
         <div class="kbd-row"><span class="desc">Toggle million / whole units</span><span class="keys"><span class="k">M</span></span></div>
@@ -1388,7 +1384,6 @@ const SHORTCUT_HANDLERS = {
   },
   // [ / ] = cycle tabs within the current view
   cycleTab: {
-    mtmfvoci:  (dir) => { const order = ['listing','journal','wair']; const i = order.indexOf(_mtmTab); const ni = (i + dir + order.length) % order.length; _mtmTab = order[ni]; renderMtmResults(document.getElementById('view-mtmfvoci')); },
     majmov:    (dir) => { const order = ['presentation','data']; const i = order.indexOf(majMovState.tab); const ni = (i + dir + order.length) % order.length; majMovState.tab = order[ni]; renderMajMovResults(document.getElementById('view-majmov')); }
   },
   // M = toggle million/whole units (Major Movement presentation view)
@@ -5730,8 +5725,8 @@ function renderMtmResults(container) {
   // ===== KPIs (two) =====
   const belowColor = belowThresholdCount > 0 ? 'var(--d-pos)' : 'var(--d-ink-4)';
   const aboveColor = aboveThresholdCount > 0 ? 'var(--d-neg)' : 'var(--d-ink-4)';
-  const lcyColor = totalLcyChg < 0 ? 'var(--d-neg)' : 'var(--d-pos)';
-  const rcyColor = totalRcyChg < 0 ? 'var(--d-neg)' : 'var(--d-pos)';
+  const lcyColor = 'var(--d-ink)';
+  const rcyColor = 'var(--d-ink)';
   const lcyDisp = (totalLcyChg < 0 ? '-' : '') + fmtN2(Math.abs(totalLcyChg));
   const rcyDisp = (totalRcyChg < 0 ? '-' : '') + fmtN2(Math.abs(totalRcyChg));
   const kpiHtml = `
@@ -5977,6 +5972,7 @@ function mtmSetFilter(onlyBreaks) {
   if (!onlyBreaks) {
     Object.keys(mtmFilters).forEach(k => delete mtmFilters[k]);
     mtmStatusFilter = 'all';
+    _mtmTab = 'listing';
   }
   _mtmPage = 1;
   renderMtmResults(document.getElementById('view-mtmfvoci'));
