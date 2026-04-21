@@ -123,13 +123,8 @@
         <div style="color:var(--ink3)">PREV_MTH_LCY_FAIR_VALUE</div>  <div class="mono-val" id="mtm-out-prev"   style="text-align:right;font-weight:600"></div>
         <div style="color:var(--ink3)">LCY_MKT_VALUE_CHG_VS_PREV</div><div class="mono-val" id="mtm-out-vsprev" style="text-align:right;font-weight:600"></div>
       </div>
-      <div>
-        <div style="font-size:11px;font-weight:600;color:var(--ink);margin-bottom:5px;">Remarks</div>
-        <textarea id="mtm-sim-remarks" rows="3" style="width:100%;font-family:var(--sans);font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);outline:none;resize:vertical;box-sizing:border-box;" placeholder="Enter remarks…"></textarea>
-      </div>
       <div style="display:flex;justify-content:flex-end;gap:8px;">
         <button class="btn" onclick="resetMtmSim()">Reset</button>
-        <button class="btn btn-primary" onclick="saveMtmSimRemarks()">Save remarks</button>
       </div>
     </div>
   </div>
@@ -5428,7 +5423,7 @@ async function runMtmFvoci() {
     out.LCY_MKT_VALUE_CHG = lcyMktChg; out.RCY_MKT_VALUE_CHG = rcyMktChg;
     const prevFairVal = prevFvociMap.get(String(row.AC_CODE||'').trim()) ?? null;
     out.PREV_MTH_LCY_FAIR_VALUE = prevFairVal; out.LCY_MKT_VALUE_CHG_VS_PREV = prevFairVal !== null ? lcyMktChg - prevFairVal : null;
-    out.REMARKS = row.REMARKS || ''; return out;
+    return out;
   });
   setProgress('mtmfvoci', 1, 'Done'); await new Promise(r => setTimeout(r, 100));
   mtmState.results = results; mtmState.wairByKey = wairByKey; mtmState.avgWair = avgWair;
@@ -5460,8 +5455,7 @@ const MTM_COL_LABELS = {
   MKT_VALUE_TOTAL:'Mkt Val Total', LCY_MKT_VALUE_CHG:'LCY Mkt Val Chg',
   RCY_MKT_VALUE_CHG:'RCY Mkt Val Chg',
   PREV_MTH_LCY_FAIR_VALUE:'Prev Mth LCY FV',
-  LCY_MKT_VALUE_CHG_VS_PREV:'LCY Chg vs Prev',
-  REMARKS:'Remarks'
+  LCY_MKT_VALUE_CHG_VS_PREV:'LCY Chg vs Prev'
 };
 function mtmrRowField(r, col) {
   if (col === 'STATUS') return MTM_STATUS_LABELS[mtmrStatusOf(r)];
@@ -5911,7 +5905,6 @@ function openMtmSim(idx) {
   document.getElementById('mtm-sim-ac').textContent = `${row.AC_CODE}  ·  ${row.CIF_NAME||''}  ·  ${row.CURCY_CODE}`;
   document.getElementById('mtm-sim-intrt').value = parseFloat(row.CURR_INT_RT||0);
   document.getElementById('mtm-sim-wair').value = typeof row.WAIR === 'number' ? row.WAIR.toFixed(6) : row.WAIR;
-  document.getElementById('mtm-sim-remarks').value = row.REMARKS || '';
   runMtmSim(); document.getElementById('mtm-sim-bg').classList.add('show');
 }
 
@@ -5947,14 +5940,6 @@ function runMtmSim() {
 }
 
 function resetMtmSim() { const row = mtmState.results?.[_mtmSimIdx]; if (!row) return; document.getElementById('mtm-sim-intrt').value = parseFloat(row.CURR_INT_RT||0); document.getElementById('mtm-sim-wair').value = typeof row.WAIR === 'number' ? row.WAIR.toFixed(6) : row.WAIR; runMtmSim(); }
-
-function saveMtmSimRemarks() {
-  const row = mtmState.results?.[_mtmSimIdx]; if (!row) return;
-  row.REMARKS = document.getElementById('mtm-sim-remarks').value || '';
-  const btn = document.querySelector('#mtm-sim-bg .btn-primary');
-  if (btn) { const orig = btn.textContent; btn.textContent = 'Saved ✓'; btn.disabled = true; setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1200); }
-  renderMtmResults(document.getElementById('view-mtmfvoci'));
-}
 
 function closeMtmSim(e) { document.getElementById('mtm-sim-bg').classList.remove('show'); }
 
