@@ -24,7 +24,10 @@
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  
+
+  /* Shared container for every top-level view pane. JS toggles display:flex on the active one. */
+  .view-pane { flex: 1; flex-direction: column; overflow: hidden; min-height: 0; display: none; }
+
   html, body {
     font-family: var(--sans);
     background: var(--paper);

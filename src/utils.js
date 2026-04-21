@@ -6,21 +6,38 @@
 const MONTH_MAP = {JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
 const MONTH_NAMES = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
+// String → Date caches. The same PROC_DTE / reporting date string appears
+// thousands of times per dataset; caching the regex+Date build is a measurable
+// win in hot aggregation loops (Major Movement, TB recon, reversal).
+// Bounded so a pathological dataset can't grow the map without limit.
+const _SAS_DATE_CACHE = new Map();
+const _RPT_DATE_CACHE = new Map();
+const _DATE_CACHE_MAX = 5000;
+
 /** Parse "31MAR2026:00:00:00" or "31MAR2026" (SAS-style) */
 function parseSasDate(s) {
-  const m = String(s||'').match(/^(\d{2})([A-Z]{3})(\d{4})/i);
-  return m ? new Date(+m[3], MONTH_MAP[m[2].toUpperCase()], +m[1]) : null;
+  const key = (s == null) ? '' : String(s);
+  if (_SAS_DATE_CACHE.has(key)) return _SAS_DATE_CACHE.get(key);
+  const m = key.match(/^(\d{2})([A-Z]{3})(\d{4})/i);
+  const out = m ? new Date(+m[3], MONTH_MAP[m[2].toUpperCase()], +m[1]) : null;
+  if (_SAS_DATE_CACHE.size < _DATE_CACHE_MAX) _SAS_DATE_CACHE.set(key, out);
+  return out;
 }
 
 /** Parse "31-MAR-2026" or "31-MAR-26" (EGL reporting date style) */
 function parseReportingDate(d) {
   if (!d) return null;
   const s = String(d).trim();
+  if (_RPT_DATE_CACHE.has(s)) return _RPT_DATE_CACHE.get(s);
+  let out = null;
   const m4 = s.match(/^(\d{2})-([A-Z]{3})-(\d{4})$/i);
-  if (m4) return new Date(parseInt(m4[3]), MONTH_MAP[m4[2].toUpperCase()], parseInt(m4[1]));
-  const m2 = s.match(/^(\d{2})-([A-Z]{3})-(\d{2})$/i);
-  if (m2) return new Date(2000 + parseInt(m2[3]), MONTH_MAP[m2[2].toUpperCase()], parseInt(m2[1]));
-  return null;
+  if (m4) out = new Date(parseInt(m4[3]), MONTH_MAP[m4[2].toUpperCase()], parseInt(m4[1]));
+  else {
+    const m2 = s.match(/^(\d{2})-([A-Z]{3})-(\d{2})$/i);
+    if (m2) out = new Date(2000 + parseInt(m2[3]), MONTH_MAP[m2[2].toUpperCase()], parseInt(m2[1]));
+  }
+  if (_RPT_DATE_CACHE.size < _DATE_CACHE_MAX) _RPT_DATE_CACHE.set(s, out);
+  return out;
 }
 
 /** Format Date → "MAR-2026" */
@@ -45,7 +62,7 @@ function yrdif30_360(d1, d2) {
 // ============================================================
 function fmtNum(v) {
   if (v === 0 || Math.abs(v) < 0.005) return '–';
-  return v.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return v.toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 const fmtN2 = v => v.toLocaleString('en-SG',{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmtN6 = v => typeof v==='number' ? v.toFixed(6) : v;
@@ -104,8 +121,8 @@ function parseCSV(txt) {
 async function parseExcel(f) {
   return new Promise(res => {
     const r = new FileReader();
-    r.onload = e => { const wb = XLSX.read(e.target.result, { type: 'binary' }); res(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' })); };
-    r.readAsBinaryString(f);
+    r.onload = e => { const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' }); res(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' })); };
+    r.readAsArrayBuffer(f);
   });
 }
 
