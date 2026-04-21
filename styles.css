@@ -1070,3 +1070,123 @@
     padding: 12px 16px; margin-bottom: 16px;
     display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
   }
+
+  /* ------------------------------------------------------------
+     MOA table — design-handoff list / by-LOB / by-RC views
+     Mirrors /mbb/project/Dashboard.html #ov-table visual spec.
+     ------------------------------------------------------------ */
+  .ptb-v2 .ov-tcard {
+    background: var(--d-surface); border: 1px solid var(--d-line);
+    border-radius: var(--d-radius); overflow: hidden;
+  }
+  .ptb-v2 .ov-tscroll { max-height: calc(100vh - 280px); overflow: auto; }
+  .ptb-v2 table.ov-data {
+    width: 100%; border-collapse: collapse; font-size: 12px;
+  }
+  .ptb-v2 table.ov-data thead th {
+    position: sticky; top: 0; z-index: 2;
+    text-align: left; font-weight: 500;
+    color: var(--d-ink-3); text-transform: uppercase; letter-spacing: 0.08em;
+    font-size: 10px; padding: 10px 10px;
+    background: var(--d-line-2); border-bottom: 1px solid var(--d-line);
+    white-space: nowrap;
+  }
+  .ptb-v2 table.ov-data thead th.num { text-align: right; }
+  .ptb-v2 table.ov-data tbody td {
+    padding: 10px 10px; vertical-align: top;
+    border-bottom: 1px solid var(--d-line-2); color: var(--d-ink-2);
+  }
+  .ptb-v2 table.ov-data tbody td.num {
+    text-align: right;
+    font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  .ptb-v2 table.ov-data tbody tr[data-ov-id] { cursor: pointer; }
+  .ptb-v2 table.ov-data tbody tr[data-ov-id]:hover td { background: var(--d-line-2); }
+
+  .ptb-v2 .ov-type-chip {
+    display: inline-block; font-size: 10px; font-weight: 500;
+    padding: 2px 7px; border-radius: 3px;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    background: color-mix(in oklab, var(--d-ink) 6%, var(--d-surface));
+    border: 1px solid var(--d-line); color: var(--d-ink-2);
+  }
+  .ptb-v2 .ov-type-chip[data-type="Borrower"] {
+    background: color-mix(in oklab, #8B7AB8 14%, var(--d-surface));
+    border-color: color-mix(in oklab, #8B7AB8 32%, var(--d-line));
+    color: #5b4a8a;
+  }
+  .ptb-v2 .ov-type-chip[data-type="Model"] {
+    background: color-mix(in oklab, #4A90B8 14%, var(--d-surface));
+    border-color: color-mix(in oklab, #4A90B8 32%, var(--d-line));
+    color: #2d5e7a;
+  }
+  .ptb-v2 .ov-type-chip[data-type="Sector"] {
+    background: color-mix(in oklab, #B8834A 14%, var(--d-surface));
+    border-color: color-mix(in oklab, #B8834A 32%, var(--d-line));
+    color: #7a512d;
+  }
+
+  .ptb-v2 .ov-entity-tag {
+    display: inline-block; font-size: 10px; letter-spacing: 0.05em;
+    font-weight: 500; padding: 2px 6px; border-radius: 3px;
+    background: var(--d-line-2); color: var(--d-ink-2);
+    text-transform: uppercase;
+    font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+  }
+
+  .ptb-v2 .ov-note { font-weight: 500; font-size: 12.5px; color: var(--d-ink); }
+  .ptb-v2 .ov-meta { font-size: 10.5px; color: var(--d-ink-4); margin-top: 2px; }
+
+  /* positive overlay → adds to reserve (risk-negative → red);
+     negative overlay → releases (risk-positive → green) */
+  .ptb-v2 .ov-amt-pos { color: var(--d-neg); font-weight: 500; }
+  .ptb-v2 .ov-amt-neg { color: var(--d-pos); font-weight: 500; }
+
+  /* Dim-head subtotal row (by-LOB / by-RC views) */
+  .ptb-v2 table.ov-data tbody tr.ov-dim-head td {
+    background: color-mix(in oklab, var(--d-accent) 8%, var(--d-bg));
+    border-top: 1px solid var(--d-line);
+    border-bottom: 1px solid var(--d-line);
+    font-size: 11.5px; color: var(--d-ink-2); padding: 8px 10px;
+    cursor: default;
+  }
+  .ptb-v2 table.ov-data tbody tr.ov-dim-head:hover td {
+    background: color-mix(in oklab, var(--d-accent) 8%, var(--d-bg));
+  }
+  .ptb-v2 table.ov-data tbody tr.ov-dim-head .grp-count {
+    margin-left: 8px; color: var(--d-ink-3);
+    font-weight: 400; font-size: 11px;
+  }
+  .ptb-v2 table.ov-data tbody tr.ov-dim-head .grp-label {
+    font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+    color: var(--d-ink); font-weight: 500; margin-left: 6px;
+  }
+
+  /* Grand total row */
+  .ptb-v2 table.ov-data tbody tr.ov-grand-row td {
+    background: var(--d-line-2) !important;
+    font-weight: 600; font-size: 11px; letter-spacing: 0.04em;
+    text-transform: uppercase; color: var(--d-ink);
+    padding: 9px 10px;
+    border-top: 1px solid var(--d-line);
+    border-bottom: 1px solid var(--d-line);
+    cursor: default;
+  }
+  .ptb-v2 table.ov-data tbody tr.ov-grand-row:hover td {
+    background: var(--d-line-2) !important;
+  }
+
+  .ptb-v2 .ov-table-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px; border-top: 1px solid var(--d-line);
+    font-size: 11px; color: var(--d-ink-3); gap: 12px; flex-wrap: wrap;
+  }
+  .ptb-v2 .ov-table-foot b {
+    color: var(--d-ink-2); font-weight: 500;
+    font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+  }
+  .ptb-v2 .ov-table-foot .dim { color: var(--d-ink-4); }
+  .ptb-v2 .ov-empty {
+    text-align: center; padding: 40px; color: var(--d-ink-4); font-size: 12px;
+  }
