@@ -5332,8 +5332,8 @@ const JPY_KRW = ['JPY','KRW'];
 function ccyDp(ccy) { return JPY_KRW.includes(String(ccy).toUpperCase()) ? 0 : 2; }
 
 function renderMtmFvoci() {
-  document.getElementById('topbar-title').textContent = 'MTM FVOCI';
-  document.getElementById('topbar-subtitle').textContent = 'Mark-to-market calculation for FVOCI loans';
+  document.getElementById('topbar-title').textContent = '';
+  document.getElementById('topbar-subtitle').textContent = '';
   const container = document.getElementById('view-mtmfvoci');
   if (mtmState.results) { renderMtmResults(container); updateNavStatus('mtmfvoci'); return; }
   if (mtmState.fvociLoaded && mtmState.disbLoaded && mtmState.prevFvociLoaded && shouldAutoRun('mtmfvoci')) {
@@ -5460,8 +5460,67 @@ async function runMtmFvoci() {
 let _mtmTab = 'listing';
 const mtmFilters = {};
 let mtmOnlyBreaks = false;
+let _mtmPage = 1;
+const MTM_PAGE_SIZE = 50;
 const MTM_BREAK_THRESHOLD = 1_000_000;
 const isMtmBreak = r => Math.abs(parseFloat(r.LCY_MKT_VALUE_CHG_VS_PREV||0)) >= MTM_BREAK_THRESHOLD;
+const mtmrStatusOf = r => isMtmBreak(r) ? 'break' : 'matched';
+const MTM_STATUS_LABELS = { break:'Above 1M', matched:'Below 1M' };
+const MTM_COL_LABELS = {
+  STATUS:'Status', PROC_DTE:'Proc Date', AC_CODE:'Account', CURCY_CODE:'Ccy',
+  CIF_NO:'CIF', CIF_NAME:'Counterparty', LEGAL_ENTITY_CODE:'Entity',
+  CURR_INT_RT:'Curr Int Rt', BASE_RT:'Base Rt',
+  RCY_END_PERIOD_BAL:'RCY End Bal', RCY_ACCRUED_INT:'RCY Accr Int',
+  RPYM_TYP:'Rpym Typ', INT_PYM_FREQ:'Int Pym Freq', INT_PYM_FREQ_UNIT:'Freq Unit',
+  DEFAULT_FLG:'Default Flg', MATURITY_DTE:'Maturity',
+  AA_FAC_REF:'AA Fac Ref', RT_TYP_DESC:'Rate Type', EXCHG_RT:'Exch Rt',
+  LCY_END_PERIOD_BAL:'LCY End Bal', LCY_ACCRUED_INT:'LCY Accr Int',
+  RESIDUAL_MTH:'Residual Mth', MOB:'MOB', LT_6_MONTHS:'< 6M',
+  WAIR:'WAIR', PERIODIC_PAYT:'Periodic Payt',
+  MKT_VALUE_PERIODIC:'Mkt Val Periodic', MKT_VALUE_FINAL:'Mkt Val Final',
+  MKT_VALUE_TOTAL:'Mkt Val Total', LCY_MKT_VALUE_CHG:'LCY Mkt Val Chg',
+  RCY_MKT_VALUE_CHG:'RCY Mkt Val Chg',
+  PREV_MTH_LCY_FAIR_VALUE:'Prev Mth LCY FV',
+  LCY_MKT_VALUE_CHG_VS_PREV:'LCY Chg vs Prev',
+  REMARKS:'Remarks'
+};
+function mtmrRowField(r, col) {
+  if (col === 'STATUS') return MTM_STATUS_LABELS[mtmrStatusOf(r)];
+  return String(r[col] == null ? '' : r[col]);
+}
+function mtmrBuildChipsHtml() {
+  const active = Object.keys(mtmFilters).filter(k => fdIsActive(mtmFilters[k]));
+  if (!active.length) return '';
+  const chips = active.map(k => {
+    const f = mtmFilters[k], sel = f.selected ? [...f.selected] : [];
+    let disp;
+    if (f.text && sel.length === 0) disp = `contains "${f.text}"`;
+    else if (sel.length === 0) disp = '—';
+    else if (sel.length <= 2) disp = sel.map(v => escapeHtmlAttr(v)).join(', ');
+    else disp = `${escapeHtmlAttr(sel[0])} <span class="dim">+${sel.length - 1}</span>`;
+    const label = MTM_COL_LABELS[k] || k;
+    return `<span class="ptb-filter-chip">${label} <span class="dim">is</span> <span class="fc-vals">${disp}</span><button class="fc-x" onclick="mtmrClearColFilter('${k}')" title="Remove">×</button></span>`;
+  }).join('');
+  return `<div class="ptb-filter-chips active">${chips}<button class="ptb-filter-chip-clear" onclick="mtmrClearAllColFilters()">Clear all</button></div>`;
+}
+function mtmrClearColFilter(k) { delete mtmFilters[k]; _mtmPage = 1; renderMtmResults(document.getElementById('view-mtmfvoci')); }
+function mtmrClearAllColFilters() { Object.keys(mtmFilters).forEach(k => delete mtmFilters[k]); _mtmPage = 1; renderMtmResults(document.getElementById('view-mtmfvoci')); }
+function mtmrSetPage(p) { _mtmPage = p; renderMtmResults(document.getElementById('view-mtmfvoci')); }
+function mtmrBuildPagerHtml(totalPages, currentPage) {
+  if (totalPages <= 1) return '';
+  const btns = []; const disabled = d => d ? ' disabled' : '';
+  btns.push(`<button${disabled(currentPage === 1)} onclick="mtmrSetPage(${currentPage - 1})" title="Previous">‹</button>`);
+  const pages = new Set([1, totalPages, currentPage, currentPage - 1, currentPage + 1]);
+  const sorted = [...pages].filter(p => p >= 1 && p <= totalPages).sort((a,b) => a - b);
+  let prev = 0;
+  for (const p of sorted) {
+    if (p - prev > 1) btns.push(`<span class="ptb-pager-ellipsis">…</span>`);
+    btns.push(`<button class="${p === currentPage ? 'active' : ''}" onclick="mtmrSetPage(${p})">${p}</button>`);
+    prev = p;
+  }
+  btns.push(`<button${disabled(currentPage === totalPages)} onclick="mtmrSetPage(${currentPage + 1})" title="Next">›</button>`);
+  return `<div class="ptb-pager">${btns.join('')}</div>`;
+}
 
 function renderMtmResults(container) {
   const rows = mtmState.results; if (!rows || !rows.length) return;
@@ -5469,7 +5528,6 @@ function renderMtmResults(container) {
   const TWO_DP = new Set(['RCY_END_PERIOD_BAL','RCY_ACCRUED_INT','EXCHG_RT','LCY_END_PERIOD_BAL','LCY_ACCRUED_INT','PERIODIC_PAYT','MKT_VALUE_PERIODIC','MKT_VALUE_FINAL','MKT_VALUE_TOTAL','LCY_MKT_VALUE_CHG','RCY_MKT_VALUE_CHG','PREV_MTH_LCY_FAIR_VALUE','LCY_MKT_VALUE_CHG_VS_PREV']);
   const INT_FMT = new Set(['RESIDUAL_MTH','MOB','INT_PYM_FREQ']);
   const DATE_COLS = new Set(['PROC_DTE','MATURITY_DTE']);
-  const DROP_COLS = new Set(['CURCY_CODE','PROC_DTE','LEGAL_ENTITY_CODE','RPYM_TYP','INT_PYM_FREQ_UNIT','DEFAULT_FLG','RT_TYP_DESC','LT_6_MONTHS']);
   const isNumRight = col => SIX_DP.has(col)||TWO_DP.has(col)||INT_FMT.has(col);
   const formatCell = (col, v) => {
     if (v===undefined||v===null||v==='') return '';
@@ -5478,73 +5536,314 @@ function renderMtmResults(container) {
     if (n !== null && !isNaN(n)) { if (SIX_DP.has(col)) return n.toFixed(6); if (TWO_DP.has(col)) return fmtN2(n); if (INT_FMT.has(col)) return n.toLocaleString('en-SG',{maximumFractionDigits:2}); }
     return v;
   };
-  const cols = Object.keys(rows[0]);
-  let filtered = rows.filter(r => cols.every(c => { const f = mtmFilters[c]; if (!fdIsActive(f)) return true; return fdMatch(String(r[c]||''), f); }));
-  if (mtmOnlyBreaks) filtered = filtered.filter(isMtmBreak);
+
+  const dataCols = Object.keys(rows[0]);
+  const tableCols = ['STATUS', ...dataCols];
+
+  // Apply filters (across all columns incl. synthetic STATUS)
+  let filtered = rows.filter(r => {
+    for (const c of tableCols) {
+      const f = mtmFilters[c];
+      if (fdIsActive(f) && !fdMatch(mtmrRowField(r, c), f)) return false;
+    }
+    return true;
+  });
+
   const aboveThresholdCount = rows.filter(isMtmBreak).length;
+  const belowThresholdCount = rows.length - aboveThresholdCount;
+  const belowPct = rows.length ? (belowThresholdCount / rows.length * 100) : 0;
   const totalLcyChg = rows.reduce((s,r) => s + (parseFloat(r.LCY_MKT_VALUE_CHG||0)), 0);
   const totalRcyChg = rows.reduce((s,r) => s + (parseFloat(r.RCY_MKT_VALUE_CHG||0)), 0);
-  // Derive reporting month from PROC_DTE
+
+  // Period from PROC_DTE
   const mtmProcRaw = rows[0]?.PROC_DTE || '';
   const mtmProcDate = parseSasDate(mtmProcRaw);
-  const mtmReportingMonth = mtmProcDate ? fmtMMMyyyy(mtmProcDate) : null;
-  const mtmHasColFilter = Object.keys(mtmFilters).some(k => fdIsActive(mtmFilters[k]));
-  const mtmTotalRowsActive = !mtmOnlyBreaks && !mtmHasColFilter;
-  const kpiHtml = `<div class="kpi-strip">${mtmReportingMonth ? `<div class="kpi-card"><div class="kpi-label">Reporting Month</div><div class="kpi-value">${mtmReportingMonth}</div></div>` : ''}<div class="kpi-card kpi-clickable ${mtmTotalRowsActive?'kpi-active':''}" onclick="mtmSetFilter(false)"><div class="kpi-label">Total Rows</div><div class="kpi-value">${rows.length.toLocaleString()}</div></div><div class="kpi-card kpi-clickable ${mtmOnlyBreaks?'kpi-active':''}" onclick="mtmSetFilter(true)"><div class="kpi-label">Above 1M</div><div class="kpi-value ${aboveThresholdCount?'red':'green'}">${aboveThresholdCount.toLocaleString()}</div></div><div class="kpi-card"><div class="kpi-label">MTM Change</div><div class="kpi-value-row"><span class="kpi-value-label">LCY</span><span class="kpi-value">${totalLcyChg<0?'-':''}${fmtN2(Math.abs(totalLcyChg))}</span></div><div class="kpi-value-row"><span class="kpi-value-label">RCY</span><span class="kpi-value">${totalRcyChg<0?'-':''}${fmtN2(Math.abs(totalRcyChg))}</span></div></div></div>`;
+  const period = mtmProcDate ? fmtMMMyyyy(mtmProcDate) : null;
+
   const isListing = _mtmTab === 'listing', isJournal = _mtmTab === 'journal', isWair = _mtmTab === 'wair';
-  const activeStyle = 'background:var(--ink);color:#fff;border-color:var(--ink)';
 
-  const buildListingTable = () => {
-    const thHtml = cols.map(c => {
-      const cf = mtmFilters[c]; const active = fdIsActive(cf);
-      return `<th class="th-filterable ${active?'th-filtered':''}" style="white-space:nowrap;text-align:${isNumRight(c)?'right':''}" onclick="openMtmFilter('${c}',this)">${c}<span class="th-caret">▾</span></th>`;
+  // ===== Page head (Title + period, view-mode seg + Export XLSX) =====
+  const tabBtn = (k, label) => {
+    const active = _mtmTab === k;
+    return `<button class="${active?'active':''}" onclick="_mtmTab='${k}';_mtmPage=1;renderMtmResults(document.getElementById('view-mtmfvoci'))">${label}</button>`;
+  };
+  const pageHeadHtml = `
+    <div class="ptb-page-head">
+      <div class="ptb-page-title">
+        <h1>MTM FVOCI</h1>
+        <div class="ptb-meta">
+          ${period ? `<span>Period <b>${period}</b></span>` : ''}
+        </div>
+      </div>
+      <div class="ptb-page-actions">
+        <div class="ptb-seg" id="mtm-view-seg">
+          ${tabBtn('listing', 'FVOCI Listing')}
+          ${tabBtn('journal', 'Journal entries')}
+          ${tabBtn('wair', 'WAIR')}
+        </div>
+        <button class="ptb-btn primary" onclick="exportMtmXlsx()" title="Export (E)">
+          <svg><use href="#i-download"/></svg>Export XLSX
+        </button>
+      </div>
+    </div>`;
+
+  // ===== KPIs (two) =====
+  const belowColor = belowThresholdCount > 0 ? 'var(--d-pos)' : 'var(--d-ink-4)';
+  const aboveColor = aboveThresholdCount > 0 ? 'var(--d-neg)' : 'var(--d-ink-4)';
+  const lcyColor = totalLcyChg < 0 ? 'var(--d-neg)' : 'var(--d-pos)';
+  const rcyColor = totalRcyChg < 0 ? 'var(--d-neg)' : 'var(--d-pos)';
+  const lcyDisp = (totalLcyChg < 0 ? '-' : '') + fmtN2(Math.abs(totalLcyChg));
+  const rcyDisp = (totalRcyChg < 0 ? '-' : '') + fmtN2(Math.abs(totalRcyChg));
+  const kpiHtml = `
+    <div class="ptb-grid">
+      <div class="ptb-card ptb-kpi ptb-col-3">
+        <div class="ptb-label">MTM Change vs Previous</div>
+        <div class="ptb-value" style="font-size:22px;letter-spacing:-0.02em">
+          <span style="color:${belowColor}">${belowThresholdCount.toLocaleString()}</span>
+          <span class="dim" style="font-size:14px">below 1M</span>
+          <span style="color:${aboveColor};margin-left:6px">${aboveThresholdCount.toLocaleString()}</span>
+          <span class="dim" style="font-size:14px">above 1M</span>
+        </div>
+        <div class="ptb-footline">
+          <div class="ptb-bar-track"><div class="ptb-bar-fill" style="width:${belowPct.toFixed(1)}%"></div></div>
+          <span class="mono">${belowPct.toFixed(1)}%</span>
+        </div>
+      </div>
+      <div class="ptb-card ptb-kpi ptb-col-3">
+        <div class="ptb-label">MTM Change</div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px;font-family:'JetBrains Mono','IBM Plex Mono',monospace;">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+            <span style="font-size:11px;color:var(--d-ink-3);letter-spacing:0.04em;text-transform:uppercase">LCY</span>
+            <span style="font-size:20px;font-weight:500;letter-spacing:-0.02em;color:${lcyColor}">${lcyDisp}</span>
+          </div>
+          <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+            <span style="font-size:11px;color:var(--d-ink-3);letter-spacing:0.04em;text-transform:uppercase">RCY</span>
+            <span style="font-size:20px;font-weight:500;letter-spacing:-0.02em;color:${rcyColor}">${rcyDisp}</span>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  let bodyHtml;
+  if (isListing)      bodyHtml = buildMtmListingCard(rows, filtered, tableCols, dataCols, isNumRight, formatCell);
+  else if (isJournal) bodyHtml = buildMtmJournalCards(rows);
+  else                bodyHtml = buildMtmWairCard();
+
+  container.innerHTML = `<div class="ptb-v2">${pageHeadHtml}${kpiHtml}${bodyHtml}</div>`;
+}
+
+function buildMtmListingCard(rows, filtered, tableCols, dataCols, isNumRight, formatCell) {
+  const totalPages = Math.max(1, Math.ceil(filtered.length / MTM_PAGE_SIZE));
+  if (_mtmPage > totalPages) _mtmPage = totalPages;
+  if (_mtmPage < 1) _mtmPage = 1;
+  const startIdx = (_mtmPage - 1) * MTM_PAGE_SIZE;
+  const endIdx = Math.min(startIdx + MTM_PAGE_SIZE, filtered.length);
+  const pageRows = filtered.slice(startIdx, endIdx);
+
+  const thHtml = tableCols.map(c => {
+    const cf = mtmFilters[c], active = fdIsActive(cf);
+    const numCls = (c !== 'STATUS' && isNumRight(c)) ? ' num' : '';
+    const label = MTM_COL_LABELS[c] || c;
+    return `<th class="${active?'filtered':''}${numCls}" data-col="${c}" onclick="openMtmFilter('${c}',this)">${label}<span class="fcol"></span></th>`;
+  }).join('');
+
+  const rowsHtml = pageRows.map(r => {
+    const st = mtmrStatusOf(r);
+    const chip = st === 'break'
+      ? `<span class="status-chip break"><span class="dot"></span>Above 1M</span>`
+      : `<span class="status-chip matched"><span class="dot"></span>Below 1M</span>`;
+    const absIdx = mtmState.results.indexOf(r);
+    const tds = dataCols.map(c => {
+      const v = formatCell(c, r[c]);
+      if (isNumRight(c)) return `<td class="num">${v}</td>`;
+      if (c === 'AC_CODE' || c === 'CIF_NO' || c === 'AA_FAC_REF' || c === 'CURCY_CODE' || c === 'LEGAL_ENTITY_CODE') return `<td class="d-mono">${v}</td>`;
+      return `<td>${v}</td>`;
     }).join('');
-    const bodyHtml = filtered.map(r => { const isBreak2 = isMtmBreak(r); return `<tr class="${isBreak2?'row-break':''}" style="cursor:pointer" onclick="openMtmSim(${mtmState.results.indexOf(r)})" title="Click to simulate">${cols.map(c => { const v = formatCell(c, r[c]); return `<td ${isNumRight(c)?`class="mono-val" style="text-align:right"`:`style="white-space:nowrap"`}>${v}</td>`; }).join('')}</tr>`; }).join('');
-    return `<div class="table-wrap" style="flex:1;overflow:auto;"><table class="data-table" style="font-size:12px;white-space:nowrap"><thead><tr>${thHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`;
+    return `<tr data-status="${st}" style="cursor:pointer" onclick="openMtmSim(${absIdx})" title="Click to simulate"><td>${chip}</td>${tds}</tr>`;
+  }).join('');
+
+  const chipsHtml = mtmrBuildChipsHtml();
+  const showingFrom = filtered.length === 0 ? 0 : startIdx + 1;
+  const showingTo = endIdx;
+  const footerHtml = `
+    <div class="ptb-table-foot">
+      <span>Showing <b>${showingFrom.toLocaleString()}–${showingTo.toLocaleString()}</b> of <b>${filtered.length.toLocaleString()}</b> rows</span>
+      ${mtmrBuildPagerHtml(totalPages, _mtmPage)}
+    </div>`;
+
+  return `<div class="ptb-card ptb-table-card">
+    ${chipsHtml}
+    <div class="ptb-scroll">
+      <table class="ptb-data">
+        <thead><tr>${thHtml}</tr></thead>
+        <tbody>${rowsHtml || `<tr><td colspan="${tableCols.length}" style="text-align:center;padding:40px;color:var(--d-ink-4)">No rows match the current filters</td></tr>`}</tbody>
+      </table>
+    </div>
+    ${footerHtml}
+  </div>`;
+}
+
+function buildMtmJournalCards(rows) {
+  const BS_AC = '1220001', OCI_AC = '4121514', COST_CENTRE = '82101';
+  const PRODUCT = '00000', INTERCO = '000', FUTURE1 = '00000', SUB_ACC = '0000', FUTURE3 = '0000';
+  const procRaw = rows[0]?.PROC_DTE || '';
+  const pm = procRaw.match(/^(\d{2})([A-Z]{3})(\d{4})/i);
+  const remarkLabel = pm ? `${pm[2].toUpperCase()}${String(pm[3]).slice(2)} MTM - LOANS FVOCI` : 'MTM - LOANS FVOCI';
+  let prevRemarkLabel = 'ER MTM - LOANS FVOCI';
+  if (pm) {
+    const curMon = MONTH_NAMES.indexOf(pm[2].toUpperCase());
+    const prevMon = curMon === 0 ? 11 : curMon - 1;
+    const prevYear = curMon === 0 ? parseInt(pm[3]) - 1 : parseInt(pm[3]);
+    prevRemarkLabel = `ER ${MONTH_NAMES[prevMon]}${String(prevYear).slice(2)} MTM - LOANS FVOCI`;
+  }
+
+  // Group rows by entity then currency — current month
+  const byEntityCurr = new Map();
+  rows.forEach(r => {
+    const ent = String(r.LEGAL_ENTITY_CODE || '').trim() || '—';
+    const ccy = String(r.CURCY_CODE || '').trim().toUpperCase();
+    if (!byEntityCurr.has(ent)) byEntityCurr.set(ent, new Map());
+    const m = byEntityCurr.get(ent);
+    m.set(ccy, (m.get(ccy) || 0) + parseFloat(r.RCY_MKT_VALUE_CHG || 0));
+  });
+
+  // Reversal lines use previous month FVOCI listing; if entity is not
+  // present on prev file, fall back to the only entity in current data.
+  const byEntityPrev = new Map();
+  if (mtmState.prevFvoci) {
+    mtmState.prevFvoci.forEach(r => {
+      const ent = String(r.LEGAL_ENTITY_CODE || '').trim() || '—';
+      const ccy = String(r.CURCY_CODE || '').trim().toUpperCase();
+      if (!byEntityPrev.has(ent)) byEntityPrev.set(ent, new Map());
+      const m = byEntityPrev.get(ent);
+      m.set(ccy, (m.get(ccy) || 0) + parseFloat(r.RCY_FAIR_VALUE || 0));
+    });
+  }
+
+  const entities = [...new Set([...byEntityCurr.keys(), ...byEntityPrev.keys()])].sort();
+  const allExportRows = [];
+
+  const makeLines = (netMap, positive_drBS, remarkStr) => {
+    const out = [];
+    [...netMap.entries()].sort((a,b) => a[0].localeCompare(b[0])).forEach(([ccy, net]) => {
+      if (!net) return;
+      const dp = ccyDp(ccy);
+      const absAmt = parseFloat(Math.abs(net).toFixed(dp));
+      const drBS = positive_drBS ? net > 0 : net < 0;
+      out.push({ ccy, cc: COST_CENTRE, account: BS_AC, prod: PRODUCT, ico: INTERCO, f1: FUTURE1, sub: SUB_ACC, f3: FUTURE3, dr: drBS ? absAmt : 0, cr: drBS ? 0 : absAmt, remarks: remarkStr });
+      out.push({ ccy, cc: COST_CENTRE, account: OCI_AC, prod: PRODUCT, ico: INTERCO, f1: FUTURE1, sub: SUB_ACC, f3: FUTURE3, dr: drBS ? 0 : absAmt, cr: drBS ? absAmt : 0, remarks: remarkStr });
+    });
+    return out;
   };
 
-  const buildJournalTable = () => {
-    const BS_AC = '1220001', OCI_AC = '4121514', COST_CENTRE = '82101', PRODUCT = '00000', INTERCO = '000', FUTURE1 = '00000', SUB_ACC = '0000', FUTURE3 = '0000';
-    const procRaw = rows[0]?.PROC_DTE || ''; const pm = procRaw.match(/^(\d{2})([A-Z]{3})(\d{4})/i);
-    const remarkLabel = pm ? `${pm[2].toUpperCase()}${String(pm[3]).slice(2)} MTM - LOANS FVOCI` : 'MTM - LOANS FVOCI';
-    let prevRemarkLabel = 'ER MTM - LOANS FVOCI';
-    if (pm) { const curMon = MONTH_NAMES.indexOf(pm[2].toUpperCase()); const prevMon = curMon === 0 ? 11 : curMon - 1; const prevYear = curMon === 0 ? parseInt(pm[3]) - 1 : parseInt(pm[3]); prevRemarkLabel = `ER ${MONTH_NAMES[prevMon]}${String(prevYear).slice(2)} MTM - LOANS FVOCI`; }
-    const makeRows2 = (netMap, positive_drBS, remarkStr) => { const out = []; [...netMap.entries()].sort((a,b)=>a[0].localeCompare(b[0])).forEach(([ccy2, net]) => { if (net === 0) return; const dp = ccyDp(ccy2); const absAmt = parseFloat(Math.abs(net).toFixed(dp)); const drBS = positive_drBS ? net > 0 : net < 0; out.push({CCY:ccy2,'Cost Centre':COST_CENTRE,Account:BS_AC,Product:PRODUCT,Interco:INTERCO,Future1:FUTURE1,'Sub Account':SUB_ACC,Future3:FUTURE3,'Entered Debit':drBS?absAmt:0,'Entered Credit':drBS?0:absAmt,Remarks:remarkStr}); out.push({CCY:ccy2,'Cost Centre':COST_CENTRE,Account:OCI_AC,Product:PRODUCT,Interco:INTERCO,Future1:FUTURE1,'Sub Account':SUB_ACC,Future3:FUTURE3,'Entered Debit':drBS?0:absAmt,'Entered Credit':drBS?absAmt:0,Remarks:remarkStr}); }); return out; };
-    const netCurr = new Map(); rows.forEach(r => { const ccy2 = String(r.CURCY_CODE||'').trim().toUpperCase(); netCurr.set(ccy2, (netCurr.get(ccy2)||0) + parseFloat(r.RCY_MKT_VALUE_CHG||0)); });
-    const currRows = makeRows2(netCurr, true, remarkLabel);
-    const netPrev = new Map(); if (mtmState.prevFvoci) mtmState.prevFvoci.forEach(r => { const ccy2 = String(r.CURCY_CODE||'').trim().toUpperCase(); netPrev.set(ccy2, (netPrev.get(ccy2)||0) + parseFloat(r.RCY_FAIR_VALUE||0)); });
-    const revRows = makeRows2(netPrev, false, prevRemarkLabel);
-    const jrnlRows = [...currRows, ...revRows]; mtmState.journalRows = jrnlRows;
-    const jCols = ['CCY','Cost Centre','Account','Product','Interco','Future1','Sub Account','Future3','Entered Debit','Entered Credit','Remarks'];
-    const numJ = new Set(['Entered Debit','Entered Credit']);
-    const thHtml2 = jCols.map(c=>`<th>${c}</th>`).join('');
-    const bodyHtml2 = jrnlRows.map((r, i) => { const isSep = i === currRows.length && revRows.length > 0 && i > 0; return `<tr style="${isSep?'border-top:2px solid var(--gold)':''}">${jCols.map(c=>{ const v = r[c]; if (numJ.has(c)) return `<td class="mono-val" style="text-align:right">${typeof v==='number'?fmtN2(v):v}</td>`; return `<td style="white-space:nowrap">${v}</td>`; }).join('')}</tr>`; }).join('');
-    return `<div class="table-wrap" style="flex:1;overflow:auto;"><table class="data-table" style="font-size:12px"><thead><tr>${thHtml2}</tr></thead><tbody>${bodyHtml2}</tbody></table></div>`;
-  };
+  let html = '';
+  entities.forEach(ent => {
+    const currMap = byEntityCurr.get(ent) || new Map();
+    const prevMap = byEntityPrev.get(ent) || new Map();
+    const lines = [...makeLines(currMap, true, remarkLabel), ...makeLines(prevMap, false, prevRemarkLabel)];
+    if (!lines.length) return;
 
-  const buildWairTable = () => {
-    const entries = [...mtmState.wairByKey.entries()].map(([k, w]) => { const [rt, ccy2] = k.split('||'); return { rt, ccy: ccy2, wair: w }; }).sort((a,b) => a.rt.localeCompare(b.rt)||a.ccy.localeCompare(b.ccy));
-    const rowsHtml2 = entries.map(e => `<tr><td style="white-space:nowrap">${e.rt}</td><td>${e.ccy}</td><td class="mono-val" style="text-align:right">${fmtN6(e.wair)}</td></tr>`).join('');
-    return `<div class="table-wrap" style="flex:1;overflow:auto;"><table class="data-table" style="font-size:12px"><thead><tr><th>RT_TYP_DESC</th><th>CURCY_CODE</th><th style="text-align:right">WAIR</th></tr></thead><tbody>${rowsHtml2}</tbody><tfoot><tr><td style="font-weight:700" colspan="2">Average WAIR (fallback)</td><td class="mono-val" style="text-align:right;font-weight:700">${fmtN6(mtmState.avgWair)}</td></tr></tfoot></table></div>`;
-  };
+    lines.forEach(l => allExportRows.push({
+      Entity: ent, CCY: l.ccy, 'Cost Centre': l.cc, Account: l.account, Product: l.prod,
+      Interco: l.ico, Future1: l.f1, 'Sub Account': l.sub, Future3: l.f3,
+      'Entered Debit': l.dr, 'Entered Credit': l.cr, Remarks: l.remarks
+    }));
 
-  container.innerHTML = `<div class="results-view" style="display:flex;flex-direction:column;overflow:hidden;">${kpiHtml}<div class="table-toolbar"><div style="display:flex;gap:4px;"><button class="btn btn-sm" style="${isListing?activeStyle:''}" onclick="_mtmTab='listing';renderMtmResults(document.getElementById('view-mtmfvoci'))">FVOCI Listing</button><button class="btn btn-sm" style="${isJournal?activeStyle:''}" onclick="_mtmTab='journal';renderMtmResults(document.getElementById('view-mtmfvoci'))">Journal Entries</button><button class="btn btn-sm" style="${isWair?activeStyle:''}" onclick="_mtmTab='wair';renderMtmResults(document.getElementById('view-mtmfvoci'))">WAIR</button></div><div style="margin-left:auto;display:flex;gap:6px;"><button class="btn btn-sm" onclick="exportMtmXlsx()" title="Export (E)">Export XLSX</button></div></div>${isListing ? buildListingTable() : isJournal ? buildJournalTable() : buildWairTable()}</div>`;
+    const totalDr = lines.reduce((s,l) => s + l.dr, 0);
+    const totalCr = lines.reduce((s,l) => s + l.cr, 0);
+    const lineRows = lines.map(l => `<tr>
+      <td class="je-mono">${l.ccy}</td>
+      <td class="je-mono">${l.cc}</td>
+      <td class="je-mono"><b>${l.account}</b></td>
+      <td class="je-mono dim">${l.prod}</td>
+      <td class="je-mono dim">${l.ico}</td>
+      <td class="je-mono dim">${l.f1}</td>
+      <td class="je-mono dim">${l.sub}</td>
+      <td class="je-mono dim">${l.f3}</td>
+      <td class="num">${l.dr > 0 ? fmtN2(l.dr) : '<span class="dim">—</span>'}</td>
+      <td class="num">${l.cr > 0 ? fmtN2(l.cr) : '<span class="dim">—</span>'}</td>
+      <td class="je-mono">${l.remarks}</td>
+    </tr>`).join('');
+
+    html += `<div class="moa-je-entry">
+      <div class="moa-je-head"><span class="tag">${ent}</span></div>
+      <div class="moa-je-scroll"><table class="moa-je-table">
+        <thead><tr>
+          <th>CCY</th><th>Cost Centre</th><th>Account</th><th>Product</th>
+          <th>Interco</th><th>Future1</th><th>Sub Account</th><th>Future3</th>
+          <th class="num">Entered Debit</th><th class="num">Entered Credit</th><th>Remarks</th>
+        </tr></thead>
+        <tbody>${lineRows}
+          <tr class="moa-je-foot"><td colspan="8" style="text-align:right;padding-right:12px">Totals</td>
+            <td class="num">${fmtN2(totalDr)}</td>
+            <td class="num">${fmtN2(totalCr)}</td>
+            <td></td></tr>
+        </tbody>
+      </table></div>
+    </div>`;
+  });
+
+  mtmState.journalRows = allExportRows;
+  if (!html) return `<div class="ptb-card" style="padding:40px;text-align:center;color:var(--d-ink-3);font-size:13px">No journal entries to post.</div>`;
+  return html;
+}
+
+function buildMtmWairCard() {
+  const entries = [...mtmState.wairByKey.entries()]
+    .map(([k, w]) => { const [rt, ccy] = k.split('||'); return { rt, ccy, wair: w }; })
+    .sort((a,b) => a.rt.localeCompare(b.rt) || a.ccy.localeCompare(b.ccy));
+  const bodyRows = entries.map(e => `<tr>
+    <td>${e.rt}</td>
+    <td class="d-mono">${e.ccy}</td>
+    <td class="num">${fmtN6(e.wair)}</td>
+  </tr>`).join('');
+  const footRow = `<tr style="background:var(--d-line-2);font-weight:600">
+    <td colspan="2">Average WAIR (fallback)</td>
+    <td class="num">${fmtN6(mtmState.avgWair || 0)}</td>
+  </tr>`;
+  return `<div class="ptb-card ptb-table-card">
+    <div class="ptb-scroll">
+      <table class="ptb-data">
+        <thead><tr>
+          <th>Rate Type</th>
+          <th>Currency</th>
+          <th class="num">WAIR</th>
+        </tr></thead>
+        <tbody>${bodyRows || `<tr><td colspan="3" style="text-align:center;padding:40px;color:var(--d-ink-4)">No WAIR data</td></tr>`}${entries.length ? footRow : ''}</tbody>
+      </table>
+    </div>
+  </div>`;
 }
 
 function mtmSetFilter(onlyBreaks) {
   mtmOnlyBreaks = !!onlyBreaks;
-  // Clicking Total Rows resets column filters too
   if (!onlyBreaks) Object.keys(mtmFilters).forEach(k => delete mtmFilters[k]);
+  _mtmPage = 1;
   renderMtmResults(document.getElementById('view-mtmfvoci'));
 }
 
 function openMtmFilter(colId, triggerEl) {
   const rows = mtmState.results; if (!rows || !rows.length) return;
-  const cols = Object.keys(rows[0]);
-  const otherFiltered = rows.filter(r => { if (mtmOnlyBreaks && !isMtmBreak(r)) return false; for (const c of cols) { if (c===colId) continue; const f = mtmFilters[c]; if (fdIsActive(f) && !fdMatch(String(r[c]||''),f)) return false; } return true; });
-  const allValues = [...new Set(otherFiltered.map(r => String(r[colId]||'')))].filter(Boolean).sort();
-  fdOpen(triggerEl, allValues, mtmFilters[colId] || null, (newFilter) => {
+  const dataCols = Object.keys(rows[0]);
+  const tableCols = ['STATUS', ...dataCols];
+  const otherFiltered = rows.filter(r => {
+    for (const c of tableCols) {
+      if (c === colId) continue;
+      const f = mtmFilters[c];
+      if (fdIsActive(f) && !fdMatch(mtmrRowField(r, c), f)) return false;
+    }
+    return true;
+  });
+  const counts = new Map();
+  otherFiltered.forEach(r => {
+    const v = mtmrRowField(r, colId);
+    counts.set(v, (counts.get(v) || 0) + 1);
+  });
+  const allValues = [...counts.keys()].filter(v => v !== '').sort();
+  const label = MTM_COL_LABELS[colId] || colId;
+  fdOpenDesign(triggerEl, allValues, mtmFilters[colId] || null, label, counts, (newFilter) => {
     mtmFilters[colId] = fdIsActive(newFilter) ? newFilter : undefined;
+    _mtmPage = 1;
     renderMtmResults(document.getElementById('view-mtmfvoci'));
   });
 }
@@ -5555,17 +5854,21 @@ function exportMtmXlsx() {
   const wb = XLSX.utils.book_new();
 
   if (_mtmTab === 'journal') {
-    // Export journal entries only
     if (!mtmState.journalRows || !mtmState.journalRows.length) { alert('No journal entries to export.'); return; }
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(mtmState.journalRows), 'Journal Entries');
     XLSX.writeFile(wb, 'mtm_fvoci_journal.xlsx');
     return;
   }
 
-  // Listing or WAIR tab: export FVOCI Listing (filtered) + WAIR
-  const cols = Object.keys(results[0]);
-  let filtered = results.filter(r => cols.every(c => { const f = mtmFilters[c]; if (!fdIsActive(f)) return true; return fdMatch(String(r[c]||''), f); }));
-  if (mtmOnlyBreaks) filtered = filtered.filter(isMtmBreak);
+  const dataCols = Object.keys(results[0]);
+  const tableCols = ['STATUS', ...dataCols];
+  const filtered = results.filter(r => {
+    for (const c of tableCols) {
+      const f = mtmFilters[c];
+      if (fdIsActive(f) && !fdMatch(mtmrRowField(r, c), f)) return false;
+    }
+    return true;
+  });
   if (filtered.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filtered), 'FVOCI Listing');
 
   const wairByKey = mtmState.wairByKey;
