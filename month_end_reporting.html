@@ -5173,19 +5173,18 @@ function renderLoanReconResults(container) {
     const absIdx = rows.indexOf(r);
     const vAbs = Math.abs(r.VARIANCE);
     const varCell = vAbs === 0
-      ? `<span class="vp-zero mono-val">–</span>`
-      : r.IS_BREAK
-        ? renderVarianceCell(r.VARIANCE)
-        : `<span class="mono-val" style="color:${r.VARIANCE<0?'var(--red)':'var(--green)'}">${r.VARIANCE<0?'-':''}${fmtNum(vAbs)}</span>`;
+      ? STATION_EMPTY_CELL
+      : `${r.VARIANCE < 0 ? '-' : ''}${fmtNum(vAbs)}`;
     const fifoCell = r.FIFO_AMT !== 0 ? fmtNum(r.FIFO_AMT) : '—';
     const status = r.IS_BREAK ? 'break' : 'matched';
     return `<tr data-status="${status}" style="cursor:pointer" onclick="openLoanDrilldown(${absIdx})" title="Click to drill down">
+      <td>${stationStatusChip(status)}</td>
       <td>${r.ENTITY}</td>
       <td>${r.PRODUCT_GROUP}</td>
       <td class="num d-mono">${fmtNum(r.PROD_AMT)}</td>
       <td class="num d-mono">${fifoCell}</td>
       <td class="num d-mono">${fmtNum(r.TB_AMT)}</td>
-      <td class="num">${varCell}</td>
+      <td class="num d-mono">${varCell}</td>
     </tr>`;
   }).join('');
 
@@ -5197,6 +5196,7 @@ function renderLoanReconResults(container) {
       <div class="ptb-scroll">
         <table class="ptb-data">
           <thead><tr>
+            <th>Status</th>
             <th>Entity</th>
             <th>Product Group</th>
             <th class="num">Product File</th>
