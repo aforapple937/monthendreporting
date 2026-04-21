@@ -471,21 +471,22 @@ function rdlDimensions(acc) {
  *  Only non-zero amounts are included. */
 function buildReconPostingPoints(acc, mapRow) {
   const raw = [
-    { a: acc.RCY_ECL_CHARGE_FY,          dg: mapRow['ECL_PNL_CHARGE'], dt:'P&L', cg: mapRow['ECL_CHARGE'],        ct:'BS',  n:'ECL CHARGE' },
+    { a: acc.RCY_ECL_CHARGE_FY,           dg: mapRow['ECL_PNL_CHARGE'], dt:'P&L', cg: mapRow['ECL_CHARGE'],        ct:'BS',  n:'ECL CHARGE' },
     { a: acc.RCY_INT_UNWIND_CHARGE_FY,    dg: mapRow['UWI_PNL_CHARGE'], dt:'P&L', cg: mapRow['UWI_CHARGE'],        ct:'BS',  n:'UWI CHARGE' },
     { a: acc.RCY_ECL_WRITEBACK_FY,        dg: mapRow['ECL_WRITEBACK'],  dt:'BS',  cg: mapRow['ECL_PNL_WRITEBACK'], ct:'P&L', n:'ECL WRITEBACK' },
     { a: acc.RCY_INT_UNWIND_WRITEBACK_FY, dg: mapRow['UWI_WRITEBACK'],  dt:'BS',  cg: mapRow['UWI_PNL_WRITEBACK'], ct:'P&L', n:'UWI WRITEBACK' },
     { a: acc.RCY_ECL_WRITE_OFF_FY,        dg: mapRow['ECL_WRITEOFF'],   dt:'BS',  cg: mapRow['ECL_PNL_WRITEOFF'],  ct:'P&L', n:'ECL WRITEOFF', tag:'|ECL_WO' },
     { a: acc.RCY_INT_UNWIND_WRITE_OFF_FY, dg: mapRow['UWI_WRITEOFF'],   dt:'BS',  cg: mapRow['UWI_PNL_WRITEOFF'],  ct:'P&L', n:'UWI WRITEOFF', tag:'|UWI_WO' },
-    { a: acc.LCY_EIR_ADJ_AMT,            dg: mapRow['EIR_BS'],          dt:'BS',  cg: mapRow['EIR_PNL'],           ct:'P&L', n:'EIR' }
+    { a: acc.LCY_EIR_ADJ_AMT,             dg: mapRow['EIR_BS'],         dt:'BS',  cg: mapRow['EIR_PNL'],           ct:'P&L', n:'EIR' }
   ];
-  return raw.filter(p => parseFloat(p.a || 0) !== 0).map(p => ({
-    amount: parseFloat(p.a),
-    drGL: p.dg, drType: p.dt,
-    crGL: p.cg, crType: p.ct,
-    nature: p.n,
-    tag: p.tag || ''
-  }));
+  const out = [];
+  for (let i = 0; i < raw.length; i++) {
+    const p = raw[i];
+    const amount = parseFloat(p.a || 0);
+    if (amount === 0) continue;
+    out.push({ amount, drGL: p.dg, drType: p.dt, crGL: p.cg, crType: p.ct, nature: p.n, tag: p.tag || '' });
+  }
+  return out;
 }
 
 /** Build the 9 TB posting points (BS-side only, with sign convention).
@@ -2863,47 +2864,88 @@ async function runRecon(name) {
 
   if (dateWarning) {
     blockAutoRun('recon');
+    // Harmonised warning look — matches the Reversal Check ptb-v2 design.
     const container = document.getElementById('view-recon');
-    container.innerHTML = `<div class="results-view" style="padding:24px">
-      <div style="background:var(--red-bg);border:1px solid #f5c4c0;border-radius:var(--radius);padding:16px 20px;max-width:600px">
-        <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:8px">⚠ Date Mismatch</div>
-        <div style="font-size:12px;color:var(--ink);line-height:1.6">${dateWarning}</div>
-        <button class="btn btn-sm" style="margin-top:14px" onclick="S.results['recon']=null;blockAutoRun('recon');renderStation('recon')">Back</button>
+    container.innerHTML = `<div class="ptb-v2"><div class="ptb-page-head"><div class="ptb-page-title"><h1>Posting Validation</h1></div></div>
+      <div class="ptb-card" style="max-width:600px;background:var(--d-neg-soft);border-color:color-mix(in srgb, var(--d-neg) 22%, transparent);">
+        <div style="font-size:13px;font-weight:600;color:var(--d-neg);margin-bottom:8px">⚠ Date Mismatch</div>
+        <div style="font-size:12px;color:var(--d-ink);line-height:1.6">${dateWarning}</div>
+        <button class="ptb-btn" style="margin-top:14px" onclick="S.results['recon']=null;renderStation('recon')">Back</button>
       </div></div>`;
     const wrap = document.getElementById('prog-recon'); if (wrap) wrap.classList.remove('show');
     return;
   }
 
-  const gen={}, metaMap={}, mapDict=getMappingDict();
+  const gen = {}, metaMap = {}, mapDict = getMappingDict();
   const unmapped = [];
 
-  // ── Uses shared classifyRdlAccount + buildReconPostingPoints ──
+  // ── RDL pass: classify, pick up the 7 posting points, emit DR+CR legs.
+  // Unrolled inner loop avoids allocating a fresh [{…},{…}] wrapper and 2
+  // inner objects for every posting point (roughly 14x saving per RDL row).
   await chunk(S.rdl_pre, acc => {
     const { l3, mapRow, unmapped: isUnmapped } = classifyRdlAccount(acc, mapDict);
     if (isUnmapped) { unmapped.push(makeUnmappedRecord(acc, l3)); return; }
     const dim = rdlDimensions(acc);
     const pts = buildReconPostingPoints(acc, mapRow);
-    pts.forEach(p => {
-      [{g:p.drGL,s:'D',type:p.drType},{g:p.crGL,s:'C',type:p.crType}].forEach(k => {
-        const tag = (p.tag && k.s==='C') ? p.tag : '';
-        const key = `${dim.ent}|${dim.rc}|${k.g}|${dim.prod}|${dim.interco}|${dim.islamic}|${dim.cur}|${k.s}${tag}`;
-        gen[key] = (gen[key]||0) + p.amount;
-        if (!metaMap[key]) metaMap[key] = {nature:p.nature, type:k.type, accounts:{}};
-        metaMap[key].accounts[dim.id] = (metaMap[key].accounts[dim.id]||0) + p.amount;
-      });
-    });
+    const dimPrefix = `${dim.ent}|${dim.rc}|`;
+    const dimSuffix = `|${dim.prod}|${dim.interco}|${dim.islamic}|${dim.cur}|`;
+    const id = dim.id;
+    for (let pi = 0; pi < pts.length; pi++) {
+      const p = pts[pi];
+      const amt = p.amount;
+      // DR leg — never tagged.
+      const drKey = dimPrefix + p.drGL + dimSuffix + 'D';
+      gen[drKey] = (gen[drKey] || 0) + amt;
+      let m = metaMap[drKey];
+      if (!m) metaMap[drKey] = m = { nature: p.nature, type: p.drType, accounts: {} };
+      m.accounts[id] = (m.accounts[id] || 0) + amt;
+      // CR leg — carries the write-off tag when present (|ECL_WO / |UWI_WO).
+      const crKey = dimPrefix + p.crGL + dimSuffix + 'C' + p.tag;
+      gen[crKey] = (gen[crKey] || 0) + amt;
+      m = metaMap[crKey];
+      if (!m) metaMap[crKey] = m = { nature: p.nature, type: p.crType, accounts: {} };
+      m.accounts[id] = (m.accounts[id] || 0) + amt;
+    }
   }, pct => setProgress(name, pct*0.8, 'Processing RDL postings…', `${Math.round(pct*100)}%`));
 
   setProgress(name, 0.9, 'Matching EGL posting file…'); await new Promise(r=>setTimeout(r,30));
-  const keys=new Set([
-    ...Object.keys(gen),
-    ...Object.keys(S.curr_egl.mbs).filter(k=>!k.startsWith('__')),
-    ...Object.keys(S.curr_egl.msl).filter(k=>!k.startsWith('__'))
-  ]);
-  const res=Array.from(keys).map(k => { const p=k.split('|'), pR=roundCents(gen[k]||0), eglEnt=p[0]==='128'?S.curr_egl.mbs:S.curr_egl.msl, pE=roundCents(eglEnt[k]||0), meta=metaMap[k]||{nature:'-',type:'-'}; return {ENTITY:p[0],RC:p[1],GL_ACC:p[2],GL_NATURE:meta.nature,BS_PL:meta.type,PRODUCT_CODE:p[3],INTERCO:p[4],ISLAMIC_INDICATOR:p[5],CURRENCY:p[6],DEBIT_CREDIT:p[7],CALCULATED:pR,POSTING_FILE:pE,VARIANCE:roundCents(pR-pE),ACCOUNTS_LIST:Object.entries(meta.accounts).map(([id,amt])=>({id,amt}))}; });
+
+  // Build the union of RDL-derived and EGL-derived keys via direct inserts.
+  // Using for-in (with a charCodeAt check for '__') avoids the three
+  // intermediate arrays the triple-spread Set constructor would allocate.
+  const keys = new Set();
+  for (const k in gen) keys.add(k);
+  const mbsEgl = S.curr_egl.mbs, mslEgl = S.curr_egl.msl;
+  for (const k in mbsEgl) if (k.charCodeAt(0) !== 95) keys.add(k);
+  for (const k in mslEgl) if (k.charCodeAt(0) !== 95) keys.add(k);
+
+  const res = [];
+  let breakRows = 0, idx = 0;
+  for (const k of keys) {
+    const p = k.split('|');
+    const pR = roundCents(gen[k] || 0);
+    const eglEnt = p[0] === '128' ? mbsEgl : mslEgl;
+    const pE = roundCents(eglEnt[k] || 0);
+    const variance = roundCents(pR - pE);
+    if (Math.abs(variance) > 0) breakRows++;
+    const meta = metaMap[k];
+    res.push({
+      __idx: idx++,
+      ENTITY: p[0], RC: p[1], GL_ACC: p[2],
+      GL_NATURE: meta ? meta.nature : '-',
+      BS_PL: meta ? meta.type : '-',
+      PRODUCT_CODE: p[3], INTERCO: p[4], ISLAMIC_INDICATOR: p[5], CURRENCY: p[6],
+      DEBIT_CREDIT: p[7],
+      CALCULATED: pR, POSTING_FILE: pE, VARIANCE: variance,
+      // Raw accounts map; materialised to [{id,amt}] only when the user opens
+      // the drill-down (avoids allocating millions of little objects upfront).
+      __accounts: meta ? meta.accounts : null
+    });
+  }
   setProgress(name, 1, 'Done'); await new Promise(r=>setTimeout(r,100));
   res.unmapped = unmapped;
   res.__reportingMonth = reportingMonth;
+  res.__stats = { breakRows, matchedRows: res.length - breakRows };
   S.results[name] = res;
 }
 
@@ -4563,20 +4605,11 @@ function rcnBuildPagerHtml(totalPages, currentPage) {
   return `<div class="ptb-pager">${btns.join('')}</div>`;
 }
 
-function renderReconResults(container) {
-  const data = S.results.recon;
-  if (!data) return;
-  const results = Array.isArray(data) ? data : [];
-  const breakRows = results.filter(r => Math.abs(r.VARIANCE||0) > 0);
-  const matchedRows = results.length - breakRows.length;
-  const reportingMonth = data.__reportingMonth || null;
-  const unmappedCount = (data.unmapped || []).length;
-  if (!reconState.filters) reconState.filters = {};
-  if (!reconState.statusFilter) reconState.statusFilter = 'all';
-  if (!reconState.page) reconState.page = 1;
-  const statusFilter = reconState.statusFilter;
-
-  // Apply status seg, then per-column filters
+/** Compute the filtered + paginated view of S.results.recon. Shared between
+ *  full render and partial-table render. */
+function rcnComputeView() {
+  const results = S.results.recon || [];
+  const statusFilter = reconState.statusFilter || 'all';
   const afterStatus = statusFilter === 'all' ? results : results.filter(r => rcnStatusOf(r) === statusFilter);
   const display = afterStatus.filter(r => {
     for (const k of RCN_COLS) {
@@ -4585,17 +4618,88 @@ function renderReconResults(container) {
     }
     return true;
   });
-
-  // Pagination
   const totalPages = Math.max(1, Math.ceil(display.length / RCN_PAGE_SIZE));
   if (reconState.page > totalPages) reconState.page = totalPages;
   if (reconState.page < 1) reconState.page = 1;
   const page = reconState.page;
   const startIdx = (page - 1) * RCN_PAGE_SIZE;
   const endIdx = Math.min(startIdx + RCN_PAGE_SIZE, display.length);
-  const pageRows = display.slice(startIdx, endIdx);
+  return { results, display, page, totalPages, startIdx, endIdx, pageRows: display.slice(startIdx, endIdx) };
+}
 
-  const matchedPct = results.length ? (matchedRows / results.length * 100) : 0;
+function rcnBuildRowsHtml(pageRows) {
+  if (!pageRows.length) return `<tr><td colspan="${RCN_COLS.length}" style="text-align:center;padding:40px;color:var(--d-ink-4)">No rows match the current filters</td></tr>`;
+  return pageRows.map(r => {
+    const st = rcnStatusOf(r);
+    const chip = st === 'break'
+      ? `<span class="status-chip break"><span class="dot"></span>Break</span>`
+      : `<span class="status-chip matched"><span class="dot"></span>Matched</span>`;
+    const varV = r.VARIANCE || 0;
+    const varCell = Math.abs(varV) === 0
+      ? `<span style="color:var(--d-ink-4)">—</span>`
+      : `${varV < 0 ? '-' : ''}${fmtNum(Math.abs(varV))}`;
+    // r.__idx is attached at build time so we don't rebuild a Map per render.
+    const perRdlCell = r.__accounts
+      ? `<span class="clickable-cell" onclick="rcnOpenBreakdown(event,${r.__idx})">${fmtNum(r.CALCULATED||0)}</span>`
+      : fmtNum(r.CALCULATED||0);
+    return `<tr data-status="${st}">
+      <td>${chip}</td>
+      <td>${r.ENTITY||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+      <td>${r.RC||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+      <td class="d-mono">${r.GL_ACC||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+      <td>${r.GL_NATURE||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+      <td>${r.BS_PL||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+      <td>${r.PRODUCT_CODE||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+      <td>${r.INTERCO||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+      <td>${r.ISLAMIC_INDICATOR||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+      <td class="d-mono" style="color:var(--d-ink-3)">${r.CURRENCY||''}</td>
+      <td class="d-mono">${r.DEBIT_CREDIT||''}</td>
+      <td class="num">${perRdlCell}</td>
+      <td class="num">${fmtNum(r.POSTING_FILE||0)}</td>
+      <td class="num">${varCell}</td>
+    </tr>`;
+  }).join('');
+}
+
+function rcnBuildFooterHtml(display, startIdx, endIdx, totalPages, page) {
+  const showingFrom = display.length === 0 ? 0 : startIdx + 1;
+  return `<div class="ptb-table-foot" id="rcn-foot">
+      <span>Showing <b>${showingFrom.toLocaleString()}–${endIdx.toLocaleString()}</b> of <b>${display.length.toLocaleString()}</b> rows</span>
+      ${rcnBuildPagerHtml(totalPages, page)}
+    </div>`;
+}
+
+/** Partial re-render: only updates the tbody + footer/pager. Used for page
+ *  changes where the page head, KPI, seg buttons and chips don't change. */
+function partialRenderReconTable() {
+  const tbody = document.getElementById('rcn-tbody');
+  const foot  = document.getElementById('rcn-foot');
+  if (!tbody || !foot) { renderReconResults(document.getElementById('view-recon')); return; }
+  const { display, page, totalPages, startIdx, endIdx, pageRows } = rcnComputeView();
+  tbody.innerHTML = rcnBuildRowsHtml(pageRows);
+  foot.outerHTML = rcnBuildFooterHtml(display, startIdx, endIdx, totalPages, page);
+}
+
+function renderReconResults(container) {
+  const data = S.results.recon;
+  if (!data) return;
+  // Stats are cached on the result array at run-time; recompute if missing (defensive).
+  if (!data.__stats) {
+    let b = 0;
+    for (const r of data) if (Math.abs(r.VARIANCE||0) > 0) b++;
+    data.__stats = { breakRows: b, matchedRows: data.length - b };
+  }
+  const { breakRows: breakCount, matchedRows: matchedCount } = data.__stats;
+  const reportingMonth = data.__reportingMonth || null;
+  const unmappedCount = (data.unmapped || []).length;
+  if (!reconState.filters) reconState.filters = {};
+  if (!reconState.statusFilter) reconState.statusFilter = 'all';
+  if (!reconState.page) reconState.page = 1;
+  const statusFilter = reconState.statusFilter;
+
+  const { results, display, page, totalPages, startIdx, endIdx, pageRows } = rcnComputeView();
+
+  const matchedPct = results.length ? (matchedCount / results.length * 100) : 0;
   const unmappedMetaHtml = unmappedCount
     ? `<span>·</span><span style="cursor:pointer;color:var(--d-warn,#B8740E);text-decoration:underline;text-underline-offset:2px;" onclick="openUnmappedModal('recon')" title="View unmapped accounts">⚠ ${unmappedCount.toLocaleString()} unmapped</span>`
     : '';
@@ -4620,9 +4724,9 @@ function renderReconResults(container) {
       <div class="ptb-card ptb-kpi ptb-col-3">
         <div class="ptb-label">Reconciliation Status</div>
         <div class="ptb-value" style="font-size:22px;letter-spacing:-0.02em">
-          <span style="color:var(--d-pos)">${matchedRows.toLocaleString()}</span>
+          <span style="color:var(--d-pos)">${matchedCount.toLocaleString()}</span>
           <span class="dim" style="font-size:14px">matched</span>
-          <span style="color:${breakRows.length?'var(--d-neg)':'var(--d-ink-4)'};margin-left:6px">${breakRows.length.toLocaleString()}</span>
+          <span style="color:${breakCount?'var(--d-neg)':'var(--d-ink-4)'};margin-left:6px">${breakCount.toLocaleString()}</span>
           <span class="dim" style="font-size:14px">breaks</span>
         </div>
         <div class="ptb-footline">
@@ -4643,8 +4747,8 @@ function renderReconResults(container) {
     <div class="ptb-table-toolbar">
       <div class="ptb-seg">
         ${segBtn('all','All', results.length, 'dim')}
-        ${segBtn('break','Breaks', breakRows.length, 'neg')}
-        ${segBtn('matched','Matched', matchedRows, 'dim')}
+        ${segBtn('break','Breaks', breakCount, 'neg')}
+        ${segBtn('matched','Matched', matchedCount, 'dim')}
       </div>
     </div>`;
 
@@ -4657,50 +4761,6 @@ function renderReconResults(container) {
     return `<th class="${active?'filtered':''}${numCls}" data-col="${k}" onclick="openReconFilter('${k}',this)">${RCN_COL_LABELS[k]}<span class="fcol"></span></th>`;
   }).join('');
 
-  // Build absolute-index map so clickable Per-RDL cells can still open the
-  // breakdown modal (openBreakdown uses the index into S.results.recon).
-  const idxByRef = new Map();
-  results.forEach((r, i) => idxByRef.set(r, i));
-
-  const rowsHtml = pageRows.map(r => {
-    const st = rcnStatusOf(r);
-    const chip = st === 'break'
-      ? `<span class="status-chip break"><span class="dot"></span>Break</span>`
-      : `<span class="status-chip matched"><span class="dot"></span>Matched</span>`;
-    const varV = r.VARIANCE || 0;
-    const varCell = Math.abs(varV) === 0
-      ? `<span style="color:var(--d-ink-4)">—</span>`
-      : `${varV < 0 ? '-' : ''}${fmtNum(Math.abs(varV))}`;
-    const absIdx = idxByRef.get(r);
-    const perRdlCell = (r.ACCOUNTS_LIST && r.ACCOUNTS_LIST.length > 0)
-      ? `<span class="clickable-cell" onclick="rcnOpenBreakdown(event,${absIdx})">${fmtNum(r.CALCULATED||0)}</span>`
-      : fmtNum(r.CALCULATED||0);
-    return `<tr data-status="${st}">
-      <td>${chip}</td>
-      <td>${r.ENTITY||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td>${r.RC||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td class="d-mono">${r.GL_ACC||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td>${r.GL_NATURE||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td>${r.BS_PL||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td>${r.PRODUCT_CODE||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td>${r.INTERCO||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td>${r.ISLAMIC_INDICATOR||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td class="d-mono" style="color:var(--d-ink-3)">${r.CURRENCY||''}</td>
-      <td class="d-mono">${r.DEBIT_CREDIT||''}</td>
-      <td class="num">${perRdlCell}</td>
-      <td class="num">${fmtNum(r.POSTING_FILE||0)}</td>
-      <td class="num">${varCell}</td>
-    </tr>`;
-  }).join('');
-
-  const showingFrom = display.length === 0 ? 0 : startIdx + 1;
-  const showingTo = endIdx;
-  const footerHtml = `
-    <div class="ptb-table-foot">
-      <span>Showing <b>${showingFrom.toLocaleString()}–${showingTo.toLocaleString()}</b> of <b>${display.length.toLocaleString()}</b> rows</span>
-      ${rcnBuildPagerHtml(totalPages, page)}
-    </div>`;
-
   container.innerHTML = `<div class="ptb-v2">
     ${pageHeadHtml}
     ${kpiHtml}
@@ -4710,10 +4770,10 @@ function renderReconResults(container) {
       <div class="ptb-scroll">
         <table class="ptb-data">
           <thead><tr>${thHtml}</tr></thead>
-          <tbody>${rowsHtml || `<tr><td colspan="${RCN_COLS.length}" style="text-align:center;padding:40px;color:var(--d-ink-4)">No rows match the current filters</td></tr>`}</tbody>
+          <tbody id="rcn-tbody">${rcnBuildRowsHtml(pageRows)}</tbody>
         </table>
       </div>
-      ${footerHtml}
+      ${rcnBuildFooterHtml(display, startIdx, endIdx, totalPages, page)}
     </div>
   </div>`;
 }
@@ -4721,9 +4781,8 @@ function renderReconResults(container) {
 function openReconFilter(key, triggerEl) {
   if (!reconState.filters) reconState.filters = {};
   const results = S.results.recon || [];
-  const base = Array.isArray(results) ? results : [];
   const statusFilter = reconState.statusFilter || 'all';
-  const baseDisplay = statusFilter === 'all' ? base : base.filter(r => rcnStatusOf(r) === statusFilter);
+  const baseDisplay = statusFilter === 'all' ? results : results.filter(r => rcnStatusOf(r) === statusFilter);
   const otherFiltered = baseDisplay.filter(r => {
     for (const k of RCN_COLS) {
       if (k === key) continue;
@@ -4752,7 +4811,8 @@ function rcnSetStatusFilter(f) {
 }
 function rcnSetPage(p) {
   reconState.page = p;
-  renderReconResults(document.getElementById('view-recon'));
+  // Page change only updates tbody + pager; avoids rebuilding KPI / headers / chips.
+  partialRenderReconTable();
 }
 function rcnClearColFilter(k) {
   if (reconState.filters) delete reconState.filters[k];
@@ -4774,8 +4834,12 @@ function rcnOpenBreakdown(e, absIdx) {
   e.stopPropagation();
   const results = S.results.recon || [];
   const row = results[absIdx];
-  if (!row || !row.ACCOUNTS_LIST) return;
-  breakdownData = row.ACCOUNTS_LIST;
+  if (!row || !row.__accounts) return;
+  // Materialise the {id, amt} list lazily — row.__accounts is the raw map
+  // kept on the row; we only convert it to an array when the user drills in.
+  const list = [];
+  for (const id in row.__accounts) list.push({ id, amt: row.__accounts[id] });
+  breakdownData = list;
   breakdownPage = 1;
   document.getElementById('breakdown-title').textContent = `Account Breakdown — ${row.GL_ACC||row.GL_NUMBER||''}`;
   renderBreakdownPage();
@@ -4783,17 +4847,20 @@ function rcnOpenBreakdown(e, absIdx) {
 }
 
 function rcnExport() {
-  const results = S.results.recon;
-  if (!Array.isArray(results)) return;
+  const results = S.results.recon || [];
   const statusFilter = reconState.statusFilter || 'all';
-  const afterStatus = statusFilter === 'all' ? results : results.filter(r => rcnStatusOf(r) === statusFilter);
-  const display = afterStatus.filter(r => {
-    for (const k of RCN_COLS) {
-      const f = reconState.filters[k];
-      if (fdIsActive(f) && !fdMatch(rcnRowField(r, k), f)) return false;
-    }
-    return true;
-  });
+  const hasColFilter = RCN_COLS.some(k => fdIsActive(reconState.filters[k]));
+  // Short-circuit when nothing is filtered: skip both filter passes.
+  const display = (statusFilter === 'all' && !hasColFilter)
+    ? results
+    : results.filter(r => {
+        if (statusFilter !== 'all' && rcnStatusOf(r) !== statusFilter) return false;
+        for (const k of RCN_COLS) {
+          const f = reconState.filters[k];
+          if (fdIsActive(f) && !fdMatch(rcnRowField(r, k), f)) return false;
+        }
+        return true;
+      });
   const rows = display.map(r => {
     const o = { 'Status': RCN_STATUS_LABELS[rcnStatusOf(r)] };
     RCN_COLS.forEach(k => { if (k !== 'STATUS') o[RCN_COL_LABELS[k]] = r[k]; });
