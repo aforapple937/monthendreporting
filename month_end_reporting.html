@@ -505,50 +505,25 @@ function buildTbPostingPoints(acc, mapRow) {
 // ============================================================
 //  SHARED SLOT CARD RENDERER (eliminates repetitive HTML generation)
 // ============================================================
-const SLOT_META = {
-  mbs_prev:  { fileType: 'Pipe-delimited TXT · MBS entity', infoKey: 'egl_posting' },
-  msl_prev:  { fileType: 'Pipe-delimited TXT · MSL entity', infoKey: 'egl_posting' },
-  mbs_rev:   { fileType: 'Pipe-delimited TXT · MBS entity · key 11', infoKey: 'egl_posting' },
-  msl_rev:   { fileType: 'Pipe-delimited TXT · MSL entity · key 11', infoKey: 'egl_posting' },
-  rdl_pre:   { fileType: 'CSV · detected by UNIQUE_ID_NO header', infoKey: 'rdl' },
-  rdl_post:  { fileType: 'CSV · detected by UNIQUE_ID_NO header', infoKey: 'rdl' },
-  mapping:   { fileType: 'XLSX · filename must contain EGL_MAPPING', infoKey: 'mapping' },
-  mbs_curr:  { fileType: 'Pipe-delimited TXT · MBS entity', infoKey: 'egl_posting' },
-  msl_curr:  { fileType: 'Pipe-delimited TXT · MSL entity', infoKey: 'egl_posting' },
-  'mbs-tb':  { fileType: 'CSV/TXT · filename must contain MBS', infoKey: 'tb' },
-  'msl-tb':  { fileType: 'CSV/TXT · filename must contain MSL', infoKey: 'tb' },
-};
-
 /** Render a single file-slot card. Accepts:
- *  { label, desc, keys: string[], filesState: object, infoKey?, pipeline? } */
+ *  { label, keys: string[], filesState: object, optional?, onclick? } */
 function renderSlotCard(slot) {
   const keys = Array.isArray(slot.keys) ? slot.keys : [slot.keys];
   const f = slot.filesState;
   const loaded = keys.every(k => f[k]);
   const partial = !loaded && keys.some(k => f[k]);
-  const slotClass = loaded ? 'loaded' : partial ? 'partial' : '';
-  const iconClass = loaded ? 'si-loaded' : partial ? 'si-partial' : 'si-idle';
-  const iconChar  = loaded ? '✓' : partial ? '½' : '↑';
-  const badge     = loaded  ? `<span class="status-badge sb-ok">Loaded</span>`
-                  : partial ? `<span class="status-badge sb-ready">Partial</span>`
-                  :           `<span class="status-badge sb-idle">${slot.optional ? 'Optional' : 'Required'}</span>`;
-  const detail    = loaded  ? `<div class="slot-file">File received</div>`
-                  : partial ? `<div class="slot-partial-detail">Missing: ${keys.filter(k=>!f[k]).join(', ')}</div>` : '';
-
-  const meta = slot.infoKey ? { infoKey: slot.infoKey } : SLOT_META[keys[0]];
-  const infoBtnHtml = meta ? `<button class="slot-info-btn" onclick="openFinfoModal('${meta.infoKey}','${slot.pipeline||''}')" title="View required fields">ⓘ</button>` : '';
-
+  const state = loaded ? 'loaded'
+              : partial ? 'partial'
+              : (slot.optional ? 'optional' : 'missing');
+  const labelMap = { loaded: 'Received', partial: 'Partial', missing: 'Not received', optional: 'Optional' };
+  const clickAttr = slot.onclick ? ` style="cursor:pointer" onclick="${slot.onclick}"` : '';
   return `
-    <div class="file-slot ${slotClass}">
-      <div class="slot-icon ${iconClass}">${iconChar}</div>
+    <div class="file-slot ${state}"${clickAttr}>
       <div class="slot-info">
         <div class="slot-name">${slot.label}</div>
-        <div class="slot-desc">${slot.desc}</div>
-        ${detail}
       </div>
-      <div class="slot-action" style="display:flex;align-items:center;gap:7px;">
-        ${infoBtnHtml}
-        ${badge}
+      <div class="slot-action">
+        <span class="status-badge sb-${state}">${labelMap[state]}</span>
       </div>
     </div>`;
 }
@@ -1494,8 +1469,10 @@ const stationConfig = {
 3. For each prior month posting, the tool looks up the corresponding reversal entry using the flipped key and computes the variance (prior amount − reversal amount). A zero variance means the posting was fully reversed.<br>
 4. Any reversal entries with no matching prior month posting are also surfaced, with the prior amount shown as zero. These represent unexpected reversals that were not part of last month's posting file and may warrant investigation.`,
     filesNeeded: [
-      { key: ['mbs_prev','msl_prev'], label: 'Prior Month Posting File', desc: 'MBS & MSL EGL posting files from last month (TXT)' },
-      { key: ['mbs_rev','msl_rev'],   label: 'Reversal File',            desc: 'MBS & MSL EGL reversal files (TXT)' }
+      { key: ['mbs_prev'], label: 'Prior Month Posting — MBS' },
+      { key: ['msl_prev'], label: 'Prior Month Posting — MSL' },
+      { key: ['mbs_rev'],  label: 'Reversal File — MBS' },
+      { key: ['msl_rev'],  label: 'Reversal File — MSL' }
     ],
     isReady: () => S.files.mbs_prev && S.files.msl_prev && S.files.mbs_rev && S.files.msl_rev,
     run: runReversal,
@@ -1534,9 +1511,10 @@ const stationConfig = {
 Only movements with a non-zero amount are included. Each movement is keyed by: Entity | RC | GL Account | Product | Interco | Islamic Indicator | Currency | DR/CR. Write-off credit legs carry an additional identifier tag so they are matched specifically against write-off entries in the EGL file (identified by description ending in "IMPAIRED WRITE OFF").<br>
 4. Expected amounts are aggregated across all accounts by composite key, then compared line by line against the actual EGL posting file amounts. Variance = Expected − Actual.`,
     filesNeeded: [
-      { key: ['rdl_pre'],              label: 'RDL (Pre-patch)',        desc: 'RDL before manual entry adjustments — drop here while on this step (CSV)' },
-      { key: ['mapping'],              label: 'EGL Mapping',            desc: 'GL mapping table (XLSX)' },
-      { key: ['mbs_curr','msl_curr'],  label: 'Current Month Posting',  desc: 'MBS & MSL EGL posting files this month (TXT)' }
+      { key: ['rdl_pre'],  label: 'RDL (Pre-patch)' },
+      { key: ['mapping'],  label: 'EGL Mapping' },
+      { key: ['mbs_curr'], label: 'Current Month Posting — MBS' },
+      { key: ['msl_curr'], label: 'Current Month Posting — MSL' }
     ],
     isReady: () => S.files.rdl_pre && S.files.mapping && S.files.mbs_curr && S.files.msl_curr,
     run: runRecon,
@@ -1573,9 +1551,10 @@ Each amount is keyed to a full account string in the format Entity-RC-GL-Product
 5. Both entities' trial balance files (MBS and MSL) are scanned. For each account whose GL number (third segment of the account string) appears in the relevant set, the <b>YTD_NET_ENTERED</b> value is compared against the aggregated RDL expectation. Variance = YTD per TB − Expected per RDL.<br>
 6. Any RDL-expected entries with no corresponding trial balance row are also included, shown with a YTD of zero — indicating amounts the RDL expects on the balance sheet that do not appear in the trial balance.`,
     filesNeeded: [
-      { key: ['rdl_post'],           label: 'RDL (Post-patch)',  desc: 'RDL after manual entry adjustments — drop here while on this step (CSV)' },
-      { key: ['mapping'],            label: 'EGL Mapping',       desc: 'GL mapping table (XLSX)' },
-      { key: ['mbs-tb','msl-tb'],   label: 'Trial Balance',     desc: 'MBS & MSL trial balance extract (TXT)' }
+      { key: ['rdl_post'], label: 'RDL (Post-patch)' },
+      { key: ['mapping'],  label: 'EGL Mapping' },
+      { key: ['mbs-tb'],   label: 'Trial Balance — MBS' },
+      { key: ['msl-tb'],   label: 'Trial Balance — MSL' }
     ],
     isReady: () => S.files.rdl_post && S.files.mapping && S.files['mbs-tb'] && S.files['msl-tb'],
     run: runTb,
@@ -1727,42 +1706,14 @@ function renderUploadPanel(name, container, cfg) {
 
   const slotsHtml = cfg.filesNeeded.map(slot => {
     const keys = Array.isArray(slot.key) ? slot.key : [slot.key];
-    const meta = SLOT_META[keys[0]];
-    return renderSlotCard({
-      label: slot.label,
-      desc: slot.desc,
-      keys: keys,
-      filesState: f,
-      infoKey: meta ? meta.infoKey : undefined,
-      pipeline: cfg.pipelineName || ''
-    });
+    return renderSlotCard({ label: slot.label, keys: keys, filesState: f });
   }).join('');
-
-  // Show available RDL months for TB Recon
-  let rdlMonthsHtml = '';
-  if (name === 'tb' && rdlPostStore.index.length > 0) {
-    const monthBadges = rdlPostStore.index.map(mk => {
-      const [y,m] = mk.split('-'); const label = MONTH_NAMES[parseInt(m)-1] + ' ' + y;
-      const isActive = mk === (rdlPostStore.active || rdlPostStore.index[0]);
-      return `<span style="display:inline-block;padding:3px 8px;border-radius:3px;font-size:10px;font-family:var(--mono);margin:2px;background:${isActive?'var(--ink)':'var(--paper2)'};color:${isActive?'#fff':'var(--ink2)'}">${label}</span>`;
-    }).join('');
-    rdlMonthsHtml = `<div style="padding:6px 16px;font-size:10px;color:var(--ink3);">Stored RDL months: ${monthBadges} <span style="color:var(--ink4);margin-left:4px">· Auto-selects based on TB date</span></div>`;
-  }
-
-  // Reversal Check & Posting Validation follow the Pre-Check TB design:
-  // simplified intro, no long procedural description.
-  const simpleIntro = name === 'reversal' || name === 'recon' || name === 'tb';
-  const introHtml = simpleIntro
-    ? `<div class="upload-intro"><div class="upload-intro-title">${cfg.title}</div></div>`
-    : `<div class="upload-intro"><div class="upload-intro-title">${cfg.title}</div><div class="upload-intro-desc">${cfg.description || cfg.subtitle + '.'}</div></div>`;
 
   container.innerHTML = `
     <div class="upload-view">
-      ${introHtml}
       <div class="file-slots">
         <div class="slot-group-label">Required files</div>
         ${slotsHtml}
-        ${rdlMonthsHtml}
       </div>
       <div class="progress-wrap" id="prog-${name}">
         <div class="progress-label" id="prog-label-${name}">Processing…</div>
@@ -1770,8 +1721,7 @@ function renderUploadPanel(name, container, cfg) {
         <div class="progress-track"><div class="progress-bar" id="prog-bar-${name}"></div></div>
       </div>
       <div class="upload-footer">
-        <button class="btn" onclick="triggerUpload()">Select files…</button>
-        ${isReady ? `<button class="btn btn-primary btn-gold" onclick="runStation('${name}')" id="run-btn-${name}">Run ${cfg.title}</button>` : `<span style="font-size:11px;color:var(--ink3);">Upload all required files to continue</span>`}
+        ${isReady ? `<button class="btn btn-primary btn-gold" onclick="runStation('${name}')" id="run-btn-${name}">Run ${cfg.title}</button>` : ''}
       </div>
     </div>`;
 }
@@ -1969,33 +1919,15 @@ function renderMajorMovement() {
 
 function renderMajMovUpload(container) {
   const avail = mmAvailableMonths();
-  const allMonths = rdlPostStore.index;
-  const rdlLoaded = allMonths.length > 0;
+  const rdlLoaded = rdlPostStore.index.length > 0;
   const isReady = avail.length > 0;
 
-  const slot = renderSlotCard({ label: 'Post-patch RDL', desc: 'Upload post-patch RDL files for consecutive months (CSV)', keys: ['rdl_post'], filesState: { rdl_post: rdlLoaded }, infoKey: 'rdl', pipeline: 'Major Movement' });
-
-  // Month badges
-  const monthBadges = allMonths.length ? allMonths.map(mk => {
-    const [y,m] = mk.split('-'); const label = MONTH_NAMES[parseInt(m)-1] + ' ' + y;
-    return `<span style="display:inline-block;padding:3px 8px;border-radius:3px;font-size:10px;font-family:var(--mono);margin:2px;background:var(--paper2);color:var(--ink2)">${label}</span>`;
-  }).join('') : '';
-
-  const pairInfo = avail.length ? avail.map(mk => {
-    const [y,m] = mk.split('-').map(Number); const pm = m===1?12:m-1, py = m===1?y-1:y;
-    return MONTH_NAMES[m-1]+' '+y+' vs '+MONTH_NAMES[pm-1]+' '+py;
-  }).join(', ') : 'Need at least two consecutive months';
+  const slot = renderSlotCard({ label: 'RDL (Post-patch)', keys: ['rdl_post'], filesState: { rdl_post: rdlLoaded } });
 
   container.innerHTML = `<div class="upload-view">
-    <div class="upload-intro">
-      <div class="upload-intro-title">Major Movement</div>
-      <div class="upload-intro-desc">Identifies major ECL movements by CIF between two consecutive months using post-patch RDL data. Upload post-patch RDL files for consecutive months — the tool will automatically pair them for comparison.</div>
-    </div>
     <div class="file-slots">
       <div class="slot-group-label">Required files</div>
       ${slot}
-      ${monthBadges ? `<div style="padding:6px 16px;font-size:10px;color:var(--ink3);">Stored months: ${monthBadges}</div>` : ''}
-      <div style="padding:6px 16px;font-size:10px;color:var(--ink3);">Available pairs: ${pairInfo}</div>
     </div>
     <div class="progress-wrap" id="prog-majmov">
       <div class="progress-label" id="prog-label-majmov">Processing…</div>
@@ -2003,8 +1935,7 @@ function renderMajMovUpload(container) {
       <div class="progress-track"><div class="progress-bar" id="prog-bar-majmov"></div></div>
     </div>
     <div class="upload-footer">
-      <button class="btn" onclick="triggerUpload()">Select files…</button>
-      ${isReady ? `<button class="btn btn-primary btn-gold" onclick="clearAutoRunBlock('majmov');majMovState.month='${avail[0]}';runMajorMovement()">Run Major Movement</button>` : `<span style="font-size:11px;color:var(--ink3);">Upload post-patch RDL for at least two consecutive months to continue</span>`}
+      ${isReady ? `<button class="btn btn-primary btn-gold" onclick="clearAutoRunBlock('majmov');majMovState.month='${avail[0]}';runMajorMovement()">Run Major Movement</button>` : ''}
     </div>
   </div>`;
 }
@@ -3097,21 +3028,14 @@ function renderQuery() {
 function renderQueryUpload(container) {
   const f = S.files;
   const slots = [
-    { label: 'RDL', desc: 'Account-level data — post-patch preferred, pre-patch used as fallback (CSV)', keys: ['rdl_pre'], filesState: { rdl_pre: f.rdl_pre || f.rdl_post }, infoKey: 'rdl', pipeline: 'Account Query' },
-    { label: 'EGL Mapping', desc: 'GL mapping table (XLSX)', keys: ['mapping'], filesState: f, infoKey: 'mapping', pipeline: 'Account Query' }
+    { label: 'RDL',         keys: ['rdl_pre'], filesState: { rdl_pre: f.rdl_pre || f.rdl_post } },
+    { label: 'EGL Mapping', keys: ['mapping'], filesState: f }
   ];
   container.innerHTML = `
     <div class="upload-view">
-      <div class="upload-intro">
-        <div class="upload-intro-title">Account Query</div>
-        <div class="upload-intro-desc">Enter a loan account number to look up all expected journal entries — GL accounts, DR/CR sides, amounts and posting nature.</div>
-      </div>
       <div class="file-slots">
         <div class="slot-group-label">Required files</div>
         ${slots.map(s => renderSlotCard(s)).join('')}
-      </div>
-      <div class="upload-footer">
-        <button class="btn" onclick="triggerUpload()">Select files…</button>
       </div>
     </div>`;
 }
@@ -3413,8 +3337,12 @@ async function refreshFilesBadge() {
 }
 
 function triggerSidebarUpload() {
-  // If a view with a reload handler is active, re-route to its reload so the
-  // sidebar "Upload / Reload" acts as "reload files for this pipeline".
+  // On a landing (upload) view, open the main file picker so users can drop
+  // required files straight in. On a results view, delegate to the pipeline's
+  // reload handler so the button acts as "reload files for this pipeline".
+  const viewEl = currentView ? document.getElementById('view-' + currentView) : null;
+  const onLanding = viewEl && viewEl.querySelector('.upload-view');
+  if (onLanding) { triggerUpload(); return; }
   if (currentView && RELOAD_HANDLERS[currentView]) {
     RELOAD_HANDLERS[currentView]();
     return;
@@ -3569,30 +3497,15 @@ function renderGlte() {
 
 function renderGlteUpload(container) {
   const tLoaded = !!glteState.template, vLoaded = !!glteState.validation;
+  const slots = [
+    renderSlotCard({ label: 'Template GLTE',   keys: ['_glte_t'], filesState: {_glte_t: tLoaded}, onclick: "triggerGlteUpload('template')" }),
+    renderSlotCard({ label: 'Validation GLTE', keys: ['_glte_v'], filesState: {_glte_v: vLoaded}, onclick: "triggerGlteUpload('validation')" })
+  ].join('');
   container.innerHTML = `
     <div class="upload-view">
-      <div class="upload-intro">
-        <div class="upload-intro-title">GLTE Validation</div>
-        <div class="upload-intro-desc">Upload two GLTE .xlsm files to compare them line by line. The tool aggregates by dimension key and shows net variances.</div>
-      </div>
       <div class="file-slots">
         <div class="slot-group-label">Required files</div>
-        <div class="file-slot ${tLoaded ? 'loaded' : ''}">
-          <div class="slot-icon ${tLoaded ? 'si-loaded' : 'si-idle'}">${tLoaded ? '✓' : '↑'}</div>
-          <div class="slot-info"><div class="slot-name">Template GLTE</div><div class="slot-desc">The reference file to compare against (XLSM/XLSX)</div>${tLoaded ? '<div class="slot-file">File loaded</div>' : ''}</div>
-          <div class="slot-action" style="display:flex;align-items:center;gap:7px;">
-            <button class="slot-info-btn" onclick="openFinfoModal('glte')" title="View required fields">ⓘ</button>
-            ${tLoaded ? `<span class="status-badge sb-ok">Loaded</span>` : `<button class="btn" onclick="triggerGlteUpload('template')">Select file…</button>`}
-          </div>
-        </div>
-        <div class="file-slot ${vLoaded ? 'loaded' : ''}">
-          <div class="slot-icon ${vLoaded ? 'si-loaded' : 'si-idle'}">${vLoaded ? '✓' : '↑'}</div>
-          <div class="slot-info"><div class="slot-name">Validation GLTE</div><div class="slot-desc">The file being validated (XLSM/XLSX)</div>${vLoaded ? '<div class="slot-file">File loaded</div>' : ''}</div>
-          <div class="slot-action" style="display:flex;align-items:center;gap:7px;">
-            <button class="slot-info-btn" onclick="openFinfoModal('glte')" title="View required fields">ⓘ</button>
-            ${vLoaded ? `<span class="status-badge sb-ok">Loaded</span>` : `<button class="btn" onclick="triggerGlteUpload('validation')">Select file…</button>`}
-          </div>
-        </div>
+        ${slots}
       </div>
       <div id="glte-prog-wrap" class="progress-wrap"><div class="progress-label" id="glte-prog-label">Parsing GLTE…</div><div class="progress-sub" id="glte-prog-sub"></div><div class="progress-track"><div class="progress-bar" id="glte-prog-bar"></div></div></div>
       <div class="upload-footer">${tLoaded || vLoaded ? `<button class="btn" onclick="resetGlte()">Reset</button>` : ''}</div>
@@ -3727,17 +3640,15 @@ function renderDq() {
 function renderDqUpload(container) {
   container.innerHTML = `
     <div class="upload-view">
-      <div class="upload-intro"><div class="upload-intro-title">Outbound Data Quality</div><div class="upload-intro-desc">Upload outbound CSV files to run month-on-month PSI checks and DQ rule validation before sending to Head Office. Supports LN, CC, OD, GUARANTEE, INVMT and RATING.</div></div>
-      <div class="file-slots"><div class="slot-group-label">Product CSV files — upload any combination</div>
+      <div class="file-slots"><div class="slot-group-label">Required files</div>
         ${DQ_PRODS.map(p => {
           const loaded = dqState.DS.some(d => d.dn === p);
-          return renderSlotCard({ label: p, desc: `Month-on-month outbound data for ${p} product (CSV)`, keys: ['_dq_'+p], filesState: { ['_dq_'+p]: loaded }, infoKey: 'dq', pipeline: 'Outbound DQ', optional: true });
+          return renderSlotCard({ label: 'Outbound DQ — ' + p, keys: ['_dq_'+p], filesState: { ['_dq_'+p]: loaded }, optional: true });
         }).join('')}
       </div>
       <div class="progress-wrap" id="dq-prog-wrap"><div class="progress-label" id="dq-prog-label">Loading…</div><div class="progress-sub" id="dq-prog-sub"></div><div class="progress-track"><div class="progress-bar" id="dq-prog-bar"></div></div></div>
       <div class="upload-footer">
-        <button class="btn" onclick="triggerDqUpload()">Select CSV files…</button>
-        ${dqState.DS.length ? `<button class="btn btn-primary btn-gold" onclick="dqCompute()">Run DQ Analysis</button>` : `<span style="font-size:11px;color:var(--ink3);">Upload at least one product CSV to continue</span>`}
+        ${dqState.DS.length ? `<button class="btn btn-primary btn-gold" onclick="dqCompute()">Run DQ Analysis</button>` : ''}
       </div>
     </div>`;
 }
@@ -3900,20 +3811,17 @@ function renderPreTb() {
 
 function renderPreTbUpload(container) {
   const f = S.files;
-  const tbLoaded = f['mbs-tb'] && f['msl-tb'], mappingLoaded = f.mapping;
-  const tbPartial = !tbLoaded && (f['mbs-tb'] || f['msl-tb']);
-  const isReady = tbLoaded && mappingLoaded;
+  const isReady = f['mbs-tb'] && f['msl-tb'] && f.mapping;
   const slots = [
-    { label: 'Trial Balance', desc: 'MBS & MSL trial balance extract (TXT)', keys: ['mbs-tb','msl-tb'], filesState: f, infoKey: 'tb', pipeline: 'Pre-Check TB' },
-    { label: 'EGL Mapping', desc: 'GL mapping table (XLSX)', keys: ['mapping'], filesState: f, infoKey: 'mapping', pipeline: 'Pre-Check TB' }
+    { label: 'Trial Balance — MBS', keys: ['mbs-tb'], filesState: f },
+    { label: 'Trial Balance — MSL', keys: ['msl-tb'], filesState: f },
+    { label: 'EGL Mapping',         keys: ['mapping'], filesState: f }
   ];
   container.innerHTML = `
     <div class="upload-view">
-      <div class="upload-intro"><div class="upload-intro-title">Pre-Check TB</div></div>
       <div class="file-slots"><div class="slot-group-label">Required files</div>${slots.map(s => renderSlotCard(s)).join('')}</div>
       <div class="upload-footer">
-        <button class="btn" onclick="triggerUpload()">Select files…</button>
-        ${isReady ? `<button class="btn btn-primary btn-gold" id="run-btn-pretb" onclick="runPreTb()">Run Pre-Check</button>` : `<span style="font-size:11px;color:var(--ink3);">Upload Trial Balance and EGL Mapping to continue</span>`}
+        ${isReady ? `<button class="btn btn-primary btn-gold" id="run-btn-pretb" onclick="runPreTb()">Run Pre-Check</button>` : ''}
       </div>
     </div>`;
 }
@@ -4916,11 +4824,11 @@ function renderTbReconResults(container) {
   const netVarDisplay = (netVariance < 0 ? '-' : '') + fmtNum(Math.abs(netVariance));
   const kpiHtml = `
     <div class="ptb-grid">
+      ${stationKpiStatusHtml(matchedRows, breakRows.length, results.length)}
       <div class="ptb-card ptb-kpi ptb-col-3">
         <div class="ptb-label">Net Variance</div>
         <div class="ptb-value" style="font-family:'JetBrains Mono','IBM Plex Mono',monospace;color:${netVarColor};">${netVarDisplay}</div>
       </div>
-      ${stationKpiStatusHtml(matchedRows, breakRows.length, results.length)}
     </div>`;
 
   const sf = tbReconState.statusFilter;
@@ -5165,12 +5073,13 @@ function renderLoanReconUpload(container) {
   const tbLoaded = S.files['mbs-tb'] && S.files['msl-tb'], mapLoaded = loanReconState.files.tbMapping, fifoLoaded = loanReconState.files.fifo;
   const isReady = LOAN_PRODUCTS.some(p => dqState.DS.some(d => d.dn === p)) && tbLoaded && mapLoaded && fifoLoaded;
   const allSlotsHtml = [
-    ...LOAN_PRODUCTS.map(p => { const loaded = dqState.DS.some(d => d.dn === p); return renderSlotCard({ label: p, desc: `Month-on-month outbound data for ${p} product (CSV)`, keys: ['_lr_'+p], filesState: {['_lr_'+p]: loaded}, infoKey: 'dq', pipeline: 'Outbound DQ', optional: p==='RATING' }); }),
-    renderSlotCard({ label: 'Trial Balance', desc: 'MBS & MSL trial balance extract (TXT)', keys: ['mbs-tb','msl-tb'], filesState: S.files, infoKey: 'tb', pipeline: 'Loan Recon' }),
-    renderSlotCard({ label: 'TB Mapping', desc: 'GL account to product group mapping (XLSX)', keys: ['tbMapping'], filesState: { tbMapping: mapLoaded }, infoKey: 'tb_mapping', pipeline: 'Loan Recon' }),
-    renderSlotCard({ label: 'FIFO', desc: 'FIFO positions file (XLSX)', keys: ['fifo'], filesState: { fifo: fifoLoaded }, infoKey: 'fifo', pipeline: 'Loan Recon' })
+    ...LOAN_PRODUCTS.map(p => { const loaded = dqState.DS.some(d => d.dn === p); return renderSlotCard({ label: 'Outbound DQ — ' + p, keys: ['_lr_'+p], filesState: {['_lr_'+p]: loaded}, optional: p==='RATING' }); }),
+    renderSlotCard({ label: 'Trial Balance — MBS', keys: ['mbs-tb'], filesState: S.files }),
+    renderSlotCard({ label: 'Trial Balance — MSL', keys: ['msl-tb'], filesState: S.files }),
+    renderSlotCard({ label: 'TB Mapping',          keys: ['tbMapping'], filesState: { tbMapping: mapLoaded } }),
+    renderSlotCard({ label: 'FIFO',                keys: ['fifo'], filesState: { fifo: fifoLoaded } })
   ].join('');
-  container.innerHTML = `<div class="upload-view"><div class="upload-intro"><div class="upload-intro-title">Loan Recon</div><div class="upload-intro-desc">Reconciles LEDGER_BALANCE_AMT from product files (latest month) against YTD_NET_ACCOUNTED in the trial balance, grouped by entity and product group (Loan, Guarantee, Investment).</div></div><div class="file-slots"><div class="slot-group-label">Required files</div>${allSlotsHtml}</div><div class="progress-wrap" id="prog-loanrecon"><div class="progress-label" id="prog-label-loanrecon">Processing…</div><div class="progress-sub" id="prog-sub-loanrecon"></div><div class="progress-track"><div class="progress-bar" id="prog-bar-loanrecon"></div></div></div><div class="upload-footer"><button class="btn" onclick="triggerUpload()">Select files…</button>${isReady ? `<button class="btn btn-primary btn-gold" onclick="runLoanRecon()">Run Loan Recon</button>` : `<span style="font-size:11px;color:var(--ink3);">Load all required files to continue</span>`}</div></div>`;
+  container.innerHTML = `<div class="upload-view"><div class="file-slots"><div class="slot-group-label">Required files</div>${allSlotsHtml}</div><div class="progress-wrap" id="prog-loanrecon"><div class="progress-label" id="prog-label-loanrecon">Processing…</div><div class="progress-sub" id="prog-sub-loanrecon"></div><div class="progress-track"><div class="progress-bar" id="prog-bar-loanrecon"></div></div></div><div class="upload-footer">${isReady ? `<button class="btn btn-primary btn-gold" onclick="runLoanRecon()">Run Loan Recon</button>` : ''}</div></div>`;
 }
 
 async function runLoanRecon() {
@@ -5321,11 +5230,11 @@ function renderMtmUpload(container) {
   const fvociLoaded = mtmState.fvociLoaded, disbLoaded = mtmState.disbLoaded, prevFvociLoaded = mtmState.prevFvociLoaded;
   const isReady = fvociLoaded && disbLoaded && prevFvociLoaded;
   const slots = [
-    { label: 'FVOCI Listing', desc: 'Current month FVOCI loan accounts (CSV)', keys: ['_fv'], filesState: {_fv:fvociLoaded}, infoKey: 'mtm_fvoci', pipeline: 'MTM FVOCI' },
-    { label: 'Prev Month FVOCI Listing', desc: 'Previous month FVOCI accounts with fair values (CSV)', keys: ['_pfv'], filesState: {_pfv:prevFvociLoaded}, infoKey: 'mtm_prev_fvoci', pipeline: 'MTM FVOCI' },
-    { label: 'Disbursement Listing (12 months)', desc: 'Past 12 months disbursement data for WAIR (CSV)', keys: ['_disb'], filesState: {_disb:disbLoaded}, infoKey: 'mtm_disb', pipeline: 'MTM FVOCI' }
+    { label: 'MTM FVOCI Listing',          keys: ['_fv'],   filesState: {_fv:fvociLoaded} },
+    { label: 'Prev Month FVOCI Listing',   keys: ['_pfv'],  filesState: {_pfv:prevFvociLoaded} },
+    { label: 'MTM Disbursement Listing',   keys: ['_disb'], filesState: {_disb:disbLoaded} }
   ];
-  container.innerHTML = `<div class="upload-view"><div class="upload-intro"><div class="upload-intro-title">MTM FVOCI</div><div class="upload-intro-desc">Computes mark-to-market values for FVOCI loans using WAIR derived from the past 12 months disbursement listing.</div></div><div class="file-slots"><div class="slot-group-label">Required files</div>${slots.map(s=>renderSlotCard(s)).join('')}</div><div class="progress-wrap" id="prog-mtmfvoci"><div class="progress-label" id="prog-label-mtmfvoci">Processing…</div><div class="progress-sub" id="prog-sub-mtmfvoci"></div><div class="progress-track"><div class="progress-bar" id="prog-bar-mtmfvoci"></div></div></div><div class="upload-footer"><button class="btn" onclick="triggerUpload()">Select files…</button>${isReady?`<button class="btn btn-primary btn-gold" onclick="runMtmFvoci()">Run MTM</button>`:`<span style="font-size:11px;color:var(--ink3);">Load all required files to continue</span>`}</div></div>`;
+  container.innerHTML = `<div class="upload-view"><div class="file-slots"><div class="slot-group-label">Required files</div>${slots.map(s=>renderSlotCard(s)).join('')}</div><div class="progress-wrap" id="prog-mtmfvoci"><div class="progress-label" id="prog-label-mtmfvoci">Processing…</div><div class="progress-sub" id="prog-sub-mtmfvoci"></div><div class="progress-track"><div class="progress-bar" id="prog-bar-mtmfvoci"></div></div></div><div class="upload-footer">${isReady?`<button class="btn btn-primary btn-gold" onclick="runMtmFvoci()">Run MTM</button>`:''}</div></div>`;
 }
 
 async function runMtmFvoci() {
