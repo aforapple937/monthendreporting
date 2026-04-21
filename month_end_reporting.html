@@ -511,48 +511,6 @@ function buildTbPostingPoints(acc, mapRow) {
 }
 
 // ============================================================
-//  SHARED NAV STATUS UPDATE (eliminates 7 separate functions)
-// ============================================================
-const NAV_STEP_NUMS = { pretb: '1', loanrecon: '2', dq: '3', mtmfvoci: '4', reversal: '5', recon: '6', moa: '7', majmov: '8', tb: '9' };
-
-/** Unified nav status updater. Checks the appropriate state for each module. */
-function updateNavStatus(name) {
-  const navEl = document.getElementById('nav-'+name);
-  const numEl = document.getElementById('nnum-'+name);
-  if (!navEl) return;
-  navEl.classList.remove('done','has-breaks');
-  if (numEl) numEl.textContent = NAV_STEP_NUMS[name] || '';
-
-  // Determine if module is complete
-  let isDone = false;
-  switch(name) {
-    case 'reversal': case 'recon': case 'tb':
-      isDone = !!S.results[name]; break;
-    case 'pretb':
-      isDone = !!preTbState.results; break;
-    case 'loanrecon':
-      isDone = !!loanReconState.results; break;
-    case 'dq':
-      isDone = dqState.AD.length > 0; break;
-    case 'mtmfvoci':
-      isDone = !!mtmState.results; break;
-    case 'moa':
-      isDone = moaState.entries.length > 0; break;
-    case 'majmov':
-      isDone = !!majMovState.results; break;
-  }
-  if (isDone) {
-    navEl.classList.add('done');
-    if (numEl) numEl.textContent = '✓';
-  }
-}
-
-/** Update all nav statuses at once */
-function updateAllNavStatuses() {
-  ['pretb','loanrecon','dq','mtmfvoci','reversal','recon','moa','majmov','tb'].forEach(updateNavStatus);
-}
-
-// ============================================================
 //  SHARED SLOT CARD RENDERER (eliminates repetitive HTML generation)
 // ============================================================
 const SLOT_META = {
@@ -1049,7 +1007,7 @@ const BK_PER_PAGE = 100;
 const loanReconState = { tbMapping: null, fifo: null, results: null, files: { tbMapping: false, fifo: false } };
 const mtmState = { fvoci: null, fvociLoaded: false, disb: null, disbLoaded: false, prevFvoci: null, prevFvociLoaded: false, results: null };
 const moaState = { entries: [], dashView: 'type', journalMonth: '', journalRows: [], compareMonths: [], mode: 'single', monthA: '', monthB: '' };
-const preTbState = { results: null, effectiveDate: null, statusFilter: 'all', filters: {}, page: 1 };
+const preTbState = { results: null, effectiveDate: null, statusFilter: 'all', filters: {}, page: 1, stats: null };
 const dqState = { DS: [], AD: [], LA: '', LB: '', CF: 'all', TH: 0.10, sort: 'psi', allExpanded: false };
 const DQ_PRODS = ['LN','CC','OD','GUARANTEE','INVMT','RATING'];
 const glteState = { template: null, validation: null, isFiltered: false, results: [] };
@@ -1117,7 +1075,6 @@ async function clearIDB() {
   resetState();
   idbSetStatus('ready', 'Cache cleared');
   if (currentView) renderView(currentView);
-  updateAllNavStatuses();
 }
 
 // ============================================================
@@ -1294,7 +1251,6 @@ async function processFiles(files) {
 
   setUploadBar(false);
   document.getElementById('file-input-hidden').value = '';
-  updateNavStatus('dq');
 }
 
 async function handleEGLFile(file) {
@@ -1368,7 +1324,7 @@ function showView(name) {
 
 /** Reload action handlers for each view — called when user clicks the reload button in topbar */
 const RELOAD_HANDLERS = {
-  pretb:     () => { preTbState.results = null; preTbState.filters = {}; preTbState.statusFilter = 'all'; preTbState.onlyEntries = false; preTbState.page = 1; blockAutoRun('pretb'); renderPreTb(); },
+  pretb:     () => { preTbState.results = null; preTbState.filters = {}; preTbState.statusFilter = 'all'; preTbState.page = 1; preTbState.stats = null; blockAutoRun('pretb'); renderPreTb(); },
   loanrecon: () => { loanReconState.results = null; blockAutoRun('loanrecon'); renderLoanRecon(); },
   dq:        () => { if (typeof dqReload === 'function') dqReload(); },
   mtmfvoci:  () => { mtmState.results = null; blockAutoRun('mtmfvoci'); renderMtmFvoci(); },
@@ -1394,7 +1350,7 @@ function setTopbarReload(viewName) {
 const SHORTCUT_HANDLERS = {
   // F = reset filters (click Total Rows KPI equivalent)
   resetFilters: {
-    pretb:     () => preTbSetFilter(false),
+    pretb:     () => preTbSetFilter(),
     mtmfvoci:  () => mtmSetFilter(false),
     reversal:  () => revResetAll(),
     recon:     () => rcnResetAll(),
@@ -1730,14 +1686,13 @@ function renderStation(name) {
     // Auto-run if all files are ready and no prior date error
     if (cfg.isReady() && shouldAutoRun(name)) {
       container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:200px;"><div id="prog-${name}" style="text-align:center"><div class="progress-track" style="width:200px;margin-bottom:8px"><div class="progress-bar" id="prog-bar-${name}" style="width:10%"></div></div><div style="font-size:11px;color:var(--ink3)" id="prog-label-${name}">Processing…</div><div style="font-size:10px;color:var(--ink4);margin-top:4px" id="prog-sub-${name}"></div></div></div>`;
-      runStation(name).then(() => { updateNavStatus(name); });
+      runStation(name);
       return;
     }
     renderUploadPanel(name, container, cfg);
   } else {
     renderResultsPanel(name, container, cfg);
   }
-  updateNavStatus(name);
 }
 
 function renderUploadPanel(name, container, cfg) {
@@ -1810,7 +1765,6 @@ async function runStation(name) {
   await cfg.run(name);
   // Only re-render if results were set; date validation failures render their own warning
   if (S.results[name]) renderStation(name);
-  else updateNavStatus(name);
 }
 
 // ============================================================
@@ -1975,7 +1929,7 @@ function renderMajorMovement() {
   document.getElementById('topbar-title').textContent = 'Major Movement';
   document.getElementById('topbar-subtitle').textContent = 'ECL movement analysis by CIF — current vs previous month';
   const container = document.getElementById('view-majmov');
-  if (majMovState.results) { renderMajMovResults(container); updateNavStatus('majmov'); return; }
+  if (majMovState.results) { renderMajMovResults(container); return; }
   const avail = mmAvailableMonths();
   if (avail.length && shouldAutoRun('majmov')) {
     if (!majMovState.month || !avail.includes(majMovState.month)) majMovState.month = avail[0];
@@ -1984,7 +1938,6 @@ function renderMajorMovement() {
     return;
   }
   renderMajMovUpload(container);
-  updateNavStatus('majmov');
 }
 
 function renderMajMovUpload(container) {
@@ -3638,7 +3591,6 @@ function renderDq() {
     }
     renderDqUpload(container);
   } else renderDqDashboard(container);
-  updateNavStatus('dq');
 }
 
 function renderDqUpload(container) {
@@ -3680,7 +3632,7 @@ async function dqHandleFiles(files) {
   if(bar)bar.style.width='100%'; renderDq();
 }
 
-function dqReset() { dqState.DS=[];dqState.AD=[];dqState.LA='';dqState.LB='';dqState.CF='all';dqState.allExpanded=false; DQ_PRODS.forEach(p => idbDelete('dq_'+p)); updateNavStatus('dq');renderDq(); }
+function dqReset() { dqState.DS=[];dqState.AD=[];dqState.LA='';dqState.LB='';dqState.CF='all';dqState.allExpanded=false; DQ_PRODS.forEach(p => idbDelete('dq_'+p)); renderDq(); }
 function dqReload() { dqState.AD=[];dqState.LA='';dqState.LB='';dqState.CF='all';dqState.allExpanded=false;blockAutoRun('dq');renderDq(); }
 
 function dqCompute() {
@@ -3731,7 +3683,7 @@ function dqCompute() {
       cfgs.forEach((c,i)=>{const tA=c.data.reduce((s,r)=>s+r.valA,0),tB=c.data.reduce((s,r)=>s+r.valB,0);let p=0,dq=0;for(const r of c.data){if(r.isInvalid&&r.valB>0)dq++;r.pc=dqPsiC(r.valA,r.valB,tA,tB);p+=r.pc;}pd.push({_i:i,title:c.t,rows:c.data,psi:p,dq,cn:c.cn,isAmt:c.isAmt,hasDl:c.hasDl,rule:dqRl(px,c.cn),tA,tB});});
       dqState.AD.push(pd);
     }
-    setUploadBar(false); updateNavStatus('dq');
+    setUploadBar(false);
     renderDqDashboard(document.getElementById('view-dq'));
   }, 50);
 }
@@ -3802,22 +3754,17 @@ function dqCloseModal(e){if(e&&e.target!==document.getElementById('dq-modal-bg')
 //  PRE-CHECK TB VIEW
 // ============================================================
 function renderPreTb() {
-  // Title/subtitle are rendered inline via the design page-head; keep the
-  // shared topbar fields empty (the main-topbar itself is hidden in renderView).
-  const tt = document.getElementById('topbar-title'); if (tt) tt.textContent = '';
-  const ts = document.getElementById('topbar-subtitle'); if (ts) ts.textContent = '';
+  // Title/subtitle are rendered inline via the design page-head; the shared
+  // main-topbar is hidden for this view in renderView, so no need to touch it.
   const container = document.getElementById('view-pretb');
-  if (preTbState.results) { renderPreTbResults(container); }
-  else {
-    const f = S.files;
-    if (f['mbs-tb'] && f['msl-tb'] && f.mapping && shouldAutoRun('pretb')) {
-      container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:200px;"><div style="text-align:center"><div style="font-size:11px;color:var(--ink3)">Processing…</div></div></div>`;
-      setTimeout(() => { runPreTb(); }, 20);
-      return;
-    }
-    renderPreTbUpload(container);
+  if (preTbState.results) { renderPreTbResults(container); return; }
+  const f = S.files;
+  if (f['mbs-tb'] && f['msl-tb'] && f.mapping && shouldAutoRun('pretb')) {
+    container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:200px;"><div style="text-align:center"><div style="font-size:11px;color:var(--ink3)">Processing…</div></div></div>`;
+    setTimeout(() => { runPreTb(); }, 20);
+    return;
   }
-  updateNavStatus('pretb');
+  renderPreTbUpload(container);
 }
 
 function renderPreTbUpload(container) {
@@ -3847,12 +3794,32 @@ function runPreTb() {
   S.mapping.forEach(row => { GL_COLS.forEach(col => { const v = String(row[col]||'').trim(); if (v) relevantGLs.add(v); }); });
   if (!relevantGLs.size) { alert('No GL accounts found in EGL Mapping for the specified columns.'); if (btn) btn.disabled = false; return; }
   const results = [];
-  const processTB = (txt) => { if (!txt) return; parseCSV(txt).forEach(row => { if (!row.ACCOUNTS) return; const parts = row.ACCOUNTS.split('-'); if (parts.length < 3) return; const gl = parts[2]; if (!relevantGLs.has(gl)) return; const ptd = parseFloat(row.PTD_NET_ENTERED || 0); results.push({ ACCOUNTS: row.ACCOUNTS, ACCOUNT_NAME: row.ACCOUNT_NAME || '', GL_NUMBER: gl, CURRENCY: row.CURRENCY || '', PTD: ptd, HAS_ENTRY: Math.abs(ptd) > 0 }); }); };
+  let firstDateRaw = null;
+  let withEntries = 0;
+  const processTB = (txt) => {
+    if (!txt) return;
+    parseCSV(txt).forEach(row => {
+      if (!firstDateRaw && row.EFFECTIVE_DATE) firstDateRaw = String(row.EFFECTIVE_DATE).trim();
+      if (!row.ACCOUNTS) return;
+      const parts = row.ACCOUNTS.split('-');
+      if (parts.length < 3) return;
+      const gl = parts[2];
+      if (!relevantGLs.has(gl)) return;
+      const ptd = parseFloat(row.PTD_NET_ENTERED || 0);
+      const hasEntry = Math.abs(ptd) > 0;
+      if (hasEntry) withEntries++;
+      results.push({ ACCOUNTS: row.ACCOUNTS, ACCOUNT_NAME: row.ACCOUNT_NAME || '', GL_NUMBER: gl, CURRENCY: row.CURRENCY || '', PTD: ptd, HAS_ENTRY: hasEntry });
+    });
+  };
   processTB(S.tb.mbs); processTB(S.tb.msl);
   preTbState.results = results;
-  const allTbRows = [...(S.tb.mbs ? parseCSV(S.tb.mbs) : []), ...(S.tb.msl ? parseCSV(S.tb.msl) : [])];
-  const firstWithDate = allTbRows.find(r => r.EFFECTIVE_DATE);
-  if (firstWithDate) { const dm = String(firstWithDate.EFFECTIVE_DATE).trim().match(/^(\d{2})-([A-Z]{3})-(\d{2})$/i); preTbState.effectiveDate = dm ? `${dm[1]}-${dm[2].toUpperCase()}-20${dm[3]}` : String(firstWithDate.EFFECTIVE_DATE).trim(); } else { preTbState.effectiveDate = null; }
+  preTbState.stats = { withEntries, cleanCount: results.length - withEntries };
+  if (firstDateRaw) {
+    const dm = firstDateRaw.match(/^(\d{2})-([A-Z]{3})-(\d{2})$/i);
+    preTbState.effectiveDate = dm ? `${dm[1]}-${dm[2].toUpperCase()}-20${dm[3]}` : firstDateRaw;
+  } else {
+    preTbState.effectiveDate = null;
+  }
   renderPreTb();
 }
 
@@ -3920,17 +3887,11 @@ function ptbBuildPagerHtml(totalPages, currentPage) {
   return `<div class="ptb-pager">${btns.join('')}</div>`;
 }
 
-function renderPreTbResults(container) {
+/** Compute the filtered + paginated view of preTbState.results. Shared
+ *  between full render and partial-table render. */
+function ptbComputeView() {
   const results = preTbState.results || [];
-  const withEntries = results.filter(r => r.HAS_ENTRY);
-  const cleanCount = results.length - withEntries.length;
-  const effectiveDate = preTbState.effectiveDate || null;
-  if (!preTbState.filters) preTbState.filters = {};
-  if (!preTbState.statusFilter) preTbState.statusFilter = 'all';
-  if (!preTbState.page) preTbState.page = 1;
-  const statusFilter = preTbState.statusFilter;
-
-  // Apply status seg first, then per-column filters
+  const statusFilter = preTbState.statusFilter || 'all';
   const afterStatus = statusFilter === 'all' ? results : results.filter(r => ptbStatusOf(r) === statusFilter);
   const display = afterStatus.filter(r => {
     for (const k of PTB_COLS) {
@@ -3939,15 +3900,68 @@ function renderPreTbResults(container) {
     }
     return true;
   });
-
-  // Pagination (fixed 50 rows/page)
   const totalPages = Math.max(1, Math.ceil(display.length / PTB_PAGE_SIZE));
   if (preTbState.page > totalPages) preTbState.page = totalPages;
   if (preTbState.page < 1) preTbState.page = 1;
   const page = preTbState.page;
   const startIdx = (page - 1) * PTB_PAGE_SIZE;
   const endIdx = Math.min(startIdx + PTB_PAGE_SIZE, display.length);
-  const pageRows = display.slice(startIdx, endIdx);
+  return { display, page, totalPages, startIdx, endIdx, pageRows: display.slice(startIdx, endIdx) };
+}
+
+function ptbBuildRowsHtml(pageRows) {
+  if (!pageRows.length) return `<tr><td colspan="${PTB_COLS.length}" style="text-align:center;padding:40px;color:var(--d-ink-4)">No rows match the current filters</td></tr>`;
+  return pageRows.map(r => {
+    const st = ptbStatusOf(r);
+    const chip = st === 'break'
+      ? `<span class="status-chip break"><span class="dot"></span>Break</span>`
+      : `<span class="status-chip matched"><span class="dot"></span>Matched</span>`;
+    const ptd = r.HAS_ENTRY ? (r.PTD<0?'-':'')+fmtNum(Math.abs(r.PTD)) : '<span style="color:var(--d-ink-4)">—</span>';
+    return `<tr data-status="${st}">
+      <td>${chip}</td>
+      <td class="d-mono">${r.ACCOUNTS}</td>
+      <td>${r.ACCOUNT_NAME||'<span style="color:var(--d-ink-4)">—</span>'}</td>
+      <td class="d-mono">${r.GL_NUMBER}</td>
+      <td class="d-mono" style="color:var(--d-ink-3)">${r.CURRENCY}</td>
+      <td class="num">${ptd}</td>
+    </tr>`;
+  }).join('');
+}
+
+function ptbBuildFooterHtml(display, startIdx, endIdx, totalPages, page) {
+  const showingFrom = display.length === 0 ? 0 : startIdx + 1;
+  return `<div class="ptb-table-foot" id="ptb-foot">
+      <span>Showing <b>${showingFrom.toLocaleString()}–${endIdx.toLocaleString()}</b> of <b>${display.length.toLocaleString()}</b> accounts</span>
+      ${ptbBuildPagerHtml(totalPages, page)}
+    </div>`;
+}
+
+/** Partial re-render: only updates the tbody + footer/pager. Used for page
+ *  changes where the page head, KPI, seg buttons and chips don't change. */
+function partialRenderPreTbTable() {
+  const tbody = document.getElementById('ptb-tbody');
+  const foot  = document.getElementById('ptb-foot');
+  if (!tbody || !foot) { renderPreTbResults(document.getElementById('view-pretb')); return; }
+  const { display, page, totalPages, startIdx, endIdx, pageRows } = ptbComputeView();
+  tbody.innerHTML = ptbBuildRowsHtml(pageRows);
+  foot.outerHTML = ptbBuildFooterHtml(display, startIdx, endIdx, totalPages, page);
+}
+
+function renderPreTbResults(container) {
+  const results = preTbState.results || [];
+  // Stats are cached at run-time; fall back to recompute if missing (defensive).
+  if (!preTbState.stats) {
+    const we = results.filter(r => r.HAS_ENTRY).length;
+    preTbState.stats = { withEntries: we, cleanCount: results.length - we };
+  }
+  const { withEntries: withEntriesCount, cleanCount } = preTbState.stats;
+  const effectiveDate = preTbState.effectiveDate || null;
+  if (!preTbState.filters) preTbState.filters = {};
+  if (!preTbState.statusFilter) preTbState.statusFilter = 'all';
+  if (!preTbState.page) preTbState.page = 1;
+  const statusFilter = preTbState.statusFilter;
+
+  const { display, page, totalPages, startIdx, endIdx, pageRows } = ptbComputeView();
 
   const matchedPct = results.length ? (cleanCount / results.length * 100) : 0;
   const pageHeadHtml = `
@@ -3972,7 +3986,7 @@ function renderPreTbResults(container) {
         <div class="ptb-value" style="font-size:22px;letter-spacing:-0.02em">
           <span style="color:var(--d-pos)">${cleanCount.toLocaleString()}</span>
           <span class="dim" style="font-size:14px">matched</span>
-          <span style="color:${withEntries.length?'var(--d-neg)':'var(--d-ink-4)'};margin-left:6px">${withEntries.length.toLocaleString()}</span>
+          <span style="color:${withEntriesCount?'var(--d-neg)':'var(--d-ink-4)'};margin-left:6px">${withEntriesCount.toLocaleString()}</span>
           <span class="dim" style="font-size:14px">breaks</span>
         </div>
         <div class="ptb-footline">
@@ -3993,7 +4007,7 @@ function renderPreTbResults(container) {
     <div class="ptb-table-toolbar">
       <div class="ptb-seg">
         ${segBtn('all','All', results.length, 'dim')}
-        ${segBtn('break','Breaks', withEntries.length, 'neg')}
+        ${segBtn('break','Breaks', withEntriesCount, 'neg')}
         ${segBtn('matched','Matched', cleanCount, 'dim')}
       </div>
     </div>`;
@@ -4007,30 +4021,6 @@ function renderPreTbResults(container) {
     return `<th class="${active?'filtered':''}${numCls}" data-col="${k}" onclick="openPreTbFilter('${k}',this)">${PTB_COL_LABELS[k]}<span class="fcol"></span></th>`;
   }).join('');
 
-  const rowsHtml = pageRows.map(r => {
-    const st = ptbStatusOf(r);
-    const chip = st === 'break'
-      ? `<span class="status-chip break"><span class="dot"></span>Break</span>`
-      : `<span class="status-chip matched"><span class="dot"></span>Matched</span>`;
-    const ptd = r.HAS_ENTRY ? (r.PTD<0?'-':'')+fmtNum(Math.abs(r.PTD)) : '<span style="color:var(--d-ink-4)">—</span>';
-    return `<tr data-status="${st}">
-      <td>${chip}</td>
-      <td class="d-mono">${r.ACCOUNTS}</td>
-      <td>${r.ACCOUNT_NAME||'<span style="color:var(--d-ink-4)">—</span>'}</td>
-      <td class="d-mono">${r.GL_NUMBER}</td>
-      <td class="d-mono" style="color:var(--d-ink-3)">${r.CURRENCY}</td>
-      <td class="num">${ptd}</td>
-    </tr>`;
-  }).join('');
-
-  const showingFrom = display.length === 0 ? 0 : startIdx + 1;
-  const showingTo = endIdx;
-  const footerHtml = `
-    <div class="ptb-table-foot">
-      <span>Showing <b>${showingFrom.toLocaleString()}–${showingTo.toLocaleString()}</b> of <b>${display.length.toLocaleString()}</b> accounts</span>
-      ${ptbBuildPagerHtml(totalPages, page)}
-    </div>`;
-
   container.innerHTML = `<div class="ptb-v2">
     ${pageHeadHtml}
     ${kpiHtml}
@@ -4040,17 +4030,18 @@ function renderPreTbResults(container) {
       <div class="ptb-scroll">
         <table class="ptb-data">
           <thead><tr>${thHtml}</tr></thead>
-          <tbody>${rowsHtml || `<tr><td colspan="${PTB_COLS.length}" style="text-align:center;padding:40px;color:var(--d-ink-4)">No rows match the current filters</td></tr>`}</tbody>
+          <tbody id="ptb-tbody">${ptbBuildRowsHtml(pageRows)}</tbody>
         </table>
       </div>
-      ${footerHtml}
+      ${ptbBuildFooterHtml(display, startIdx, endIdx, totalPages, page)}
     </div>
   </div>`;
 }
 
 function preTbSetPage(p) {
   preTbState.page = p;
-  renderPreTbResults(document.getElementById('view-pretb'));
+  // Page change only updates tbody + pager; avoids rebuilding KPI / headers / chips.
+  partialRenderPreTbTable();
 }
 function preTbClearColFilter(k) {
   if (preTbState.filters) delete preTbState.filters[k];
@@ -4096,21 +4087,11 @@ function preTbSetStatusFilter(f) {
   renderPreTbResults(document.getElementById('view-pretb'));
 }
 
-function preTbSetFilter(onlyEntries) {
-  // Backwards-compatible: F shortcut resets everything; old "onlyEntries" maps to 'break' seg
-  if (!onlyEntries) {
-    preTbState.statusFilter = 'all';
-    preTbState.filters = {};
-    preTbState.onlyEntries = false;
-  } else {
-    preTbState.statusFilter = 'break';
-    preTbState.onlyEntries = true;
-  }
+/** F-key shortcut: reset status seg and all column filters. */
+function preTbSetFilter() {
+  preTbState.statusFilter = 'all';
+  preTbState.filters = {};
   preTbState.page = 1;
-  renderPreTbResults(document.getElementById('view-pretb'));
-}
-function preTbToggleFilter() {
-  preTbState.statusFilter = preTbState.statusFilter === 'break' ? 'all' : 'break';
   renderPreTbResults(document.getElementById('view-pretb'));
 }
 function preTbExport() {
@@ -5185,7 +5166,6 @@ function renderLoanRecon() {
     }
     renderLoanReconUpload(container);
   }
-  updateNavStatus('loanrecon');
 }
 
 function renderLoanReconUpload(container) {
@@ -5335,13 +5315,13 @@ function renderMtmFvoci() {
   document.getElementById('topbar-title').textContent = 'MTM FVOCI';
   document.getElementById('topbar-subtitle').textContent = 'Mark-to-market calculation for FVOCI loans';
   const container = document.getElementById('view-mtmfvoci');
-  if (mtmState.results) { renderMtmResults(container); updateNavStatus('mtmfvoci'); return; }
+  if (mtmState.results) { renderMtmResults(container); return; }
   if (mtmState.fvociLoaded && mtmState.disbLoaded && mtmState.prevFvociLoaded && shouldAutoRun('mtmfvoci')) {
     container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:200px;"><div id="prog-mtmfvoci" style="text-align:center"><div class="progress-track" style="width:200px;margin-bottom:8px"><div class="progress-bar" id="prog-bar-mtmfvoci" style="width:10%"></div></div><div style="font-size:11px;color:var(--ink3)" id="prog-label-mtmfvoci">Processing…</div><div style="font-size:10px;color:var(--ink4);margin-top:4px" id="prog-sub-mtmfvoci"></div></div></div>`;
     runMtmFvoci();
     return;
   }
-  renderMtmUpload(container); updateNavStatus('mtmfvoci');
+  renderMtmUpload(container);
 }
 
 function renderMtmUpload(container) {
@@ -6804,7 +6784,6 @@ function renderMoa() {
     + '</div>'
     + '</div>';
   if (view === 'type' && moaState.allCollapsed) applyMoaExpandState();
-  updateNavStatus('moa');
 }
 
 function moaSetMode(mode) {
@@ -7502,7 +7481,6 @@ function suProgress(pct, msg) {
     suProgress(50, 'Loading files…');
     await loadFromIDB();
     suProgress(90, 'Restoring state…');
-    updateAllNavStatuses();
     refreshFilesBadge();
     suProgress(100, 'Ready');
   } catch(e) {
