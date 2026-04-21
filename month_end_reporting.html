@@ -211,7 +211,7 @@
         <button class="btn" id="moa-modal-del-btn" style="display:none;color:var(--red);border-color:color-mix(in oklab, var(--red) 30%, var(--border))" onclick="deleteMoaFromModal()"><svg width="12" height="12"><use href="#i-trash"/></svg>Delete</button>
         <button class="btn" id="moa-modal-dup-btn" style="display:none" onclick="duplicateMoaEntry()"><svg width="12" height="12"><use href="#i-copy"/></svg>Duplicate</button>
         <button class="btn" onclick="closeMoaModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="saveMoaEntry()">Save overlay</button>
+        <button class="btn btn-gold" onclick="saveMoaEntry()">Save overlay</button>
       </div>
     </div>
   </div>
@@ -5691,6 +5691,147 @@ function moaToggleAllBreakdowns() {
 function closeMoaActionModal() { var el = document.getElementById('moa-entry-action-modal'); if (el) el.remove(); }
 function openMoaEntryModal(idx) { openMoaModal(idx); }
 
+/* ============================================================
+ *  Design-handoff tables: list / by-LOB / by-RC (single month)
+ *  Mirrors /mbb/project/Dashboard.html #ov-table visual spec.
+ *  ============================================================ */
+function moaEntryDesc(e) {
+  if (!e) return '&mdash;';
+  if (e.type === 'Borrower') {
+    var prefix = e.group ? (e.group + ' &middot; ') : '';
+    return prefix + (e.cif || '&mdash;') + ' &middot; ' + (e.borrower || '&mdash;');
+  }
+  if (e.type === 'Model')  return e.modelDesc || '&mdash;';
+  if (e.type === 'Sector') return 'Sector overlay';
+  return '&mdash;';
+}
+
+function moaAmtCell(v, opts) {
+  opts = opts || {};
+  var n = parseFloat(v) || 0;
+  var cls = n >= 0 ? 'ov-amt-pos' : 'ov-amt-neg';
+  var s = (n > 0 ? '+' : '') + fmtN2(n);
+  var tdStyle = 'padding-right:' + (opts.padRight || '10px');
+  return '<td class="num" style="' + tdStyle + '"><span class="' + cls + '">' + s + '</span></td>';
+}
+
+function buildMoaDesignListHtml(entries, month) {
+  var list = entries.map(function(e,i){ return {e:e, i:i}; })
+    .filter(function(x){ return x.e.month === month; });
+  list.sort(function(a,b){ return Math.abs(parseFloat(b.e.amount)||0) - Math.abs(parseFloat(a.e.amount)||0); });
+
+  var body = '';
+  if (!list.length) {
+    body = '<tr><td colspan="4" class="ov-empty">No overlays for ' + (month || '&mdash;') + '</td></tr>';
+  } else {
+    body = list.map(function(x) {
+      return '<tr data-ov-id="' + x.i + '" onclick="openMoaModal(' + x.i + ')" title="Click to edit">'
+        + '<td style="padding-left:16px"><span class="ov-type-chip" data-type="' + (x.e.type||'') + '">' + (x.e.type||'&mdash;') + '</span></td>'
+        + '<td><span class="ov-entity-tag">' + (x.e.entity||'&mdash;') + '</span></td>'
+        + '<td><div class="ov-note">' + moaEntryDesc(x.e) + '</div></td>'
+        + moaAmtCell(x.e.amount, {padRight:'16px'})
+        + '</tr>';
+    }).join('');
+  }
+
+  var net = list.reduce(function(s,x){ return s + (parseFloat(x.e.amount)||0); }, 0);
+  var netStr = (net > 0 ? '+' : '') + fmtN2(net);
+
+  return '<div class="ov-tcard">'
+    + '<div class="ov-tscroll"><table class="ov-data">'
+    + '<thead><tr>'
+    + '<th style="width:120px;padding-left:16px">Type</th>'
+    + '<th style="width:96px">Entity</th>'
+    + '<th style="min-width:340px">Overlay description</th>'
+    + '<th class="num" style="width:160px;padding-right:16px">Amount (LCY)</th>'
+    + '</tr></thead>'
+    + '<tbody>' + body + '</tbody></table></div>'
+    + '<div class="ov-table-foot">'
+    + '<span>Showing <b>' + list.length + '</b> overlay' + (list.length===1?'':'s')
+    + ' &middot; Net total <b>' + netStr + '</b></span>'
+    + '<span class="dim">Click a row to edit</span>'
+    + '</div></div>';
+}
+
+function buildMoaDesignPivotHtml(entries, month, dim) {
+  var allocKey = dim === 'lob' ? 'lobAlloc' : 'rcAlloc';
+  var dimLabel = dim === 'lob' ? 'LOB' : 'RC';
+  var flat = [];
+  entries.forEach(function(e, i) {
+    if (e.month !== month) return;
+    moaMigrateEntry(e);
+    var alloc = e[allocKey] || {};
+    Object.keys(alloc).forEach(function(k) {
+      var v = parseFloat(alloc[k]) || 0;
+      if (!k || !v) return;
+      flat.push({ e:e, idx:i, dimVal:k, v:v });
+    });
+  });
+  flat.sort(function(a,b){
+    if (a.dimVal !== b.dimVal) return a.dimVal.localeCompare(b.dimVal);
+    return Math.abs(b.v) - Math.abs(a.v);
+  });
+
+  var body = '';
+  if (!flat.length) {
+    body = '<tr><td colspan="5" class="ov-empty">No ' + dimLabel + ' allocations for ' + (month || '&mdash;') + '</td></tr>';
+  } else {
+    var curDim = null, groupAcc = [];
+    var flushGroup = function() {
+      if (curDim === null) return;
+      var groupSum = groupAcc.reduce(function(s,r){ return s + r.v; }, 0);
+      var count = groupAcc.length;
+      var sumStr = (groupSum > 0 ? '+' : '') + fmtN2(groupSum);
+      var dimDisp = dim === 'rc' ? moaRcLabel(curDim) : curDim;
+      body += '<tr class="ov-dim-head"><td colspan="4" style="padding-left:16px">'
+        + dimLabel + '<span class="grp-label">' + dimDisp + '</span>'
+        + '<span class="grp-count">' + count + ' allocation' + (count===1?'':'s') + '</span>'
+        + '</td><td class="num" style="padding-right:16px;color:var(--d-ink);font-weight:500">' + sumStr + '</td></tr>';
+      groupAcc.forEach(function(r) {
+        body += '<tr data-ov-id="' + r.idx + '" onclick="openMoaModal(' + r.idx + ')" title="Click to edit">'
+          + '<td style="padding-left:16px"></td>'
+          + '<td><span class="ov-type-chip" data-type="' + (r.e.type||'') + '">' + (r.e.type||'&mdash;') + '</span></td>'
+          + '<td><span class="ov-entity-tag">' + (r.e.entity||'&mdash;') + '</span></td>'
+          + '<td><div class="ov-note">' + moaEntryDesc(r.e) + '</div></td>'
+          + moaAmtCell(r.v, {padRight:'16px'})
+          + '</tr>';
+      });
+    };
+    flat.forEach(function(r) {
+      if (r.dimVal !== curDim) { flushGroup(); curDim = r.dimVal; groupAcc = []; }
+      groupAcc.push(r);
+    });
+    flushGroup();
+
+    var grand = flat.reduce(function(s,r){ return s + r.v; }, 0);
+    var grandStr = (grand > 0 ? '+' : '') + fmtN2(grand);
+    body += '<tr class="ov-grand-row"><td colspan="4" style="padding-left:16px">Total across all ' + dimLabel + 's</td>'
+      + '<td class="num" style="padding-right:16px">' + grandStr + '</td></tr>';
+  }
+
+  var ovCount = new Set(flat.map(function(r){ return r.idx; })).size;
+  var net = flat.reduce(function(s,r){ return s + r.v; }, 0);
+  var netStr = (net > 0 ? '+' : '') + fmtN2(net);
+  var dimColW = dim === 'rc' ? '200px' : '120px';
+
+  return '<div class="ov-tcard">'
+    + '<div class="ov-tscroll"><table class="ov-data">'
+    + '<thead><tr>'
+    + '<th style="width:' + dimColW + ';padding-left:16px">' + dimLabel + '</th>'
+    + '<th style="width:96px">Type</th>'
+    + '<th style="width:96px">Entity</th>'
+    + '<th style="min-width:300px">Overlay description</th>'
+    + '<th class="num" style="width:150px;padding-right:16px">Allocation (LCY)</th>'
+    + '</tr></thead>'
+    + '<tbody>' + body + '</tbody></table></div>'
+    + '<div class="ov-table-foot">'
+    + '<span><b>' + ovCount + '</b> overlay' + (ovCount===1?'':'s')
+    + ' &middot; <b>' + flat.length + '</b> allocation' + (flat.length===1?'':'s')
+    + ' &middot; Net total <b>' + netStr + '</b></span>'
+    + '<span class="dim">Click a row to edit</span>'
+    + '</div></div>';
+}
+
 function buildMoaJournalHtml(entries, allMonths) {
   if (!allMonths.length) return '<div style="padding:20px;font-size:11px;color:var(--ink3);">No entries yet.</div>';
   if (!moaState.journalMonth || allMonths.indexOf(moaState.journalMonth) < 0) moaState.journalMonth = allMonths[allMonths.length - 1];
@@ -5817,8 +5958,12 @@ function renderMoa() {
   if (incomplete.length) { var irows = incomplete.map(function(x){ return '<tr style="cursor:pointer" onclick="openMoaModal(' + x.i + ')" title="Click to edit"><td style="padding:5px 10px;font-size:11px">' + (x.e.entity||'—') + '</td><td style="padding:5px 10px;font-size:11px">' + (x.e.month||'—') + '</td><td style="padding:5px 10px;font-size:11px">' + (x.e.type||'—') + '</td><td style="padding:5px 10px;font-size:11px;color:var(--red)">' + x.missing.join(', ') + '</td></tr>'; }).join(''); incompleteHtml = '<div style="background:var(--red-bg);border:1px solid #f5c4c0;border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;"><div style="font-size:11px;font-weight:600;color:var(--red);margin-bottom:6px;">&#9888; ' + incomplete.length + ' entr' + (incomplete.length===1?'y':'ies') + ' with missing required fields — click to edit</div><div style="overflow:auto;max-height:120px;"><table class="data-table" style="font-size:11px;"><thead><tr><th>Entity</th><th>Month</th><th>Type</th><th>Missing Fields</th></tr></thead><tbody>' + irows + '</tbody></table></div></div>'; }
 
   var mainHtml;
-  if (view === 'type') { var groupKeys = [], groupMap = new Map(); entries.forEach(function(e) { var gk = (e.entity||'') + '||' + (e.type||''); if (!groupMap.has(gk)) { groupMap.set(gk, []); groupKeys.push(gk); } groupMap.get(gk).push(e); }); groupKeys.sort(function(a,b){ var ap=a.split('||'), bp=b.split('||'); if(ap[0]!==bp[0]) return ap[0]==='MBB-SG'?-1:1; return ap[1].localeCompare(bp[1]); }); mainHtml = buildMoaDashHtml(entries, visMonths, groupKeys, groupMap); }
-  else if (view === 'journal') { moaState.journalMonth = moaState.dashTo; mainHtml = buildMoaJournalHtml(entries, allMonths); }
+  if (view === 'journal') { moaState.journalMonth = moaState.dashTo; mainHtml = buildMoaJournalHtml(entries, allMonths); }
+  else if (moaState.mode === 'single') {
+    if (view === 'type') mainHtml = buildMoaDesignListHtml(entries, moaState.monthA || '');
+    else mainHtml = buildMoaDesignPivotHtml(entries, moaState.monthA || '', view === 'rcMgt' ? 'lob' : 'rc');
+  }
+  else if (view === 'type') { var groupKeys = [], groupMap = new Map(); entries.forEach(function(e) { var gk = (e.entity||'') + '||' + (e.type||''); if (!groupMap.has(gk)) { groupMap.set(gk, []); groupKeys.push(gk); } groupMap.get(gk).push(e); }); groupKeys.sort(function(a,b){ var ap=a.split('||'), bp=b.split('||'); if(ap[0]!==bp[0]) return ap[0]==='MBB-SG'?-1:1; return ap[1].localeCompare(bp[1]); }); mainHtml = buildMoaDashHtml(entries, visMonths, groupKeys, groupMap); }
   else { mainHtml = buildMoaRcHtml(entries, visMonths, view === 'rcMgt' ? 'rcMgt' : 'rcTb'); }
 
   // ===== View-mode buttons (moved up to page-head, next to Roll-forward) =====
