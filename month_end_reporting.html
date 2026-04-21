@@ -289,14 +289,39 @@
   </div>
 </div>
 
-<!-- Cache Inspector Modal -->
+<!-- Cache Inspector Modal (Stored Files) -->
 <div class="modal-bg" id="cache-modal-bg" onclick="closeCacheModal(event)">
-  <div class="modal" style="width:520px;" onclick="event.stopPropagation()">
+  <div class="modal sf-modal" onclick="event.stopPropagation()">
     <div class="modal-head">
-      <h3>Cached Files</h3>
+      <h3>Stored Files <span class="sf-head-sub">· Local IndexedDB</span></h3>
       <span class="modal-close" onclick="closeCacheModal()">&times;</span>
     </div>
-    <div class="modal-body" id="cache-modal-body" style="padding:0;"></div>
+    <div class="modal-body" id="cache-modal-body" style="padding:16px 20px;">
+      <div class="sf-search-row">
+        <div class="sf-search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color:var(--ink3);flex-shrink:0"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="sf-search-input" placeholder="Search filename…" oninput="sfOnSearchInput(this.value)" />
+        </div>
+        <span class="sf-count" id="sf-count"></span>
+      </div>
+      <div class="sf-card" id="sf-card">
+        <table class="sf-table" id="sf-table">
+          <thead>
+            <tr>
+              <th class="sf-col-name">Filename</th>
+              <th class="sf-col-type">Type</th>
+              <th class="sf-col-up">Uploaded</th>
+              <th class="sf-col-act">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="sf-rows"></tbody>
+        </table>
+        <div id="sf-empty" class="sf-empty" style="display:none">
+          <div class="sf-empty-title">No files stored yet</div>
+          <div class="sf-empty-sub">Upload files via the sidebar or reload a pipeline to cache its source files here.</div>
+        </div>
+      </div>
+    </div>
     <div class="modal-foot" style="justify-content:flex-end;">
       <button class="btn btn-sm" style="color:var(--red);border-color:#f5c4c0;background:var(--red-bg);" onclick="clearIDBFromModal()">Clear all cache</button>
     </div>
@@ -397,8 +422,6 @@
         <h4>Management Overlay</h4>
         <div class="kbd-row"><span class="desc">New overlay</span><span class="keys"><span class="k">N</span></span></div>
         <div class="kbd-row"><span class="desc">Save &amp; export JSON</span><span class="keys"><span class="k">S</span></span></div>
-        <div class="kbd-row"><span class="desc">Expand / collapse all (List view)</span><span class="keys"><span class="k">X</span></span></div>
-        <div class="kbd-row"><span class="desc">Cycle view (List &harr; Journal entries)</span><span class="keys"><span class="k">[</span><span class="k">]</span></span></div>
       </div>
       <div class="kbd-group">
         <h4>MTM FVOCI</h4>
@@ -1414,7 +1437,22 @@ const SHORTCUT_HANDLERS = {
     recon:     () => rcnResetAll(),
     tb:        () => tbrResetAll(),
     majmov:    () => { majMovState.filters = {}; majMovState.page = 0; renderMajMovResults(document.getElementById('view-majmov')); },
-    glte:      () => { if (typeof resetGlteFilters === 'function') resetGlteFilters(); }
+    glte:      () => { if (typeof resetGlteFilters === 'function') resetGlteFilters(); },
+    moa:       () => {
+      if (typeof moaFilters === 'object' && moaFilters) {
+        Object.keys(moaFilters).forEach(function(v){ Object.keys(moaFilters[v]).forEach(function(k){ moaFilters[v][k].clear(); }); });
+      }
+      var seen = {}, allMonths = [];
+      (moaState.entries || []).forEach(function(e){ if (e.month && !seen[e.month]) { seen[e.month] = 1; allMonths.push(e.month); } });
+      allMonths.sort();
+      moaState.mode = 'single';
+      moaState.dashView = 'type';
+      moaState.monthA = allMonths.length ? allMonths[allMonths.length - 1] : '';
+      moaState.monthB = '';
+      moaState.compareMonths = [];
+      moaState.allCollapsed = false;
+      renderMoa();
+    }
   },
   // E = export
   exportData: {
@@ -1431,8 +1469,7 @@ const SHORTCUT_HANDLERS = {
   // [ / ] = cycle tabs within the current view
   cycleTab: {
     mtmfvoci:  (dir) => { const order = ['listing','journal','wair']; const i = order.indexOf(_mtmTab); const ni = (i + dir + order.length) % order.length; _mtmTab = order[ni]; renderMtmResults(document.getElementById('view-mtmfvoci')); },
-    majmov:    (dir) => { const order = ['presentation','data']; const i = order.indexOf(majMovState.tab); const ni = (i + dir + order.length) % order.length; majMovState.tab = order[ni]; renderMajMovResults(document.getElementById('view-majmov')); },
-    moa:       (dir) => { const order = ['type','journal']; let i = order.indexOf(moaState.dashView); if (i < 0) i = 0; const ni = (i + dir + order.length) % order.length; moaSetView(order[ni]); }
+    majmov:    (dir) => { const order = ['presentation','data']; const i = order.indexOf(majMovState.tab); const ni = (i + dir + order.length) % order.length; majMovState.tab = order[ni]; renderMajMovResults(document.getElementById('view-majmov')); }
   },
   // M = toggle million/whole units (Major Movement presentation view)
   toggleUnit: {
@@ -1461,7 +1498,6 @@ function handleGlobalShortcut(e) {
   else if (keyLower === 'e' && SHORTCUT_HANDLERS.exportData[v]) { e.preventDefault(); SHORTCUT_HANDLERS.exportData[v](); }
   else if (keyLower === 's' && v === 'moa') { e.preventDefault(); exportMoaJson(); }
   else if (keyLower === 'n' && v === 'moa') { e.preventDefault(); openMoaModal(null); }
-  else if (keyLower === 'x' && v === 'moa' && moaState.dashView === 'type') { e.preventDefault(); moaToggleAllBreakdowns(); }
   else if ((key === '[' || key === ']') && SHORTCUT_HANDLERS.cycleTab[v]) { e.preventDefault(); SHORTCUT_HANDLERS.cycleTab[v](key === ']' ? 1 : -1); }
   else if (keyLower === 'm' && SHORTCUT_HANDLERS.toggleUnit[v]) { e.preventDefault(); SHORTCUT_HANDLERS.toggleUnit[v](); }
 }
@@ -3135,37 +3171,113 @@ const IDB_KEY_LABELS = {
   dq_GUARANTEE:'Outbound DQ — GUARANTEE', dq_INVMT:'Outbound DQ — INVMT', dq_RATING:'Outbound DQ — RATING',
 };
 
-async function openCacheModal() {
-  const body = document.getElementById('cache-modal-body');
-  body.innerHTML = `<div style="padding:24px;text-align:center;color:var(--ink3);font-size:12px">Loading…</div>`;
-  document.getElementById('cache-modal-bg').classList.add('show');
-  let keys = [], meta = {};
-  try { const inv = await idbGetInventory(); keys = inv.keys.filter(k => k !== '_meta'); meta = inv.meta; } catch(e) { body.innerHTML = `<div style="padding:24px;color:var(--red);font-size:12px">Could not read cache.</div>`; return; }
-  if (!keys.length) { body.innerHTML = `<div style="padding:24px;text-align:center;color:var(--ink3);font-size:12px">No files cached yet.</div>`; return; }
-  const sorted = keys.sort((a, b) => (meta[b]?.savedAt || 0) - (meta[a]?.savedAt || 0));
-  let html = '';
-  for (const k of sorted) {
-    const m = meta[k] || {};
-    const fname = m.filename || null;
-    const savedAt = m.savedAt ? new Date(m.savedAt).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : 'Cached before tracking — re-upload to record';
-    const slotLabel = IDB_KEY_LABELS[k] || (k.startsWith('dq_') ? 'Outbound DQ — ' + k.replace('dq_','') : (k.startsWith('rdl_post_') ? 'RDL (Post-patch) — ' + (() => { const mk = k.replace('rdl_post_',''); if (mk === 'unknown') return 'Unknown month'; const [y,m] = mk.split('-'); return MONTH_NAMES[parseInt(m)-1] + ' ' + y; })() : k));
-    const isLegacy = !IDB_KEY_LABELS[k] && !k.startsWith('dq_') && !k.startsWith('rdl_post_');
-    const primaryLine = fname || slotLabel;
-    const secondaryLine = fname ? slotLabel : null;
-    const legacyLine = isLegacy ? 'Legacy cache entry — safe to remove' : null;
-    html += `<div style="display:flex;align-items:center;gap:10px;padding:10px 20px;border-bottom:1px solid var(--paper2);">
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:11px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${primaryLine}">${primaryLine}</div>
-          ${secondaryLine ? `<div style="font-size:10px;color:var(--ink3);margin-top:1px">${secondaryLine}</div>` : ''}
-          ${legacyLine ? `<div style="font-size:10px;color:var(--amber);margin-top:1px">⚠ ${legacyLine}</div>` : ''}
-        </div>
-        <div style="text-align:right;flex-shrink:0;">
-          <div style="font-size:10px;font-family:var(--mono);color:${m.savedAt?'var(--ink2)':'var(--ink4)'};margin-bottom:2px">${savedAt}</div>
-        </div>
-        <button class="btn btn-sm" style="font-size:10px;padding:3px 8px;color:var(--red);border-color:#f5c4c0;background:var(--red-bg);flex-shrink:0" onclick="deleteCacheKey('${k}')">Remove</button>
-      </div>`;
+let _sfSearch = '';
+let _sfEntries = [];
+
+function sfExtOf(name) { const m = /\.([a-z0-9]+)$/i.exec(name || ''); return (m ? m[1] : '').toLowerCase(); }
+function sfTypeCat(name) {
+  const e = sfExtOf(name);
+  if (e === 'html' || e === 'htm') return 'html';
+  if (e === 'csv') return 'csv';
+  if (e === 'xlsx' || e === 'xls') return 'xlsx';
+  if (e === 'json') return 'json';
+  if (e === 'pdf') return 'pdf';
+  if (e === 'txt') return 'txt';
+  return 'other';
+}
+function sfFmtDate(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function sfSlotLabel(k) {
+  if (IDB_KEY_LABELS[k]) return IDB_KEY_LABELS[k];
+  if (k.startsWith('dq_')) return 'Outbound DQ — ' + k.replace('dq_', '');
+  if (k.startsWith('rdl_post_')) {
+    const mk = k.replace('rdl_post_', '');
+    if (mk === 'unknown') return 'RDL (Post-patch) — Unknown month';
+    const [y, mm] = mk.split('-');
+    return 'RDL (Post-patch) — ' + MONTH_NAMES[parseInt(mm) - 1] + ' ' + y;
   }
-  body.innerHTML = html;
+  return k;
+}
+
+function sfOnSearchInput(v) {
+  _sfSearch = v || '';
+  sfRenderRows();
+}
+
+function sfRenderRows() {
+  const rowsEl = document.getElementById('sf-rows');
+  const emptyEl = document.getElementById('sf-empty');
+  const countEl = document.getElementById('sf-count');
+  if (!rowsEl) return;
+  const q = _sfSearch.trim().toLowerCase();
+  const list = _sfEntries.filter(it => {
+    if (!q) return true;
+    return (it.filename || '').toLowerCase().includes(q) || (it.slotLabel || '').toLowerCase().includes(q);
+  });
+  if (countEl) countEl.textContent = list.length ? `${list.length} of ${_sfEntries.length} file${_sfEntries.length === 1 ? '' : 's'}` : (_sfEntries.length ? 'No matches' : '');
+  if (!list.length) {
+    rowsEl.innerHTML = '';
+    if (emptyEl) {
+      emptyEl.style.display = '';
+      const title = emptyEl.querySelector('.sf-empty-title');
+      const sub = emptyEl.querySelector('.sf-empty-sub');
+      if (_sfEntries.length) {
+        if (title) title.textContent = 'No matching files';
+        if (sub) sub.textContent = 'Try a different search term.';
+      } else {
+        if (title) title.textContent = 'No files stored yet';
+        if (sub) sub.textContent = 'Upload files via the sidebar or reload a pipeline to cache its source files here.';
+      }
+    }
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+  const html = list.map(it => {
+    const cat = sfTypeCat(it.filename);
+    const extLabel = (sfExtOf(it.filename) || '—').toUpperCase();
+    const primary = it.filename || it.slotLabel;
+    const secondary = it.filename ? it.slotLabel : (it.isLegacy ? 'Legacy cache entry — safe to remove' : '');
+    const secondaryCls = it.filename ? 'sf-sub' : (it.isLegacy ? 'sf-sub sf-legacy' : 'sf-sub');
+    return `<tr data-key="${it.key}">
+      <td class="sf-col-name">
+        <span class="sf-dot"></span>
+        <div class="sf-name-wrap">
+          <div class="sf-name" title="${primary.replace(/"/g, '&quot;')}">${primary}</div>
+          ${secondary ? `<div class="${secondaryCls}">${secondary}</div>` : ''}
+        </div>
+      </td>
+      <td class="sf-col-type"><span class="sf-badge ${cat}">${extLabel}</span></td>
+      <td class="sf-col-up"><span class="sf-date">${sfFmtDate(it.savedAt)}</span></td>
+      <td class="sf-col-act">
+        <div class="sf-row-act">
+          <button class="sf-act danger" onclick="deleteCacheKey('${it.key}')" title="Remove this cached file">Remove</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+  rowsEl.innerHTML = html;
+}
+
+async function openCacheModal() {
+  const bg = document.getElementById('cache-modal-bg');
+  bg.classList.add('show');
+  const rowsEl = document.getElementById('sf-rows');
+  const emptyEl = document.getElementById('sf-empty');
+  if (rowsEl) rowsEl.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--ink3);font-size:12px;padding:24px">Loading…</td></tr>`;
+  if (emptyEl) emptyEl.style.display = 'none';
+  let keys = [], meta = {};
+  try { const inv = await idbGetInventory(); keys = inv.keys.filter(k => k !== '_meta'); meta = inv.meta; }
+  catch(e) { if (rowsEl) rowsEl.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--red);font-size:12px;padding:24px">Could not read cache.</td></tr>`; return; }
+  _sfEntries = keys.map(k => {
+    const m = meta[k] || {};
+    const isLegacy = !IDB_KEY_LABELS[k] && !k.startsWith('dq_') && !k.startsWith('rdl_post_') && !k.startsWith('file_');
+    return { key: k, filename: m.filename || null, savedAt: m.savedAt || 0, slotLabel: sfSlotLabel(k), isLegacy };
+  }).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+  sfRenderRows();
 }
 
 async function deleteCacheKey(key) {
