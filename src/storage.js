@@ -28,8 +28,6 @@ function openIDB() {
   });
 }
 
-function idbTx(mode) { return db.transaction(IDB_STORE, mode).objectStore(IDB_STORE); }
-
 async function idbPut(key, value) {
   if (!db) return;
   return new Promise((resolve, reject) => {
@@ -55,17 +53,20 @@ async function idbGetAll() {
   return new Promise((resolve, reject) => {
     const tx    = db.transaction(IDB_STORE, 'readonly');
     const store = tx.objectStore(IDB_STORE);
-    const out   = {};
     const kReq  = store.getAllKeys();
+    const vReq  = store.getAll();
+    const out   = {};
+    let done = 0;
+    const finish = () => { if (++done === 2) resolve(out); };
     kReq.onsuccess = () => {
-      const keys  = kReq.result;
-      let pending = keys.length;
-      if (!pending) { resolve(out); return; }
-      keys.forEach(k => {
-        const vReq = store.get(k);
-        vReq.onsuccess = () => { out[k] = vReq.result; if (--pending === 0) resolve(out); };
-        vReq.onerror   = e => reject(e.target.error);
-      });
+      const keys = kReq.result || [];
+      vReq.onsuccess = () => {
+        const vals = vReq.result || [];
+        for (let i = 0; i < keys.length; i++) out[keys[i]] = vals[i];
+        finish();
+      };
+      vReq.onerror = e => reject(e.target.error);
+      finish();
     };
     kReq.onerror = e => reject(e.target.error);
   });
@@ -78,13 +79,17 @@ async function idbGetInventory() {
     const tx    = db.transaction(IDB_STORE, 'readonly');
     const store = tx.objectStore(IDB_STORE);
     const kReq  = store.getAllKeys();
-    kReq.onsuccess = () => {
-      const keys = kReq.result || [];
-      const metaReq = store.get('_meta');
-      metaReq.onsuccess = () => resolve({ keys, meta: metaReq.result || {} });
-      metaReq.onerror = e => reject(e.target.error);
+    const mReq  = store.get('_meta');
+    let keys = null, meta = null, settled = false;
+    const maybeDone = () => {
+      if (settled || keys === null || meta === null) return;
+      settled = true;
+      resolve({ keys, meta: meta || {} });
     };
+    kReq.onsuccess = () => { keys = kReq.result || []; maybeDone(); };
+    mReq.onsuccess = () => { meta = mReq.result || {}; maybeDone(); };
     kReq.onerror = e => reject(e.target.error);
+    mReq.onerror = e => reject(e.target.error);
   });
 }
 
@@ -98,14 +103,28 @@ async function idbDelete(key) {
   });
 }
 
+/**
+ * Write a slot and refresh its entry in `_meta` inside a single transaction,
+ * so a crash can't leave the slot saved but unindexed (or vice versa).
+ */
 async function persistSlot(key, value, filename) {
+  if (!db) return;
   idbSetStatus('working', 'Saving…');
   try {
-    await idbPut(key, value);
-    let meta = {};
-    try { const m = await idbGet('_meta'); if (m) meta = m; } catch(e) {}
-    meta[key] = { filename: filename || key, savedAt: Date.now() };
-    await idbPut('_meta', meta);
+    await new Promise((resolve, reject) => {
+      const tx    = db.transaction(IDB_STORE, 'readwrite');
+      const store = tx.objectStore(IDB_STORE);
+      store.put(value, key);
+      const mReq = store.get('_meta');
+      mReq.onsuccess = () => {
+        const meta = mReq.result || {};
+        meta[key] = { filename: filename || key, savedAt: Date.now() };
+        store.put(meta, '_meta');
+      };
+      tx.oncomplete = resolve;
+      tx.onerror    = e => reject(e.target.error);
+      tx.onabort    = e => reject(e.target.error);
+    });
     idbSetStatus('ready', 'Saved');
     if (typeof refreshFilesBadge === 'function') refreshFilesBadge();
   } catch(e) {

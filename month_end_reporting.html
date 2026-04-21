@@ -83,18 +83,18 @@
     </div>
 
     <div class="main-content" id="main-content">
-      <div id="view-pretb"      style="flex:1;flex-direction:column;overflow:hidden;min-height:0;display:none;"></div>
-      <div id="view-loanrecon"  style="flex:1;flex-direction:column;overflow:hidden;min-height:0;display:none;"></div>
-      <div id="view-dq"         style="flex:1;flex-direction:column;overflow:hidden;min-height:0;display:none;"></div>
-      <div id="view-mtmfvoci"   style="flex:1;flex-direction:column;overflow:hidden;min-height:0;display:none;"></div>
-      <div id="view-reversal"   style="flex:1;flex-direction:column;overflow:hidden;min-height:0;display:none;"></div>
-      <div id="view-recon"    style="flex:1;flex-direction:column;overflow:hidden;min-height:0;display:none;"></div>
-      <div id="view-moa"      style="flex:1;flex-direction:column;overflow:hidden;min-height:0;display:none;"></div>
-      <div id="view-majmov"   style="flex:1;flex-direction:column;overflow:hidden;min-height:0;display:none;"></div>
-      <div id="view-tb"       style="flex:1;flex-direction:column;overflow:hidden;min-height:0;display:none;"></div>
-      <div id="view-query"    style="flex:1;flex-direction:column;overflow:hidden;min-height:0;display:none;"></div>
-      <div id="view-glte"     style="flex:1;flex-direction:column;overflow:hidden;min-height:0;display:none;"></div>
-      <div id="view-files"    style="flex:1;flex-direction:column;overflow:hidden;min-height:0;display:none;"></div>
+      <div id="view-pretb"     class="view-pane"></div>
+      <div id="view-loanrecon" class="view-pane"></div>
+      <div id="view-dq"        class="view-pane"></div>
+      <div id="view-mtmfvoci"  class="view-pane"></div>
+      <div id="view-reversal"  class="view-pane"></div>
+      <div id="view-recon"     class="view-pane"></div>
+      <div id="view-moa"       class="view-pane"></div>
+      <div id="view-majmov"    class="view-pane"></div>
+      <div id="view-tb"        class="view-pane"></div>
+      <div id="view-query"     class="view-pane"></div>
+      <div id="view-glte"      class="view-pane"></div>
+      <div id="view-files"     class="view-pane"></div>
     </div>
   </div>
 </div>
@@ -408,6 +408,28 @@
 <script>
 'use strict';
 
+// ============================================================
+//  SHARED MICRO-HELPERS (pagination label, single-sheet XLSX, memoized date parse)
+// ============================================================
+
+/** Render the "Showing X–Y of Z <noun>" label used in every pagination footer.
+ *  Pass `bold:false` for plain-text variants (Major Movement uses the plain form). */
+function fmtShowingLabel(from, to, total, noun, bold) {
+  const f = Number(from).toLocaleString('en-SG');
+  const t = Number(to).toLocaleString('en-SG');
+  const n = Number(total).toLocaleString('en-SG');
+  const label = noun ? ` ${noun}` : '';
+  return (bold === false)
+    ? `Showing ${f}–${t} of ${n}${label}`
+    : `Showing <b>${f}–${t}</b> of <b>${n}</b>${label}`;
+}
+
+/** Build + download a single-sheet .xlsx from an array of plain-object rows. */
+function downloadXlsx(rows, sheetName, filename) {
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), sheetName);
+  XLSX.writeFile(wb, filename);
+}
 
 // ============================================================
 //  SHARED RDL CLASSIFICATION (eliminates 3x duplication)
@@ -1239,7 +1261,6 @@ async function processFiles(files) {
       }
     }
 
-    if (!ok) console.warn(`File not matched: ${file.name}`);
     // Clear auto-run blocks for all modules since new files may resolve date mismatches
     Object.keys(_autoRunBlocked).forEach(k => delete _autoRunBlocked[k]);
     if (currentView) renderView(currentView);
@@ -1672,8 +1693,7 @@ function exportCSV(name) {
   const cfg = stationConfig[name], data = S.results[name]; if (!data) return;
   const filtered = applyStationFilters(name, data, cfg.columns);
   const rows = filtered.map(r => { const o = {}; cfg.columns.forEach(c => { o[c.label] = r[c.id]; }); return o; });
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), name);
-  XLSX.writeFile(wb, `${name}_export.xlsx`);
+  downloadXlsx(rows, name, `${name}_export.xlsx`);
 }
 
 // ============================================================
@@ -1860,8 +1880,7 @@ function exportUnmappedCSV() {
   if (!_unmappedStation) return;
   const data = (S.results[_unmappedStation] || {}).unmapped || [];
   const rows = data.map(r => ({ 'Account No.': r.UNIQUE_ID_NO, 'Entity': r.LEGAL_ENTITY, 'Level 3': r.LEVEL_3, 'SEC CLS': r.SEC_CLS_CD, 'ST Ind': r.F_SHORT_TERM_IND, 'ST Incep': r.F_SHORT_TERM_INCEP_IND, 'Currency': r.CURCY_CODE }));
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Unmapped');
-  XLSX.writeFile(wb, `unmapped_${_unmappedStation}.xlsx`);
+  downloadXlsx(rows, 'Unmapped', `unmapped_${_unmappedStation}.xlsx`);
 }
 
 // ============================================================
@@ -2136,7 +2155,7 @@ function buildMajMovDataTab() {
     }).join('')}</tr>`;
   }).join('');
   const paginationHtml = filtered.length > ps ? `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--ink3);flex-shrink:0;">
-    <div>Showing ${pageStart.toLocaleString()}–${pageEnd.toLocaleString()} of ${filtered.length.toLocaleString()}</div>
+    <div>${fmtShowingLabel(pageStart, pageEnd, filtered.length, '', false)}</div>
     <div style="display:flex;gap:4px;">
       <button class="btn btn-sm" ${majMovState.page===0?'disabled':''} onclick="majMovState.page=0;renderMajMovResults(document.getElementById('view-majmov'))">First</button>
       <button class="btn btn-sm" ${majMovState.page===0?'disabled':''} onclick="majMovState.page--;renderMajMovResults(document.getElementById('view-majmov'))">Prev</button>
@@ -3081,7 +3100,7 @@ function runQuery() {
   let rows='';
   pts.forEach(p => {
     [{g:p.drGL,s:'DR',t:p.drType},{g:p.crGL,s:'CR',t:p.crType}].forEach(k => {
-      rows+=`<tr><td><span class="tag ${dim.ent==='128'?'tag-mbs':'tag-msl'}">${dim.ent}</span></td><td>${dim.rc}</td><td class="mono-val">${k.g||'–'}</td><td>${p.nature}</td><td><span style="font-size:10px;padding:2px 7px;border-radius:3px;background:${k.t==='BS'?'var(--blue-bg)':'var(--amber-bg)'};color:${k.t==='BS'?'var(--blue)':'var(--amber)'};font-weight:500">${k.t}</span></td><td>${dim.prod}</td><td>${dim.interco}</td><td>${dim.islamic}</td><td>${dim.cur}</td><td><b>${k.s}</b></td><td class="mono-val" style="text-align:right">${p.amount.toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr>`;
+      rows+=`<tr><td><span class="tag ${dim.ent==='128'?'tag-mbs':'tag-msl'}">${dim.ent}</span></td><td>${dim.rc}</td><td class="mono-val">${k.g||'–'}</td><td>${p.nature}</td><td><span style="font-size:10px;padding:2px 7px;border-radius:3px;background:${k.t==='BS'?'var(--blue-bg)':'var(--amber-bg)'};color:${k.t==='BS'?'var(--blue)':'var(--amber)'};font-weight:500">${k.t}</span></td><td>${dim.prod}</td><td>${dim.interco}</td><td>${dim.islamic}</td><td>${dim.cur}</td><td><b>${k.s}</b></td><td class="mono-val" style="text-align:right">${fmtN2(p.amount)}</td></tr>`;
     });
   });
   area.innerHTML=`
@@ -3109,7 +3128,7 @@ function renderBreakdownPage() {
   const body = document.getElementById('breakdown-body');
   const total = breakdownData.length, pages = Math.ceil(total/BK_PER_PAGE);
   const s = (breakdownPage-1)*BK_PER_PAGE, end = Math.min(s+BK_PER_PAGE, total);
-  body.innerHTML = breakdownData.slice(s,end).map(a => `<tr><td style="font-family:var(--mono);font-size:11px;">${a.id}</td><td class="num">${a.amt.toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr>`).join('');
+  body.innerHTML = breakdownData.slice(s,end).map(a => `<tr><td style="font-family:var(--mono);font-size:11px;">${a.id}</td><td class="num">${fmtN2(a.amt)}</td></tr>`).join('');
   document.getElementById('breakdown-page-info').textContent = total > BK_PER_PAGE ? `Page ${breakdownPage} of ${pages} (${total} accounts)` : `${total} accounts`;
   document.getElementById('breakdown-prev').disabled = breakdownPage===1;
   document.getElementById('breakdown-next').disabled = breakdownPage>=pages;
@@ -3596,7 +3615,7 @@ function openGlteFilter(key, triggerEl) {
 }
 function resetGlteFilters() { Object.keys(glteFilters).forEach(k => delete glteFilters[k]); glteState.isFiltered = false; renderGlteResults(document.getElementById('view-glte')); }
 function toggleGlteBreaks() { glteState.isFiltered = !glteState.isFiltered; renderGlteResults(document.getElementById('view-glte')); }
-function exportGlteCSV() { const rows = glteState.isFiltered ? glteState.results.filter(r => r.isBreak) : glteState.results; const exportRows = rows.map(r => ({ 'CCY': r.parts[0], 'Cost Centre': r.parts[1], 'Account': r.parts[2], 'Product': r.parts[3], 'Interco': r.parts[4], 'Future 1': r.parts[5], 'Sub Account': r.parts[6], 'Future 3': r.parts[7], 'Template Net': r.tNet, 'Validation Net': r.vNet, 'Variance': r.variance })); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(exportRows), 'GLTE'); XLSX.writeFile(wb, 'glte_validation.xlsx'); }
+function exportGlteCSV() { const rows = glteState.isFiltered ? glteState.results.filter(r => r.isBreak) : glteState.results; const exportRows = rows.map(r => ({ 'CCY': r.parts[0], 'Cost Centre': r.parts[1], 'Account': r.parts[2], 'Product': r.parts[3], 'Interco': r.parts[4], 'Future 1': r.parts[5], 'Sub Account': r.parts[6], 'Future 3': r.parts[7], 'Template Net': r.tNet, 'Validation Net': r.vNet, 'Variance': r.variance })); downloadXlsx(exportRows, 'GLTE', 'glte_validation.xlsx'); }
 
 // ============================================================
 //  OUTBOUND DQ MODULE (all logic preserved identically)
@@ -3653,7 +3672,7 @@ function triggerDqUpload() { const inp = document.createElement('input'); inp.ty
 
 async function dqHandleFiles(files) {
   const valid = [];
-  for (const f of files) { let p = f.name.replace(/\.csv$/i,''); if (p.includes('_')) p = p.split('_')[0]; if (!DQ_PRODS.includes(p.toUpperCase())) { console.warn('DQ: unrecognised file', f.name); continue; } valid.push({ file: f, prod: p.toUpperCase() }); }
+  for (const f of files) { let p = f.name.replace(/\.csv$/i,''); if (p.includes('_')) p = p.split('_')[0]; if (!DQ_PRODS.includes(p.toUpperCase())) { continue; } valid.push({ file: f, prod: p.toUpperCase() }); }
   if (!valid.length) { alert('No recognised files. Filename must start with: ' + DQ_PRODS.join(', ')); return; }
   const wrap=document.getElementById('dq-prog-wrap'),bar=document.getElementById('dq-prog-bar'),lbl=document.getElementById('dq-prog-label');
   if(wrap)wrap.classList.add('show');
@@ -4029,7 +4048,7 @@ function ptbBuildRowsHtml(pageRows) {
 function ptbBuildFooterHtml(display, startIdx, endIdx, totalPages, page) {
   const showingFrom = display.length === 0 ? 0 : startIdx + 1;
   return `<div class="ptb-table-foot" id="ptb-foot">
-      <span>Showing <b>${showingFrom.toLocaleString()}–${endIdx.toLocaleString()}</b> of <b>${display.length.toLocaleString()}</b> accounts</span>
+      <span>${fmtShowingLabel(showingFrom, endIdx, display.length, 'accounts')}</span>
       ${ptbBuildPagerHtml(totalPages, page)}
     </div>`;
 }
@@ -4261,7 +4280,7 @@ function revBuildRowsHtml(pageRows) {
 function revBuildFooterHtml(display, startIdx, endIdx, totalPages, page) {
   const showingFrom = display.length === 0 ? 0 : startIdx + 1;
   return `<div class="ptb-table-foot" id="rev-foot">
-      <span>Showing <b>${showingFrom.toLocaleString()}–${endIdx.toLocaleString()}</b> of <b>${display.length.toLocaleString()}</b> rows</span>
+      <span>${fmtShowingLabel(showingFrom, endIdx, display.length, 'rows')}</span>
       ${revBuildPagerHtml(totalPages, page)}
     </div>`;
 }
@@ -4508,7 +4527,7 @@ function rcnBuildRowsHtml(pageRows) {
 function rcnBuildFooterHtml(display, startIdx, endIdx, totalPages, page) {
   const showingFrom = display.length === 0 ? 0 : startIdx + 1;
   return `<div class="ptb-table-foot" id="rcn-foot">
-      <span>Showing <b>${showingFrom.toLocaleString()}–${endIdx.toLocaleString()}</b> of <b>${display.length.toLocaleString()}</b> rows</span>
+      <span>${fmtShowingLabel(showingFrom, endIdx, display.length, 'rows')}</span>
       ${rcnBuildPagerHtml(totalPages, page)}
     </div>`;
 }
@@ -4901,7 +4920,7 @@ function renderTbReconResults(container) {
   const showingTo = endIdx;
   const footerHtml = `
     <div class="ptb-table-foot">
-      <span>Showing <b>${showingFrom.toLocaleString()}–${showingTo.toLocaleString()}</b> of <b>${display.length.toLocaleString()}</b> rows</span>
+      <span>${fmtShowingLabel(showingFrom, showingTo, display.length, 'rows')}</span>
       ${tbrBuildPagerHtml(totalPages, page)}
     </div>`;
 
@@ -5216,7 +5235,7 @@ function loanReconSetStatusFilter(f) {
   renderLoanReconResults(document.getElementById('view-loanrecon'));
 }
 
-function loanReconExport() { if (!loanReconState.results) return; const { rows } = loanReconState.results; const exportRows = rows.map(r => ({ 'Entity': r.ENTITY, 'Product Group': r.PRODUCT_GROUP, 'Product File Amount': r.PROD_AMT, 'FIFO': r.FIFO_AMT, 'TB Amount': r.TB_AMT, 'Variance': r.VARIANCE })); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(exportRows), 'Loan Recon'); XLSX.writeFile(wb, 'loan_recon.xlsx'); }
+function loanReconExport() { if (!loanReconState.results) return; const { rows } = loanReconState.results; const exportRows = rows.map(r => ({ 'Entity': r.ENTITY, 'Product Group': r.PRODUCT_GROUP, 'Product File Amount': r.PROD_AMT, 'FIFO': r.FIFO_AMT, 'TB Amount': r.TB_AMT, 'Variance': r.VARIANCE })); downloadXlsx(exportRows, 'Loan Recon', 'loan_recon.xlsx'); }
 
 // ============================================================
 //  LOAN RECON DRILLDOWN
@@ -5625,7 +5644,7 @@ function buildMtmListingCard(rows, filtered, tableCols, dataCols, isNumRight, fo
   const showingTo = endIdx;
   const footerHtml = `
     <div class="ptb-table-foot">
-      <span>Showing <b>${showingFrom.toLocaleString()}–${showingTo.toLocaleString()}</b> of <b>${filtered.length.toLocaleString()}</b> rows</span>
+      <span>${fmtShowingLabel(showingFrom, showingTo, filtered.length, 'rows')}</span>
       ${mtmrBuildPagerHtml(totalPages, _mtmPage)}
     </div>`;
 
@@ -6902,7 +6921,7 @@ function buildMoaJournalHtml(entries, allMonths) {
   return html;
 }
 
-function exportMoaJournalXlsx() { var rows = moaState.journalRows; if (!rows || !rows.length) { alert('No journal entries to export.'); return; } var ws = XLSX.utils.json_to_sheet(rows), wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'MOA Journal'); XLSX.writeFile(wb, 'moa_journal.xlsx'); }
+function exportMoaJournalXlsx() { var rows = moaState.journalRows; if (!rows || !rows.length) { alert('No journal entries to export.'); return; } downloadXlsx(rows, 'MOA Journal', 'moa_journal.xlsx'); }
 
 function buildMoaRcHtml(entries, visMonths, rcField) {
   if (!visMonths.length) return '<div style="padding:20px;font-size:11px;color:var(--ink3);">No entries in the selected range.</div>';
