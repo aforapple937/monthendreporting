@@ -3773,7 +3773,7 @@ function ptbBuildRowsHtml(pageRows) {
       <td class="d-mono">${r.ACCOUNTS}</td>
       <td>${r.ACCOUNT_NAME||STATION_EMPTY_CELL}</td>
       <td class="d-mono">${r.GL_NUMBER}</td>
-      <td class="d-mono" style="color:var(--d-ink-3)">${r.CURRENCY}</td>
+      <td class="d-mono">${r.CURRENCY}</td>
       <td class="num">${ptd}</td>
     </tr>`;
   }).join('');
@@ -4001,7 +4001,7 @@ function revBuildRowsHtml(pageRows) {
       <td>${r.PRODUCT_CODE||STATION_EMPTY_CELL}</td>
       <td>${r.INTERCO||STATION_EMPTY_CELL}</td>
       <td>${r.ISLAMIC_INDICATOR||STATION_EMPTY_CELL}</td>
-      <td class="d-mono" style="color:var(--d-ink-3)">${r.CURRENCY||''}</td>
+      <td class="d-mono">${r.CURRENCY||''}</td>
       <td class="d-mono">${r.PREV_DRCR||''}</td>
       <td class="num">${fmtNum(r.PREV_AMT||0)}</td>
       <td class="d-mono">${r.REV_DRCR||''}</td>
@@ -4249,7 +4249,7 @@ function rcnBuildRowsHtml(pageRows) {
       <td>${r.PRODUCT_CODE||STATION_EMPTY_CELL}</td>
       <td>${r.INTERCO||STATION_EMPTY_CELL}</td>
       <td>${r.ISLAMIC_INDICATOR||STATION_EMPTY_CELL}</td>
-      <td class="d-mono" style="color:var(--d-ink-3)">${r.CURRENCY||''}</td>
+      <td class="d-mono">${r.CURRENCY||''}</td>
       <td class="d-mono">${r.DEBIT_CREDIT||''}</td>
       <td class="num">${perRdlCell}</td>
       <td class="num">${fmtNum(r.POSTING_FILE||0)}</td>
@@ -4610,7 +4610,7 @@ function renderTbReconResults(container) {
       const tds = cols.map(c => {
         if (c === 'VARIANCE') return `<td class="num">${stationVarCell(r.VARIANCE||0)}</td>`;
         if (c === 'GL_NUMBER') return `<td class="d-mono">${r.GL_NUMBER||''}</td>`;
-        if (c === 'CURRENCY') return `<td class="d-mono" style="color:var(--d-ink-3)">${r.CURRENCY||''}</td>`;
+        if (c === 'CURRENCY') return `<td class="d-mono">${r.CURRENCY||''}</td>`;
         return `<td>${r[c]||STATION_EMPTY_CELL}</td>`;
       }).join('');
       return `<tr>${tds}</tr>`;
@@ -4638,7 +4638,7 @@ function renderTbReconResults(container) {
         <td>${r.PRODUCT_CODE||STATION_EMPTY_CELL}</td>
         <td>${r.INTERCO||STATION_EMPTY_CELL}</td>
         <td>${r.ISLAMIC_INDICATOR||STATION_EMPTY_CELL}</td>
-        <td class="d-mono" style="color:var(--d-ink-3)">${r.CURRENCY||''}</td>
+        <td class="d-mono">${r.CURRENCY||''}</td>
         <td class="num">${fmtNum(r.YTD_ENTERED||0)}</td>
         <td class="num">${perRdlCell}</td>
         <td class="num">${stationVarCell(r.VARIANCE||0)}</td>
