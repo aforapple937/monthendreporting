@@ -5490,7 +5490,7 @@ function buildMtmWairCard() {
     .sort((a,b) => a.rt.localeCompare(b.rt) || a.ccy.localeCompare(b.ccy));
   const bodyRows = entries.map(e => `<tr>
     <td>${e.rt}</td>
-    <td class="d-mono">${e.ccy}</td>
+    <td>${e.ccy}</td>
     <td class="num">${fmtN6(e.wair)}</td>
   </tr>`).join('');
   const footRow = `<tr style="background:var(--d-line-2);font-weight:600">
