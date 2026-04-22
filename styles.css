@@ -1399,34 +1399,6 @@
     font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
   }
   .ptb-v2 .moa-je-scroll { overflow-x: auto; }
-  .ptb-v2 table.moa-je-table {
-    width: 100%; border-collapse: collapse; font-size: 12px;
-    font-family: inherit;
-  }
-  .ptb-v2 table.moa-je-table th {
-    text-align: left; font-weight: 500; font-size: 10px;
-    text-transform: uppercase; letter-spacing: 0.08em;
-    color: var(--d-ink-3, #888);
-    padding: 10px 10px; background: var(--d-line-2, #f2f2ee);
-    border-bottom: 1px solid var(--d-line, #e5e5e2);
-    white-space: nowrap;
-  }
-  .ptb-v2 table.moa-je-table th.num { text-align: right; }
-  .ptb-v2 table.moa-je-table td {
-    padding: 0 10px; height: var(--d-row-h); vertical-align: middle;
-    border-bottom: 1px solid var(--d-line-2, #f2f2ee);
-    color: var(--d-ink-2, #333); font-size: 12px;
-  }
-  .ptb-v2 table.moa-je-table td.num {
-    text-align: right;
-    font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
-    font-variant-numeric: tabular-nums;
-  }
-  .ptb-v2 table.moa-je-table td.je-mono {
-    font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
-    font-variant-numeric: tabular-nums;
-  }
-  .ptb-v2 table.moa-je-table td.je-mono.dim { color: var(--d-ink-4, #aaa); }
 
   /* ============ STORED FILES VIEW (design-file layout, scoped under .ptb-v2) ============ */
   .ptb-v2.sf-v .sf-head-sub {

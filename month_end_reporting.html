@@ -5453,22 +5453,22 @@ function buildMtmJournalCards(rows) {
     }));
 
     const lineRows = lines.map(l => `<tr>
-      <td class="je-mono">${l.ccy}</td>
-      <td class="je-mono">${l.cc}</td>
-      <td class="je-mono"><b>${l.account}</b></td>
-      <td class="je-mono dim">${l.prod}</td>
-      <td class="je-mono dim">${l.ico}</td>
-      <td class="je-mono dim">${l.f1}</td>
-      <td class="je-mono dim">${l.sub}</td>
-      <td class="je-mono dim">${l.f3}</td>
+      <td class="d-mono">${l.ccy}</td>
+      <td class="d-mono">${l.cc}</td>
+      <td class="d-mono"><b>${l.account}</b></td>
+      <td class="d-mono">${l.prod}</td>
+      <td class="d-mono">${l.ico}</td>
+      <td class="d-mono">${l.f1}</td>
+      <td class="d-mono">${l.sub}</td>
+      <td class="d-mono">${l.f3}</td>
       <td class="num">${l.dr > 0 ? fmtN2(l.dr) : '<span class="dim">—</span>'}</td>
       <td class="num">${l.cr > 0 ? fmtN2(l.cr) : '<span class="dim">—</span>'}</td>
-      <td class="je-mono">${l.remarks}</td>
+      <td class="d-mono">${l.remarks}</td>
     </tr>`).join('');
 
     html += `<div class="moa-je-entry">
       <div class="moa-je-head"><span class="tag">${ent}</span></div>
-      <div class="moa-je-scroll"><table class="moa-je-table">
+      <div class="moa-je-scroll"><table class="ptb-data">
         <thead><tr>
           <th>CCY</th><th>Cost Centre</th><th>Account</th><th>Product</th>
           <th>Interco</th><th>Future1</th><th>Sub Account</th><th>Future3</th>
@@ -6433,23 +6433,23 @@ function buildMoaJournalHtml(entries, allMonths) {
         'Remarks': remarks
       });
       return '<tr>'
-        + '<td class="je-mono">' + r.ccy + '</td>'
-        + '<td class="je-mono">' + (r.cc || '<span class="dim">—</span>') + '</td>'
-        + '<td class="je-mono"><b>' + r.account + '</b></td>'
-        + '<td class="je-mono dim">' + r.prod + '</td>'
-        + '<td class="je-mono dim">' + r.ico + '</td>'
-        + '<td class="je-mono dim">' + r.f1 + '</td>'
-        + '<td class="je-mono dim">' + r.sub + '</td>'
-        + '<td class="je-mono dim">' + r.f3 + '</td>'
+        + '<td class="d-mono">' + r.ccy + '</td>'
+        + '<td class="d-mono">' + (r.cc || '<span class="dim">—</span>') + '</td>'
+        + '<td class="d-mono"><b>' + r.account + '</b></td>'
+        + '<td class="d-mono">' + r.prod + '</td>'
+        + '<td class="d-mono">' + r.ico + '</td>'
+        + '<td class="d-mono">' + r.f1 + '</td>'
+        + '<td class="d-mono">' + r.sub + '</td>'
+        + '<td class="d-mono">' + r.f3 + '</td>'
         + '<td class="num">' + (r.dr > 0 ? fmtN2(r.dr) : '<span class="dim">—</span>') + '</td>'
         + '<td class="num">' + (r.cr > 0 ? fmtN2(r.cr) : '<span class="dim">—</span>') + '</td>'
-        + '<td class="je-mono">' + remarks + '</td>'
+        + '<td class="d-mono">' + remarks + '</td>'
         + '</tr>';
     }).join('');
 
     html += '<div class="moa-je-entry">'
       + '<div class="moa-je-head"><span class="tag">' + ent + '</span></div>'
-      + '<div class="moa-je-scroll"><table class="moa-je-table">'
+      + '<div class="moa-je-scroll"><table class="ptb-data">'
       + '<thead><tr>'
       +   '<th>CCY</th><th>Cost Centre</th><th>Account</th><th>Product</th>'
       +   '<th>Interco</th><th>Future1</th><th>Sub Account</th><th>Future3</th>'
