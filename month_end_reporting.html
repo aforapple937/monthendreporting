@@ -5168,9 +5168,27 @@ const MTM_COL_LABELS = {
   PREV_MTH_LCY_FAIR_VALUE:'Prev Mth LCY FV',
   LCY_MKT_VALUE_CHG_VS_PREV:'LCY Chg vs Prev'
 };
+const MTM_SIX_DP = new Set(['CURR_INT_RT','BASE_RT','WAIR']);
+const MTM_TWO_DP = new Set(['RCY_END_PERIOD_BAL','RCY_ACCRUED_INT','EXCHG_RT','LCY_END_PERIOD_BAL','LCY_ACCRUED_INT','PERIODIC_PAYT','MKT_VALUE_PERIODIC','MKT_VALUE_FINAL','MKT_VALUE_TOTAL','LCY_MKT_VALUE_CHG','RCY_MKT_VALUE_CHG','PREV_MTH_LCY_FAIR_VALUE','LCY_MKT_VALUE_CHG_VS_PREV','RESIDUAL_MTH']);
+const MTM_INT_FMT = new Set(['MOB','INT_PYM_FREQ']);
+const MTM_DATE_COLS = new Set(['PROC_DTE','MATURITY_DTE']);
+const mtmIsNumRight = col => MTM_SIX_DP.has(col) || MTM_TWO_DP.has(col) || MTM_INT_FMT.has(col);
+function mtmFormatCell(col, v) {
+  if (v === undefined || v === null || v === '') return '';
+  if (MTM_DATE_COLS.has(col)) { const s = String(v), m = s.match(/^(\d{2})([A-Z]{3})(\d{4})/i); return m ? `${m[1]}${m[2].toUpperCase()}${m[3]}` : s; }
+  const n = typeof v === 'number' ? v : parseFloat(v);
+  if (n !== null && !isNaN(n)) {
+    if (MTM_SIX_DP.has(col)) return n.toFixed(6);
+    if (MTM_TWO_DP.has(col)) return fmtN2(n);
+    if (MTM_INT_FMT.has(col)) return n.toLocaleString('en-SG', { maximumFractionDigits: 2 });
+  }
+  return String(v);
+}
 function mtmrRowField(r, col) {
   if (col === 'STATUS') return MTM_STATUS_LABELS[mtmrStatusOf(r)];
-  return String(r[col] == null ? '' : r[col]);
+  const v = r[col];
+  if (mtmIsNumRight(col) || MTM_DATE_COLS.has(col)) return mtmFormatCell(col, v);
+  return String(v == null ? '' : v);
 }
 function mtmrBuildChipsHtml() {
   const active = Object.keys(mtmFilters).filter(k => fdIsActive(mtmFilters[k]));
@@ -5196,18 +5214,8 @@ function mtmrBuildPagerHtml(totalPages, currentPage) {
 
 function renderMtmResults(container) {
   const rows = mtmState.results; if (!rows || !rows.length) return;
-  const SIX_DP = new Set(['CURR_INT_RT','BASE_RT','WAIR']);
-  const TWO_DP = new Set(['RCY_END_PERIOD_BAL','RCY_ACCRUED_INT','EXCHG_RT','LCY_END_PERIOD_BAL','LCY_ACCRUED_INT','PERIODIC_PAYT','MKT_VALUE_PERIODIC','MKT_VALUE_FINAL','MKT_VALUE_TOTAL','LCY_MKT_VALUE_CHG','RCY_MKT_VALUE_CHG','PREV_MTH_LCY_FAIR_VALUE','LCY_MKT_VALUE_CHG_VS_PREV','RESIDUAL_MTH']);
-  const INT_FMT = new Set(['MOB','INT_PYM_FREQ']);
-  const DATE_COLS = new Set(['PROC_DTE','MATURITY_DTE']);
-  const isNumRight = col => SIX_DP.has(col)||TWO_DP.has(col)||INT_FMT.has(col);
-  const formatCell = (col, v) => {
-    if (v===undefined||v===null||v==='') return '';
-    if (DATE_COLS.has(col)) { const s = String(v), m = s.match(/^(\d{2})([A-Z]{3})(\d{4})/i); return m ? `${m[1]}${m[2].toUpperCase()}${m[3]}` : s; }
-    const n = typeof v === 'number' ? v : parseFloat(v);
-    if (n !== null && !isNaN(n)) { if (SIX_DP.has(col)) return n.toFixed(6); if (TWO_DP.has(col)) return fmtN2(n); if (INT_FMT.has(col)) return n.toLocaleString('en-SG',{maximumFractionDigits:2}); }
-    return v;
-  };
+  const isNumRight = mtmIsNumRight;
+  const formatCell = mtmFormatCell;
 
   const dataCols = Object.keys(rows[0]);
   const tableCols = ['STATUS', ...dataCols];
@@ -5537,9 +5545,8 @@ function openMtmFilter(colId, triggerEl) {
     const v = mtmrRowField(r, colId);
     counts.set(v, (counts.get(v) || 0) + 1);
   });
-  const MTM_NUM_COLS = new Set(['CURR_INT_RT','BASE_RT','WAIR','RCY_END_PERIOD_BAL','RCY_ACCRUED_INT','EXCHG_RT','LCY_END_PERIOD_BAL','LCY_ACCRUED_INT','PERIODIC_PAYT','MKT_VALUE_PERIODIC','MKT_VALUE_FINAL','MKT_VALUE_TOTAL','LCY_MKT_VALUE_CHG','RCY_MKT_VALUE_CHG','PREV_MTH_LCY_FAIR_VALUE','LCY_MKT_VALUE_CHG_VS_PREV','RESIDUAL_MTH','MOB','INT_PYM_FREQ']);
   const allValues = [...counts.keys()].filter(v => v !== '').sort(
-    MTM_NUM_COLS.has(colId) ? (a, b) => parseFloat(String(a).replace(/,/g, '')) - parseFloat(String(b).replace(/,/g, '')) : undefined
+    mtmIsNumRight(colId) ? (a, b) => parseFloat(String(a).replace(/,/g, '')) - parseFloat(String(b).replace(/,/g, '')) : undefined
   );
   const label = MTM_COL_LABELS[colId] || colId;
   fdOpenDesign(triggerEl, allValues, mtmFilters[colId] || null, label, counts, (newFilter) => {
