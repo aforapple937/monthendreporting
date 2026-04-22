@@ -6262,12 +6262,12 @@ function buildMoaComparePivotHtml(entries, mA, mB, dim) {
 
   var body = '';
   if (!dimRows.length) {
-    body = '<tr><td colspan="6" class="ov-empty">No ' + dimLabel + ' allocations to compare for the selected months</td></tr>';
+    body = '<tr><td colspan="7" class="ov-empty">No ' + dimLabel + ' allocations to compare for the selected months</td></tr>';
   } else {
     dimRows.forEach(function(dr) {
       var dimDisp = dim === 'rc' ? moaRcLabel(dr.k) : dr.k;
       body += '<tr class="ov-dim-head">'
-        + '<td colspan="3" style="padding-left:16px">' + dimLabel
+        + '<td colspan="4" style="padding-left:16px">' + dimLabel
         + '<span class="grp-label">' + dimDisp + '</span>'
         + '<span class="grp-count">' + dr.items.length + ' overlay' + (dr.items.length===1?'':'s') + '</span>'
         + '</td>'
@@ -6277,7 +6277,8 @@ function buildMoaComparePivotHtml(entries, mA, mB, dim) {
         var clickable = r.i !== null && r.i !== undefined;
         body += '<tr'
           + (clickable ? ' data-ov-id="' + r.i + '" onclick="openMoaModal(' + r.i + ')"' : '') + '>'
-          + '<td style="padding-left:16px">' + (r.e.type||'&mdash;') + '</td>'
+          + '<td style="padding-left:16px"></td>'
+          + '<td>' + (r.e.type||'&mdash;') + '</td>'
           + '<td>' + (r.e.entity||'&mdash;') + '</td>'
           + '<td>' + moaEntryDesc(r.e) + '</td>'
           + moaCmpAmtCell(r.amtA) + moaCmpAmtCell(r.amtB) + moaCmpDeltaCell(r.delta)
@@ -6286,7 +6287,7 @@ function buildMoaComparePivotHtml(entries, mA, mB, dim) {
     });
     var totA = dimRows.reduce(function(s,r){ return s+r.totA; }, 0);
     var totB = dimRows.reduce(function(s,r){ return s+r.totB; }, 0);
-    body += '<tr class="ov-grand-row"><td colspan="3" style="padding-left:16px">GRAND TOTAL</td>'
+    body += '<tr class="ov-grand-row"><td colspan="4" style="padding-left:16px">GRAND TOTAL</td>'
       + moaCmpAmtCell(totA) + moaCmpAmtCell(totB) + moaCmpDeltaCell(totB - totA) + '</tr>';
   }
 
@@ -6299,6 +6300,7 @@ function buildMoaComparePivotHtml(entries, mA, mB, dim) {
     + moaThHtml(dimCol, dimLabel, {style:'width:' + dimColW + ';padding-left:16px'})
     + moaThHtml('type', 'Type', {style:'width:90px'})
     + moaThHtml('entity', 'Entity', {style:'width:88px'})
+    + moaThHtml('note', 'Overlay description', {style:'min-width:260px'})
     + moaThHtml('amtA', moaMonthShortLabel(mA), {num:true, style:'width:130px'})
     + moaThHtml('amtB', moaMonthShortLabel(mB), {num:true, style:'width:130px'})
     + moaThHtml('amount', 'Δ', {num:true, style:'width:130px;padding-right:16px'})
