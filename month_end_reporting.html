@@ -224,7 +224,7 @@
       </div>
     </div>
     <div class="modal-body" style="padding:0;overflow:auto;flex:1;">
-      <table class="data-table" id="loan-drill-table" style="font-size:12pxwhite-space:nowrap;"></table>
+      <table class="data-table dt-modern" id="loan-drill-table" style="font-size:12pxwhite-space:nowrap;"></table>
     </div>
   </div>
 </div>
@@ -277,7 +277,7 @@
     <div class="modal-head"><h3 id="dq-modal-title">—</h3><span class="modal-close" onclick="dqCloseModal()">&times;</span></div>
     <div style="padding:8px 20px 6px;font-size:11px;color:var(--ink3);border-bottom:1px solid var(--border);font-family:var(--mono)" id="dq-modal-rule">—</div>
     <div class="modal-body" style="padding:0">
-      <table class="data-table" style="font-size:11px">
+      <table class="data-table dt-modern" style="font-size:11px">
         <thead><tr><th>Category</th><th id="dq-th-a" style="text-align:right">Period A</th><th id="dq-th-b" style="text-align:right">Period B</th><th style="text-align:right">Δ Qty</th><th style="text-align:right">PSI</th></tr></thead>
         <tbody id="dq-modal-body"></tbody>
       </table>
@@ -432,11 +432,6 @@ function downloadXlsx(rows, sheetName, filename) {
 }
 
 /** "⚠ N unmapped" span rendered inside a clickable KPI card (stops propagation). */
-function unmappedKpiSpan(stationName, count) {
-  if (!count) return '';
-  return `<span onclick="event.stopPropagation();openUnmappedModal('${stationName}')" style="margin-left:10px;font-size:10px;color:var(--amber);cursor:pointer;font-family:var(--mono);vertical-align:middle;text-decoration:underline" title="Click to view unmapped accounts">⚠ ${count.toLocaleString()} unmapped</span>`;
-}
-
 /** "⚠ N unmapped" chip rendered as a meta item under a page-head title. */
 function unmappedFootChip(stationName, count) {
   if (!count) return '';
@@ -1434,7 +1429,6 @@ const SHORTCUT_HANDLERS = {
       moaState.monthA = allMonths.length ? allMonths[allMonths.length - 1] : '';
       moaState.monthB = '';
       moaState.compareMonths = [];
-      moaState.allCollapsed = false;
       renderMoa();
     }
   },
@@ -1641,55 +1635,8 @@ Each amount is keyed to a full account string in the format Entity-RC-GL-Product
 const stationFilters  = { reversal: {}, recon: {}, tb: {} };
 const stationOnlyBreaks = { reversal: false, recon: false, tb: false };
 
-function updateFilter(name, colId, val) { stationFilters[name][colId] = val; renderStation(name); }
-function toggleBreaks(name) { stationOnlyBreaks[name] = !stationOnlyBreaks[name]; renderStation(name); }
-function stationSetFilter(name, onlyBreaks) {
-  stationOnlyBreaks[name] = !!onlyBreaks;
-  // Clicking Total Rows also resets column filters
-  if (!onlyBreaks && stationFilters[name]) {
-    Object.keys(stationFilters[name]).forEach(k => delete stationFilters[name][k]);
-  }
-  renderStation(name);
-}
 function resetFilters(name) { stationFilters[name] = {}; stationOnlyBreaks[name] = false; renderStation(name); }
 function reupload(name) { S.results[name] = null; blockAutoRun(name); renderStation(name); }
-
-function updateTextFilter(name, colId, inputEl) {
-  const val = inputEl.value, sel = [inputEl.selectionStart, inputEl.selectionEnd];
-  stationFilters[name][colId] = val;
-  debounce(`filter-${name}-${colId}`, () => {
-    partialRenderTable(name);
-    const restored = document.getElementById(`fi-${name}-${colId}`);
-    if (restored) { restored.focus(); restored.setSelectionRange(sel[0], sel[1]); }
-  });
-}
-
-/** Open Excel-style filter dropdown for a station column */
-function openStationFilter(name, colId, triggerEl) {
-  const cfg = stationConfig[name], data = S.results[name];
-  if (!data) return;
-  const cols = cfg.columns;
-  // Cascade: get values from rows passing all OTHER filters + breaks-only
-  const otherFiltered = data.filter(row => {
-    if (stationOnlyBreaks[name] && Math.abs(row.VARIANCE||0) === 0) return false;
-    for (const [k, f] of Object.entries(stationFilters[name]||{})) {
-      if (k === colId) continue;
-      if (!fdIsActive(f)) continue;
-      if (!fdMatch(row[k], f)) return false;
-    }
-    return true;
-  });
-  const allValues = [...new Set(otherFiltered.map(r => String(r[colId]||'')))].filter(Boolean).sort();
-  // Count occurrences
-  const counts = new Map();
-  otherFiltered.forEach(r => { const v = String(r[colId]||''); if (v) counts.set(v, (counts.get(v)||0)+1); });
-  const currentFilter = stationFilters[name]?.[colId] || null;
-  fdOpen(triggerEl, allValues, currentFilter, (newFilter) => {
-    if (!stationFilters[name]) stationFilters[name] = {};
-    stationFilters[name][colId] = fdIsActive(newFilter) ? newFilter : undefined;
-    renderStation(name);
-  }, counts);
-}
 
 function applyStationFilters(name, data, cols) {
   const filters = stationFilters[name]||{}, onlyBreaks = stationOnlyBreaks[name];
@@ -1701,39 +1648,6 @@ function applyStationFilters(name, data, cols) {
     }
     return true;
   });
-}
-
-function partialRenderTable(name) {
-  const cfg = stationConfig[name], data = S.results[name]; if (!data) return;
-  const cols = cfg.columns, filtered = applyStationFilters(name, data, cols);
-  const numCols = cols.filter(c => c.type === 'number'), totals = {};
-  numCols.forEach(c => totals[c.id] = 0);
-  const tbody = document.getElementById(`main-tbody-${name}`);
-  if (!tbody) return;
-  const parts = [];
-  filtered.forEach((row, i) => {
-    numCols.forEach(c => totals[c.id] += row[c.id]||0);
-    const isBreak = Math.abs(row.VARIANCE||0) > 0;
-    const cells = cols.map(c => {
-      if (c.type === 'number') {
-        if (c.id === 'VARIANCE') { const v = row.VARIANCE||0; return `<td class="mono-val" style="text-align:right">${Math.abs(v)===0?'–':(v<0?'-':'')+fmtNum(Math.abs(v))}</td>`; }
-        if (c.clickable && row.ACCOUNTS_LIST && row.ACCOUNTS_LIST.length > 0) return `<td><span class="clickable-cell mono-val" onclick="openBreakdown(event,'${name}',${i})">${fmtNum(row[c.id])}</span></td>`;
-        return `<td class="mono-val">${fmtNum(row[c.id])}</td>`;
-      }
-      return `<td>${row[c.id]||'–'}</td>`;
-    }).join('');
-    parts.push(`<tr class="${isBreak?'row-break':''}">${cells}</tr>`);
-  });
-  tbody.innerHTML = parts.join('');
-  const tfoot = document.getElementById(`main-tfoot-${name}`);
-  if (tfoot) tfoot.innerHTML = `<tr>${cols.map(c => c.type==='number' ? `<td class="mono-val">${fmtNum(totals[c.id])}</td>` : `<td></td>`).join('')}</tr>`;
-}
-
-function exportCSV(name) {
-  const cfg = stationConfig[name], data = S.results[name]; if (!data) return;
-  const filtered = applyStationFilters(name, data, cfg.columns);
-  const rows = filtered.map(r => { const o = {}; cfg.columns.forEach(c => { o[c.label] = r[c.id]; }); return o; });
-  downloadXlsx(rows, name, `${name}_export.xlsx`);
 }
 
 // ============================================================
@@ -1811,85 +1725,10 @@ async function runStation(name) {
 let _unmappedStation = null;
 
 function renderResultsPanel(name, container, cfg) {
-  // Reversal Check, Posting Validation and TB Reconciliation all use the
-  // Pre-Check TB design-handoff layout.
+  // Dispatcher: all three live stations use the Pre-Check TB design-handoff layout.
   if (name === 'reversal') { renderReversalResults(container); return; }
   if (name === 'recon')    { renderReconResults(container);    return; }
   if (name === 'tb')       { renderTbReconResults(container);  return; }
-
-  const data = S.results[name]; if (!data) return;
-  const cols     = cfg.columns;
-  const filtered = applyStationFilters(name, data, cols);
-  const totalRows = data.length, breakRows = data.filter(r => Math.abs(r.VARIANCE||0) > 0).length;
-  const netVariance = name === 'tb' ? data.reduce((s,r) => s + (r.VARIANCE||0), 0) : null;
-
-  const revMonth    = data.__revMonth    || null;
-  const dateWarning = data.__dateWarning || null;
-
-  const unmappedCount = (data.unmapped || []).length;
-  const breaksActive = !!stationOnlyBreaks[name];
-  let kpiHtml;
-  if (name === 'tb') {
-    // TB Recon: KPI-as-filter pattern (same as reversal/recon), plus clickable Net Variance
-    const stHasColFilter = Object.keys(stationFilters[name]||{}).some(k => fdIsActive(stationFilters[name][k]));
-    const stTotalRowsActive = !breaksActive && !stHasColFilter;
-    const unmappedIndicator = unmappedKpiSpan(name, unmappedCount);
-    kpiHtml = `
-      <div class="kpi-strip">
-        ${data.__reportingMonth ? `<div class="kpi-card"><div class="kpi-label">Reporting Month</div><div class="kpi-value">${data.__reportingMonth}</div></div>` : ''}
-        <div class="kpi-card kpi-clickable ${stTotalRowsActive?'kpi-active':''}" onclick="stationSetFilter('${name}', false)"><div class="kpi-label">Total Rows</div><div class="kpi-value">${totalRows.toLocaleString()}</div></div>
-        <div class="kpi-card kpi-clickable ${breaksActive?'kpi-active':''}" onclick="stationSetFilter('${name}', true)"><div class="kpi-label">Breaks</div><div class="kpi-value ${breakRows?'red':'green'}">${breakRows.toLocaleString()}${unmappedIndicator}</div></div>
-        ${netVariance !== null ? `<div class="kpi-card"><div class="kpi-label">Net Variance</div><div class="kpi-value ${Math.abs(netVariance)>0?'red':'green'}">${fmtNum(netVariance)}</div></div>` : ''}
-      </div>`;
-  } else {
-    // reversal or recon — KPI-as-filter
-    const reportingMonth = name === 'reversal' ? revMonth : data.__reportingMonth;
-    const unmappedIndicator = name === 'recon' ? unmappedKpiSpan(name, unmappedCount) : '';
-    const stHasColFilter = Object.keys(stationFilters[name]||{}).some(k => fdIsActive(stationFilters[name][k]));
-    const stTotalRowsActive = !breaksActive && !stHasColFilter;
-    kpiHtml = `
-      <div class="kpi-strip">
-        ${reportingMonth ? `<div class="kpi-card"><div class="kpi-label">Reporting Month</div><div class="kpi-value">${reportingMonth}</div></div>` : ''}
-        <div class="kpi-card kpi-clickable ${stTotalRowsActive?'kpi-active':''}" onclick="stationSetFilter('${name}', false)"><div class="kpi-label">Total Rows</div><div class="kpi-value">${totalRows.toLocaleString()}</div></div>
-        <div class="kpi-card kpi-clickable ${breaksActive?'kpi-active':''}" onclick="stationSetFilter('${name}', true)"><div class="kpi-label">Breaks</div><div class="kpi-value ${breakRows?'red':'green'}">${breakRows.toLocaleString()}${unmappedIndicator}</div></div>
-      </div>`;
-  }
-
-  const toolbarHtml = `<div class="table-toolbar"><div style="margin-left:auto"><button class="btn btn-sm" onclick="exportCSV('${name}')" title="Export (E)">Export XLSX</button></div></div>`;
-
-  const thHtml = cols.map(c => {
-    const cf = stationFilters[name]?.[c.id];
-    const active = fdIsActive(cf);
-    return `<th class="th-filterable ${active?'th-filtered':''}" onclick="openStationFilter('${name}','${c.id}',this)">${c.label}<span class="th-caret">▾</span></th>`;
-  }).join('');
-
-  const numCols = cols.filter(c => c.type === 'number'), totals = {}; numCols.forEach(c => totals[c.id] = 0);
-  const rowsHtml = filtered.map((row, i) => {
-    numCols.forEach(c => totals[c.id] += row[c.id]||0);
-    const isBreak = Math.abs(row.VARIANCE||0) > 0;
-    const cells = cols.map(c => {
-      if (c.type === 'number') {
-        if (c.id === 'VARIANCE') { const v = row.VARIANCE||0; return `<td class="mono-val" style="text-align:right">${Math.abs(v)===0?'–':(v<0?'-':'')+fmtNum(Math.abs(v))}</td>`; }
-        if (c.clickable && row.ACCOUNTS_LIST && row.ACCOUNTS_LIST.length > 0) return `<td><span class="clickable-cell mono-val" onclick="openBreakdown(event,'${name}',${i})">${fmtNum(row[c.id])}</span></td>`;
-        return `<td class="mono-val">${fmtNum(row[c.id])}</td>`;
-      }
-      return `<td>${row[c.id]||'–'}</td>`;
-    }).join('');
-    return `<tr class="${isBreak?'row-break':''}">${cells}</tr>`;
-  }).join('');
-
-  container.innerHTML = `
-    <div class="results-view">
-      ${kpiHtml}
-      ${toolbarHtml}
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead><tr>${thHtml}</tr></thead>
-          <tbody id="main-tbody-${name}">${rowsHtml}</tbody>
-          ${name === 'tb' ? `<tfoot id="main-tfoot-${name}"><tr>${cols.map(c=>c.type==='number'?`<td class="mono-val">${fmtNum(totals[c.id])}</td>`:`<td></td>`).join('')}</tr></tfoot>` : ''}
-        </table>
-      </div>
-    </div>`;
 }
 
 function openUnmappedModal(stationName) {
@@ -2210,7 +2049,7 @@ function buildMajMovDataTab() {
     </div>
   </div>` : '';
   return `<div class="table-wrap" style="flex:1;overflow:auto;">
-      <table class="data-table" style="font-size:12px">
+      <table class="data-table dt-modern" style="font-size:12px">
         <thead><tr>${thHtml}</tr></thead>
         <tbody>${rowsHtml}</tbody>
       </table>
@@ -2484,7 +2323,7 @@ function buildMajMovPresTab() {
     }
 
     return `<div style="padding:12px 20px 6px;font-size:12px;font-weight:700;color:var(--ink);">${title}</div>
-      <table class="data-table" style="font-size:11px;table-layout:fixed;width:100%;">
+      <table class="data-table dt-modern" style="font-size:11px;table-layout:fixed;width:100%;">
         ${colgroup}
         <thead>${thHtml}</thead>
         <tbody>${bodyHtml}${footerHtml}</tbody>
@@ -2662,109 +2501,6 @@ function exportMajMov() {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataRows), 'Data');
     XLSX.writeFile(wb, `major_movement_data_${mk}.xlsx`);
   }
-}
-
-// ============================================================
-//  TB SUMMARY (unchanged logic)
-// ============================================================
-const TB_SUM_DIMS = [
-  { id: 'ENTITY', label: 'Entity' },
-  { id: 'GL_NATURE', label: 'GL Nature' },
-  { id: 'GL_NUMBER', label: 'GL Number' },
-  { id: 'CURRENCY', label: 'Currency' },
-];
-
-function tbSumToggleDim(dimId) {
-  if (!window.tbSumSelected) window.tbSumSelected = new Set(TB_SUM_DIMS.map(d=>d.id));
-  if (window.tbSumSelected.has(dimId)) window.tbSumSelected.delete(dimId);
-  else window.tbSumSelected.add(dimId);
-  const lbl = document.getElementById('sum-lbl-'+dimId);
-  const active = window.tbSumSelected.has(dimId);
-  if (lbl) { lbl.style.background = active?'var(--ink)':'var(--paper2)'; lbl.style.color = active?'#fff':'var(--ink2)'; }
-  if (!active && window.tbSumFilters) delete window.tbSumFilters[dimId];
-  buildTbSummaryTable();
-}
-
-function buildTbSummaryTable() {
-  const body = document.getElementById('tb-sum-body');
-  if (!body) return;
-  if (!window.tbSumSelected) window.tbSumSelected = new Set(TB_SUM_DIMS.map(d=>d.id));
-  if (!window.tbSumFilters)  window.tbSumFilters  = {};
-  if (window.tbSumVarFilter === undefined) window.tbSumVarFilter = '';
-  const selected = TB_SUM_DIMS.filter(d => window.tbSumSelected.has(d.id));
-  if (!selected.length) { body.innerHTML = '<div style="padding:16px;font-size:11px;color:var(--ink3)">Select at least one column above.</div>'; return; }
-  const data = S.results['tb'] || [];
-  const m = new Map();
-  data.forEach(r => {
-    if (Math.abs(r.VARIANCE||0) === 0) return;
-    const parts = selected.map(d => String(r[d.id]||'—'));
-    const k = parts.join('||');
-    const cur = m.get(k) || { parts, var: 0 };
-    cur.var += r.VARIANCE || 0;
-    m.set(k, cur);
-  });
-  const allBreakRows = [...m.values()];
-  // Apply filters using fdMatch
-  let rows = allBreakRows.filter(v => {
-    for (let i = 0; i < selected.length; i++) {
-      const f = window.tbSumFilters[selected[i].id];
-      if (fdIsActive(f) && !fdMatch(v.parts[i], f)) return false;
-    }
-    if (window.tbSumVarFilter) {
-      const s = window.tbSumVarFilter;
-      if (!fmtNum(Math.abs(v.var)).includes(s) && !String(v.var).includes(s)) return false;
-    }
-    return true;
-  }).sort((a,b) => Math.abs(b.var) - Math.abs(a.var));
-  const totalVar = rows.reduce((s,v) => s + v.var, 0);
-  const rowsHtml = rows.map(v => {
-    const varHtml = `<span class="var-pill ${v.var<0?'vp-break':'vp-ok'}">${v.var<0?'-':''}${fmtNum(Math.abs(v.var))}</span>`;
-    const dimCells = v.parts.map(p=>`<td style="font-size:11px">${p}</td>`).join('');
-    return `<tr class="row-break">${dimCells}<td>${varHtml}</td></tr>`;
-  }).join('') || `<tr><td colspan="${selected.length+1}" style="text-align:center;padding:16px;color:var(--ink3);font-size:11px">No variance breaks match current filters.</td></tr>`;
-  const tfootHtml = rows.length ? `<tfoot><tr>${selected.map((_,i) => i===0 ? `<td style="font-weight:600">Total (${rows.length})</td>` : `<td></td>`).join('')}<td class="mono-val" style="font-weight:700;color:${totalVar<0?'var(--red)':'var(--green)'}">${totalVar<0?'-':''}${fmtNum(Math.abs(totalVar))}</td></tr></tfoot>` : '';
-  const thRow = [...selected.map((d,i) => {
-    const cf = window.tbSumFilters[d.id]; const active = fdIsActive(cf);
-    return `<th class="th-filterable ${active?'th-filtered':''}" onclick="openTbSumFilter('${d.id}',${i},this)">${d.label}<span class="th-caret">▾</span></th>`;
-  }), (() => {
-    const vActive = !!window.tbSumVarFilter;
-    return `<th class="th-filterable ${vActive?'th-filtered':''}" onclick="openTbSumVarFilter(this)">Variance<span class="th-caret">▾</span></th>`;
-  })()].join('');
-  body.innerHTML = `<table class="data-table" style="font-size:11px"><thead><tr>${thRow}</tr></thead><tbody>${rowsHtml}</tbody>${tfootHtml}</table>`;
-}
-
-function openTbSumFilter(dimId, dimIdx, triggerEl) {
-  const selected = TB_SUM_DIMS.filter(d => window.tbSumSelected && window.tbSumSelected.has(d.id));
-  const data = S.results['tb'] || [];
-  const m = new Map();
-  data.forEach(r => { if (Math.abs(r.VARIANCE||0)===0) return; const parts=selected.map(d=>String(r[d.id]||'—')); m.set(parts.join('||'),{parts,var:0}); });
-  const allBreakRows = [...m.values()];
-  const otherFiltered = allBreakRows.filter(v => { for (let j=0;j<selected.length;j++) { if(selected[j].id===dimId) continue; const f2=window.tbSumFilters[selected[j].id]; if(fdIsActive(f2)&&!fdMatch(v.parts[j],f2)) return false; } return true; });
-  const allValues = [...new Set(otherFiltered.map(v=>v.parts[dimIdx]))].filter(Boolean).sort();
-  fdOpen(triggerEl, allValues, window.tbSumFilters[dimId]||null, (newFilter) => {
-    if (!window.tbSumFilters) window.tbSumFilters = {};
-    window.tbSumFilters[dimId] = fdIsActive(newFilter) ? newFilter : undefined;
-    buildTbSummaryTable();
-  });
-}
-
-function openTbSumVarFilter(triggerEl) {
-  // Simple text filter for variance column
-  fdOpen(triggerEl, [], {text:window.tbSumVarFilter||'',selected:null}, (newFilter) => {
-    window.tbSumVarFilter = newFilter.text || '';
-    buildTbSummaryTable();
-  });
-}
-
-function toggleTbSummary() {
-  const body = document.getElementById('tb-sum-body');
-  const filter = document.getElementById('tb-sum-filter-row');
-  const chev = document.getElementById('tb-sum-chev');
-  if (!body) return;
-  const collapsed = body.style.display === 'none';
-  body.style.display = collapsed ? '' : 'none';
-  if (filter) filter.style.display = collapsed ? 'flex' : 'none';
-  if (chev) chev.textContent = collapsed ? '▲' : '▼';
 }
 
 // ============================================================
@@ -6161,87 +5897,6 @@ function moaMovementTd(later, earlier, opts) {
   return '<td class="mono-val" style="' + baseStyle + weight + color + '">' + sign + fmtN2(d) + '</td>';
 }
 
-function buildMoaDashHtml(entries, visMonths, groupKeys, groupMap) {
-  if (!visMonths.length) return '<div style="padding:20px;font-size:11px;color:var(--ink3);">No entries yet. Click + New MOA to add an entry.</div>';
-  var latestMonth = visMonths[visMonths.length - 1];
-  // Pre-build identity-index so inner cell loops don't do O(N) indexOf scans.
-  var entryIdx = new Map();
-  entries.forEach(function(e, i){ entryIdx.set(e, i); });
-  // Colors a number cell based on delta vs the previous visible month
-  function moaDeltaStyle(monthIdx, curSum, prevSum) {
-    if (monthIdx === 0 || prevSum === undefined) return '';
-    var d = curSum - prevSum;
-    if (Math.abs(d) < 0.005) return '';
-    return d > 0 ? 'color:var(--red);font-weight:600;' : 'color:var(--green);font-weight:600;';
-  }
-  var thMonths = visMonths.map(function(m){ return moaCompareThHtml(m); }).join('');
-  var cmp = moaActiveCompare(visMonths), cmpOn = cmp.length === 2;
-  var moveTh = cmpOn ? moaMovementThHtml(cmp) : '';
-  var entities = [], entitySeen = {};
-  groupKeys.forEach(function(gk){ var e=gk.split('||')[0]; if(!entitySeen[e]){entitySeen[e]=1;entities.push(e);} });
-  var allBodyRows = '';
-  entities.forEach(function(entity) {
-    var entityGks = groupKeys.filter(function(gk){ return gk.split('||')[0]===entity; });
-    var entityEntries = []; entityGks.forEach(function(gk){ entityEntries = entityEntries.concat(groupMap.get(gk)); });
-    entityGks.forEach(function(gk) {
-      var parts = gk.split('||'), type = parts[1], grpEntries = groupMap.get(gk);
-      var rowId = 'moadash_' + gk.replace(/[^a-z0-9]/gi,'_');
-      var prevSum = undefined, cmpSums = {};
-      var cells = visMonths.map(function(m, mi) {
-        var monthEntries = grpEntries.filter(function(e){ return e.month===m; });
-        var sum = monthEntries.reduce(function(s,e){ return s+(parseFloat(e.amount)||0); }, 0);
-        var deltaStyle = moaDeltaStyle(mi, sum, prevSum);
-        prevSum = sum;
-        if (cmpOn && cmp.indexOf(m) >= 0) cmpSums[m] = sum;
-        if (sum === 0) return '<td class="mono-val" style="text-align:right">&mdash;</td>';
-        if (type === 'Sector') { var idx = entryIdx.get(monthEntries[0]); return '<td class="mono-val" style="text-align:right;cursor:pointer;' + deltaStyle + '" onclick="openMoaEntryModal(' + idx + ')" title="Click to edit">' + fmtN2(sum) + '</td>'; }
-        return '<td class="mono-val" style="text-align:right;' + deltaStyle + '">' + fmtN2(sum) + '</td>';
-      }).join('');
-      var moveCell = cmpOn ? moaMovementTd(cmpSums[cmp[1]], cmpSums[cmp[0]]) : '';
-      var detailRows = '', hasDetail = type === 'Borrower' || type === 'Model';
-      if (type === 'Borrower') {
-        var groupBuckets = new Map();
-        grpEntries.forEach(function(e) { var subKey = (e.cif||'') + '||' + (e.borrower||''); var g = e.group || ('__solo__' + subKey); if (!groupBuckets.has(g)) groupBuckets.set(g, new Map()); var bucket = groupBuckets.get(g); if (!bucket.has(subKey)) { var prefix = e.group ? e.group + ' &middot; ' : ''; bucket.set(subKey, { label: prefix + (e.cif||'&mdash;') + ' &middot; ' + (e.borrower||'&mdash;'), byMonth: {} }); } bucket.get(subKey).byMonth[e.month] = e; });
-        var groupList = []; groupBuckets.forEach(function(bucket, g) { var groupLatest = 0; bucket.forEach(function(sub){ groupLatest += parseFloat((sub.byMonth[latestMonth]||{}).amount||0); }); var cifList = []; bucket.forEach(function(sub){ cifList.push({sub:sub, latestAmt: parseFloat((sub.byMonth[latestMonth]||{}).amount||0)}); }); cifList.sort(function(a,b){ return b.latestAmt - a.latestAmt; }); groupList.push({cifList:cifList, groupLatest:groupLatest}); });
-        groupList.sort(function(a,b){ return b.groupLatest - a.groupLatest; });
-        groupList.forEach(function(gl) { gl.cifList.forEach(function(c) { var prevAmt = undefined, subCmp = {}; var cols2 = visMonths.map(function(m, mi){ var e = c.sub.byMonth[m]; var amt = e ? (parseFloat(e.amount)||0) : 0; if (cmpOn && cmp.indexOf(m) >= 0) subCmp[m] = amt; if (!e) { prevAmt = 0; return '<td></td>'; } var idx2 = entryIdx.get(e); var ds = moaDeltaStyle(mi, amt, prevAmt); prevAmt = amt; return '<td class="mono-val" style="text-align:right;font-size:11px;padding:4px 8px;cursor:pointer;' + ds + '" onclick="openMoaEntryModal(' + idx2 + ')" title="Click to edit">' + fmtN2(amt) + '</td>'; }).join(''); var subMove = cmpOn ? moaMovementTd(subCmp[cmp[1]], subCmp[cmp[0]], {style:'font-size:11px;padding:4px 8px;'}) : ''; detailRows += '<tr class="moa-detail-row" data-group="' + rowId + '" style="background:var(--paper);"><td colspan="2" style="padding:4px 8px 4px 28px;font-size:11px;color:var(--ink3);">' + c.sub.label + '</td>' + cols2 + subMove + '</tr>'; }); });
-      } else if (type === 'Model') {
-        var modelMap = new Map(); grpEntries.forEach(function(e) { var sk = e.modelDesc||'&mdash;'; if (!modelMap.has(sk)) modelMap.set(sk, {label: sk, byMonth: {}}); modelMap.get(sk).byMonth[e.month] = e; });
-        var modelList = []; modelMap.forEach(function(sub){ modelList.push({sub:sub, latestAmt: parseFloat((sub.byMonth[latestMonth]||{}).amount||0)}); }); modelList.sort(function(a,b){ return b.latestAmt - a.latestAmt; });
-        modelList.forEach(function(ml) { var prevAmt = undefined, subCmp = {}; var cols2 = visMonths.map(function(m, mi){ var e = ml.sub.byMonth[m]; var amt = e ? (parseFloat(e.amount)||0) : 0; if (cmpOn && cmp.indexOf(m) >= 0) subCmp[m] = amt; if (!e) { prevAmt = 0; return '<td></td>'; } var idx2 = entryIdx.get(e); var ds = moaDeltaStyle(mi, amt, prevAmt); prevAmt = amt; return '<td class="mono-val" style="text-align:right;font-size:11px;padding:4px 8px;cursor:pointer;' + ds + '" onclick="openMoaEntryModal(' + idx2 + ')" title="Click to edit">' + fmtN2(amt) + '</td>'; }).join(''); var subMove = cmpOn ? moaMovementTd(subCmp[cmp[1]], subCmp[cmp[0]], {style:'font-size:11px;padding:4px 8px;'}) : ''; detailRows += '<tr class="moa-detail-row" data-group="' + rowId + '" style="background:var(--paper);"><td colspan="2" style="padding:4px 8px 4px 28px;font-size:11px;color:var(--ink3);">' + ml.sub.label + '</td>' + cols2 + subMove + '</tr>'; });
-      }
-      var typeCell = hasDetail ? '<span data-rowid="' + rowId + '" data-open="1" style="cursor:pointer;user-select:none" onclick="moaDashToggle(this)">&#9660; ' + type + '</span>' : type;
-      allBodyRows += '<tr style="border-bottom:1px solid var(--border);"><td style="padding:8px 10px;font-weight:600;font-size:12px">' + entity + '</td><td style="padding:8px 10px;font-size:12px">' + typeCell + '</td>' + cells + moveCell + '</tr>' + detailRows;
-    });
-    var prevSubTotal = undefined, subTotCmp = {};
-    var subCells = visMonths.map(function(m, mi){ var s = entityEntries.filter(function(e){ return e.month===m; }).reduce(function(acc,e){ return acc+(parseFloat(e.amount)||0); },0); if (cmpOn && cmp.indexOf(m) >= 0) subTotCmp[m] = s; var ds = moaDeltaStyle(mi, s, prevSubTotal); prevSubTotal = s; return '<td class="mono-val" style="text-align:right;font-weight:700;background:var(--paper2);' + ds + '">' + (s?fmtN2(s):'&mdash;') + '</td>'; }).join('');
-    var subTotMove = cmpOn ? moaMovementTd(subTotCmp[cmp[1]], subTotCmp[cmp[0]], {bold:true}) : '';
-    allBodyRows += '<tr style="border-top:2px solid var(--border);"><td style="padding:7px 10px;font-weight:700;font-size:12px;background:var(--paper2)">' + entity + ' Total</td><td style="background:var(--paper2)"></td>' + subCells + subTotMove + '</tr>';
-  });
-  var prevGrand = undefined, grandCmp = {};
-  var grandCells = visMonths.map(function(m, mi){ var s = entries.filter(function(e){ return e.month===m; }).reduce(function(acc,e){ return acc+(parseFloat(e.amount)||0); },0); if (cmpOn && cmp.indexOf(m) >= 0) grandCmp[m] = s; var d = (mi===0 || prevGrand===undefined) ? 0 : s - prevGrand; prevGrand = s; var cStyle = Math.abs(d)<0.005 ? '' : (d>0 ? 'color:var(--red) !important;' : 'color:var(--green) !important;'); return '<td class="mono-val" style="text-align:right;font-weight:700;' + cStyle + '">' + (s?fmtN2(s):'&mdash;') + '</td>'; }).join('');
-  var grandMove = cmpOn ? moaMovementTd(grandCmp[cmp[1]], grandCmp[cmp[0]], {bold:true}) : '';
-  return '<div class="table-wrap" style="overflow:auto;max-height:calc(100vh - 260px);"><table class="data-table" style="font-size:12px;"><thead style="position:sticky;top:0;z-index:2;background:var(--ink);"><tr><th>Entity</th><th>Type</th>' + thMonths + moveTh + '</tr></thead><tbody>' + allBodyRows + '</tbody><tfoot class="moa-tfoot"><tr><td style="padding:8px 10px;font-weight:700;font-size:12px">Grand Total</td><td></td>' + grandCells + grandMove + '</tr></tfoot></table></div>';
-}
-
-function moaDashToggle(el) { var rowId = el.getAttribute('data-rowid'), isOpen = el.getAttribute('data-open') === '1'; document.querySelectorAll('.moa-detail-row').forEach(function(r) { if ((r.getAttribute('data-group')||'').split(' ').indexOf(rowId) >= 0) r.style.display = isOpen ? 'none' : ''; }); el.setAttribute('data-open', isOpen ? '0' : '1'); var typeName = el.textContent.replace(/^[^\s]+\s/, ''); el.innerHTML = (isOpen ? '&#9658; ' : '&#9660; ') + typeName; }
-
-function moaGetToggleTargets() { return document.querySelectorAll('#view-moa [data-rowid][data-open]'); }
-function applyMoaExpandState() {
-  var shouldCollapse = !!moaState.allCollapsed;
-  moaGetToggleTargets().forEach(function(el) {
-    var isOpen = el.getAttribute('data-open') === '1';
-    if (shouldCollapse && isOpen) moaDashToggle(el);
-    else if (!shouldCollapse && !isOpen) moaDashToggle(el);
-  });
-  var btn = document.getElementById('moa-expand-all-btn');
-  if (btn) btn.textContent = shouldCollapse ? 'Expand All' : 'Collapse All';
-}
-function moaToggleAllBreakdowns() {
-  if (moaState.dashView !== 'type') return;
-  moaState.allCollapsed = !moaState.allCollapsed;
-  applyMoaExpandState();
-}
 function closeMoaActionModal() { var el = document.getElementById('moa-entry-action-modal'); if (el) el.remove(); }
 function openMoaEntryModal(idx) { openMoaModal(idx); }
 
@@ -6969,61 +6624,6 @@ function buildMoaJournalHtml(entries, allMonths) {
 
 function exportMoaJournalXlsx() { var rows = moaState.journalRows; if (!rows || !rows.length) { alert('No journal entries to export.'); return; } downloadXlsx(rows, 'MOA Journal', 'moa_journal.xlsx'); }
 
-function buildMoaRcHtml(entries, visMonths, rcField) {
-  if (!visMonths.length) return '<div style="padding:20px;font-size:11px;color:var(--ink3);">No entries in the selected range.</div>';
-  var rowKeys = [], rowMap = new Map();
-  // rcField = 'rcMgt' → use lobAlloc; rcField = 'rcTb' → use rcAlloc
-  var allocField = rcField === 'rcMgt' ? 'lobAlloc' : 'rcAlloc';
-  // Pre-build identity-index so we don't indexOf every entry once per allocation.
-  var entryIdx = new Map();
-  entries.forEach(function(e, i){ entryIdx.set(e, i); });
-  entries.forEach(function(e) {
-    moaMigrateEntry(e);
-    var alloc = e[allocField] || {};
-    Object.keys(alloc).forEach(function(rc) {
-      var amt = parseFloat(alloc[rc])||0;
-      if (!rc || !amt) return;
-      var gk = (e.entity||'') + '||' + rc;
-      if (!rowMap.has(gk)) { rowMap.set(gk, {entity:e.entity||'', rc:rc, byMonth:{}}); rowKeys.push(gk); }
-      var row = rowMap.get(gk);
-      if (!row.byMonth[e.month]) row.byMonth[e.month] = [];
-      row.byMonth[e.month].push({ei:entryIdx.get(e), entry:e, allocAmt: amt});
-    });
-  });
-  rowKeys.sort(function(a,b){ var ap=a.split('||'), bp=b.split('||'); if(ap[0]!==bp[0]) return ap[0]==='MBB-SG'?-1:1; return (ap[1]||'').localeCompare(bp[1]||''); });
-  if (!rowKeys.length) return '<div style="padding:20px;font-size:11px;color:var(--ink3);">No RC allocations found in entries.</div>';
-  var thMonths = visMonths.map(function(m){ return moaCompareThHtml(m); }).join('');
-  var cmp = moaActiveCompare(visMonths), cmpOn = cmp.length === 2;
-  var moveTh = cmpOn ? moaMovementThHtml(cmp) : '';
-  function moaDeltaStyle(mi, cur, prev) { if (mi === 0 || prev === undefined) return ''; var d = cur - prev; if (Math.abs(d) < 0.005) return ''; return d > 0 ? 'color:var(--red);font-weight:600;' : 'color:var(--green);font-weight:600;'; }
-  var bodyRows = rowKeys.map(function(gk) {
-    var row = rowMap.get(gk); var rcDisplay = rcField === 'rcTb' ? moaRcLabel(row.rc) : (row.rc||'&mdash;');
-    var prevSum = undefined, rowCmp = {};
-    var cells = visMonths.map(function(m, mi) {
-      var items = row.byMonth[m];
-      if (!items || !items.length) { prevSum = 0; if (cmpOn && cmp.indexOf(m) >= 0) rowCmp[m] = 0; return '<td class="mono-val" style="text-align:right">&mdash;</td>'; }
-      var sum = items.reduce(function(s,x){ return s+x.allocAmt; }, 0);
-      if (cmpOn && cmp.indexOf(m) >= 0) rowCmp[m] = sum;
-      var ds = moaDeltaStyle(mi, sum, prevSum);
-      prevSum = sum;
-      var dataStr = encodeURIComponent(JSON.stringify(items.map(function(x){ var desc = x.entry.type==='Borrower' ? (x.entry.cif||'') + ' - ' + (x.entry.borrower||'') : x.entry.type==='Model' ? (x.entry.modelDesc||'') : 'Sector'; return {desc:desc, amt:x.allocAmt, ei:x.ei}; })));
-      return '<td class="mono-val" style="text-align:right;cursor:pointer;' + ds + '" onclick="openMoaRcBreakdown(this)" data-items="' + dataStr + '" title="Click for breakdown">' + fmtN2(sum) + '</td>';
-    }).join('');
-    var moveCell = cmpOn ? moaMovementTd(rowCmp[cmp[1]], rowCmp[cmp[0]]) : '';
-    return '<tr style="border-bottom:1px solid var(--border);"><td style="padding:8px 10px;font-weight:600;font-size:12px">' + row.entity + '</td><td style="padding:8px 10px;font-family:var(--mono);font-size:12px">' + rcDisplay + '</td>' + cells + moveCell + '</tr>';
-  }).join('');
-  return '<div class="table-wrap" style="overflow:auto;max-height:calc(100vh - 260px);"><table class="data-table" style="font-size:12px;"><thead style="position:sticky;top:0;z-index:2;background:var(--ink);"><tr><th>Entity</th><th>RC</th>' + thMonths + moveTh + '</tr></thead><tbody>' + bodyRows + '</tbody></table></div>';
-}
-
-function openMoaRcBreakdown(cell) {
-  var items = JSON.parse(decodeURIComponent(cell.getAttribute('data-items')));
-  var existing = document.getElementById('moa-rc-breakdown-modal'); if (existing) existing.remove();
-  var rowsHtml = items.map(function(x){ return '<tr style="cursor:pointer;border-bottom:1px solid var(--border)" onclick="closeMoaRcBreakdownModal();openMoaModal(' + x.ei + ')" title="Click to edit"><td style="padding:8px 12px;font-size:12px">' + x.desc + '</td><td class="mono-val" style="padding:8px 12px;text-align:right;font-size:12px">' + fmtN2(x.amt) + '</td></tr>'; }).join('');
-  var totalAmt = items.reduce(function(s,x){ return s+x.amt; }, 0);
-  var div = document.createElement('div'); div.id = 'moa-rc-breakdown-modal'; div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:3000;display:flex;align-items:center;justify-content:center;'; div.onclick = function(ev){ if(ev.target===div) closeMoaRcBreakdownModal(); };
-  div.innerHTML = '<div style="background:#fff;border-radius:12px;min-width:400px;max-width:560px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.18);"><div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;"><div style="font-size:13px;font-weight:700;color:var(--ink);">RC Allocation Breakdown</div><span style="cursor:pointer;font-size:18px;color:var(--ink3);line-height:1" onclick="closeMoaRcBreakdownModal()">&times;</span></div><div style="overflow:auto;flex:1;"><table style="width:100%;border-collapse:collapse;"><thead><tr style="background:var(--ink);color:#fff;"><th style="padding:8px 12px;font-size:10px;font-family:var(--mono);font-weight:500;text-align:left;">Description</th><th style="padding:8px 12px;font-size:10px;font-family:var(--mono);font-weight:500;text-align:right;">Amount (SGD)</th></tr></thead><tbody>' + rowsHtml + '</tbody><tfoot><tr style="background:var(--paper2);border-top:2px solid var(--border);"><td style="padding:8px 12px;font-size:12px;font-weight:600;">Total</td><td class="mono-val" style="padding:8px 12px;text-align:right;font-weight:700;font-size:12px;">' + fmtN2(totalAmt) + '</td></tr></tfoot></table></div><div style="padding:12px 20px;border-top:1px solid var(--border);text-align:right;font-size:11px;color:var(--ink3);">Click any row to edit that entry</div></div>';
-  document.body.appendChild(div);
-}
 function closeMoaRcBreakdownModal() { var el = document.getElementById('moa-rc-breakdown-modal'); if (el) el.remove(); }
 
 function renderMoa() {
@@ -7060,7 +6660,7 @@ function renderMoa() {
   var view = moaState.dashView;
   var incomplete = entries.map(function(e,i){ return {e:e,i:i,missing:moaGetMissingFields(e)}; }).filter(function(x){ return x.missing.length>0; });
   var incompleteHtml = '';
-  if (incomplete.length) { var irows = incomplete.map(function(x){ return '<tr style="cursor:pointer" onclick="openMoaModal(' + x.i + ')" title="Click to edit"><td style="padding:5px 10px;font-size:11px">' + (x.e.entity||'—') + '</td><td style="padding:5px 10px;font-size:11px">' + (x.e.month||'—') + '</td><td style="padding:5px 10px;font-size:11px">' + (x.e.type||'—') + '</td><td style="padding:5px 10px;font-size:11px;color:var(--red)">' + x.missing.join(', ') + '</td></tr>'; }).join(''); incompleteHtml = '<div style="background:var(--red-bg);border:1px solid #f5c4c0;border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;"><div style="font-size:11px;font-weight:600;color:var(--red);margin-bottom:6px;">&#9888; ' + incomplete.length + ' entr' + (incomplete.length===1?'y':'ies') + ' with missing required fields — click to edit</div><div style="overflow:auto;max-height:120px;"><table class="data-table" style="font-size:11px;"><thead><tr><th>Entity</th><th>Month</th><th>Type</th><th>Missing Fields</th></tr></thead><tbody>' + irows + '</tbody></table></div></div>'; }
+  if (incomplete.length) { var irows = incomplete.map(function(x){ return '<tr style="cursor:pointer" onclick="openMoaModal(' + x.i + ')" title="Click to edit"><td style="padding:5px 10px;font-size:11px">' + (x.e.entity||'—') + '</td><td style="padding:5px 10px;font-size:11px">' + (x.e.month||'—') + '</td><td style="padding:5px 10px;font-size:11px">' + (x.e.type||'—') + '</td><td style="padding:5px 10px;font-size:11px;color:var(--red)">' + x.missing.join(', ') + '</td></tr>'; }).join(''); incompleteHtml = '<div style="background:var(--red-bg);border:1px solid #f5c4c0;border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;"><div style="font-size:11px;font-weight:600;color:var(--red);margin-bottom:6px;">&#9888; ' + incomplete.length + ' entr' + (incomplete.length===1?'y':'ies') + ' with missing required fields — click to edit</div><div style="overflow:auto;max-height:120px;"><table class="data-table dt-modern" style="font-size:11px;"><thead><tr><th>Entity</th><th>Month</th><th>Type</th><th>Missing Fields</th></tr></thead><tbody>' + irows + '</tbody></table></div></div>'; }
 
   var mainHtml;
   if (view === 'journal') {
@@ -7156,7 +6756,6 @@ function renderMoa() {
     + mainHtml
     + '</div>'
     + '</div>';
-  if (view === 'type' && moaState.allCollapsed) applyMoaExpandState();
 }
 
 function moaSetMode(mode) {

@@ -385,11 +385,6 @@
     padding: 8px 12px;
     border-top: 2px solid var(--border);
   }
-  table.data-table tfoot.moa-tfoot tr,
-  table.data-table tfoot.moa-tfoot tr td {
-    position: static;
-    color: inherit !important;
-  }
 
   /* .dt-modern: re-skins .data-table using the modern --d-* palette.
      Opt-in per table — unstyled .data-table instances keep the legacy dark header. */
