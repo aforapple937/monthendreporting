@@ -5522,8 +5522,6 @@ function buildMtmJournalCards(rows) {
       'Entered Debit': l.dr, 'Entered Credit': l.cr, Remarks: l.remarks
     }));
 
-    const totalDr = lines.reduce((s,l) => s + l.dr, 0);
-    const totalCr = lines.reduce((s,l) => s + l.cr, 0);
     const lineRows = lines.map(l => `<tr>
       <td class="je-mono">${l.ccy}</td>
       <td class="je-mono">${l.cc}</td>
@@ -5546,12 +5544,7 @@ function buildMtmJournalCards(rows) {
           <th>Interco</th><th>Future1</th><th>Sub Account</th><th>Future3</th>
           <th class="num">Entered Debit</th><th class="num">Entered Credit</th><th>Remarks</th>
         </tr></thead>
-        <tbody>${lineRows}
-          <tr class="moa-je-foot"><td colspan="8" style="text-align:right;padding-right:12px">Totals</td>
-            <td class="num">${fmtN2(totalDr)}</td>
-            <td class="num">${fmtN2(totalCr)}</td>
-            <td></td></tr>
-        </tbody>
+        <tbody>${lineRows}</tbody>
       </table></div>
     </div>`;
   });
@@ -5927,11 +5920,19 @@ function moaAmtCell(v, opts) {
  *  Per-view filter state — keys: type, entity, note, amount, lob, rc
  *  ============================================================ */
 var moaFilters = {
-  list:     { type: new Set(), entity: new Set(), note: new Set(), amount: new Set() },
-  'by-lob': { lob: new Set(),  type: new Set(), entity: new Set(), note: new Set(), amount: new Set() },
-  'by-rc':  { rc: new Set(),   type: new Set(), entity: new Set(), note: new Set(), amount: new Set() }
+  list:     { type: new Set(), entity: new Set(), note: new Set(), amount: new Set(), amtA: new Set(), amtB: new Set() },
+  'by-lob': { lob: new Set(),  type: new Set(), entity: new Set(), note: new Set(), amount: new Set(), amtA: new Set(), amtB: new Set() },
+  'by-rc':  { rc: new Set(),   type: new Set(), entity: new Set(), note: new Set(), amount: new Set(), amtA: new Set(), amtB: new Set() }
 };
-var MOA_COL_LABELS = { type:'Type', entity:'Entity', note:'Description', amount:'Amount', lob:'LOB', rc:'RC' };
+var MOA_COL_LABELS = { type:'Type', entity:'Entity', note:'Description', amount:'Amount', lob:'LOB', rc:'RC', amtA:'Month A', amtB:'Month B' };
+function moaColLabel(col) {
+  if (col === 'amtA' || col === 'amtB') {
+    var pair = [moaState.monthA, moaState.monthB].filter(Boolean).sort();
+    var m = col === 'amtA' ? pair[0] : pair[1];
+    return moaMonthShortLabel(m || '');
+  }
+  return MOA_COL_LABELS[col] || col;
+}
 var moaPopCol = null, moaPopSearch = '';
 
 function moaAmtBucket(v) {
@@ -5957,6 +5958,8 @@ function moaOvField(e, col) {
   if (col === 'entity') return e.entity || '';
   if (col === 'note')   return moaEntryDesc(e).replace(/&middot;/g, '·').replace(/&mdash;/g, '—').replace(/<[^>]+>/g, '').trim();
   if (col === 'amount') return moaAmtBucket(e.amount);
+  if (col === 'amtA')   return moaAmtBucket(e.__amtA || 0);
+  if (col === 'amtB')   return moaAmtBucket(e.__amtB || 0);
   return '';
 }
 /* Extract filter value for a flat row (overlay + dim allocation) at a column */
@@ -5966,6 +5969,8 @@ function moaOvFieldFlat(row, col) {
   if (col === 'entity') return row.e.entity || '';
   if (col === 'note')   return moaEntryDesc(row.e).replace(/&middot;/g, '·').replace(/&mdash;/g, '—').replace(/<[^>]+>/g, '').trim();
   if (col === 'amount') return moaAmtBucket(row.v);
+  if (col === 'amtA')   return moaAmtBucket(row.amtA || 0);
+  if (col === 'amtB')   return moaAmtBucket(row.amtB || 0);
   return '';
 }
 
@@ -6014,7 +6019,7 @@ function moaFilterChipsHtml(view) {
   var chips = active.map(function(col) {
     var vals = Array.from(filt[col]);
     var disp = vals.length <= 2 ? vals.join(', ') : vals[0] + ' <span class="dim">+' + (vals.length - 1) + '</span>';
-    return '<span class="ov-filter-chip">' + (MOA_COL_LABELS[col] || col) + ' <span class="dim">is</span> <span class="fc-vals">' + disp + '</span><button class="fc-x" data-moaclearcol="' + col + '" title="Remove">×</button></span>';
+    return '<span class="ov-filter-chip">' + moaColLabel(col) + ' <span class="dim">is</span> <span class="fc-vals">' + disp + '</span><button class="fc-x" data-moaclearcol="' + col + '" title="Remove">×</button></span>';
   }).join('');
   return '<div class="ov-filter-chips">' + chips + '<button class="ov-filter-chip-clear" onclick="moaClearAllFilters()">Clear all</button></div>';
 }
@@ -6080,17 +6085,17 @@ function buildMoaDesignListHtml(entries, month) {
     body = '<tr><td colspan="4" class="ov-empty">No overlays for ' + (month || '&mdash;') + ' matching the current filters</td></tr>';
   } else {
     body = list.map(function(x) {
-      return '<tr data-ov-id="' + x.__idx + '" onclick="openMoaModal(' + x.__idx + ')" title="Click to edit">'
+      return '<tr data-ov-id="' + x.__idx + '" onclick="openMoaModal(' + x.__idx + ')">'
         + '<td style="padding-left:16px"><span class="ov-type-chip" data-type="' + (x.type||'') + '">' + (x.type||'&mdash;') + '</span></td>'
         + '<td><span class="ov-entity-tag">' + (x.entity||'&mdash;') + '</span></td>'
         + '<td><div class="ov-note">' + moaEntryDesc(x) + '</div></td>'
         + moaAmtCell(x.amount, {padRight:'16px'})
         + '</tr>';
     }).join('');
+    var net = list.reduce(function(s,x){ return s + (parseFloat(x.amount)||0); }, 0);
+    body += '<tr class="ov-grand-row"><td colspan="3" style="padding-left:16px">GRAND TOTAL</td>'
+      + '<td class="num" style="padding-right:16px">' + fmtN2(net) + '</td></tr>';
   }
-
-  var net = list.reduce(function(s,x){ return s + (parseFloat(x.amount)||0); }, 0);
-  var netStr = fmtN2(net);
 
   return '<div class="ov-tcard">'
     + moaFilterChipsHtml('list')
@@ -6102,11 +6107,7 @@ function buildMoaDesignListHtml(entries, month) {
     + moaThHtml('amount', 'Amount (SGD)', {num:true, style:'width:160px;padding-right:16px'})
     + '</tr></thead>'
     + '<tbody>' + body + '</tbody></table></div>'
-    + '<div class="ov-table-foot">'
-    + '<span>Showing <b>' + list.length + '</b> overlay' + (list.length===1?'':'s')
-    + ' &middot; Net total <b>' + netStr + '</b></span>'
-    + '<span class="dim">Click a row to edit</span>'
-    + '</div></div>';
+    + '</div>';
 }
 
 function buildMoaDesignPivotHtml(entries, month, dim) {
@@ -6143,7 +6144,7 @@ function buildMoaDesignPivotHtml(entries, month, dim) {
         + '<span class="grp-count">' + count + ' allocation' + (count===1?'':'s') + '</span>'
         + '</td><td class="num" style="padding-right:16px;color:var(--d-ink);font-weight:500">' + sumStr + '</td></tr>';
       groupAcc.forEach(function(r) {
-        body += '<tr data-ov-id="' + r.idx + '" onclick="openMoaModal(' + r.idx + ')" title="Click to edit">'
+        body += '<tr data-ov-id="' + r.idx + '" onclick="openMoaModal(' + r.idx + ')">'
           + '<td style="padding-left:16px"></td>'
           + '<td><span class="ov-type-chip" data-type="' + (r.e.type||'') + '">' + (r.e.type||'&mdash;') + '</span></td>'
           + '<td><span class="ov-entity-tag">' + (r.e.entity||'&mdash;') + '</span></td>'
@@ -6160,13 +6161,10 @@ function buildMoaDesignPivotHtml(entries, month, dim) {
 
     var grand = flat.reduce(function(s,r){ return s + r.v; }, 0);
     var grandStr = fmtN2(grand);
-    body += '<tr class="ov-grand-row"><td colspan="4" style="padding-left:16px">Total across all ' + dimLabel + 's</td>'
+    body += '<tr class="ov-grand-row"><td colspan="4" style="padding-left:16px">GRAND TOTAL</td>'
       + '<td class="num" style="padding-right:16px">' + grandStr + '</td></tr>';
   }
 
-  var ovCount = new Set(flat.map(function(r){ return r.idx; })).size;
-  var net = flat.reduce(function(s,r){ return s + r.v; }, 0);
-  var netStr = fmtN2(net);
   var dimColW = dim === 'rc' ? '200px' : '120px';
   var dimCol = dim === 'lob' ? 'lob' : 'rc';
 
@@ -6181,12 +6179,7 @@ function buildMoaDesignPivotHtml(entries, month, dim) {
     + moaThHtml('amount', 'Allocation (SGD)', {num:true, style:'width:150px;padding-right:16px'})
     + '</tr></thead>'
     + '<tbody>' + body + '</tbody></table></div>'
-    + '<div class="ov-table-foot">'
-    + '<span><b>' + ovCount + '</b> overlay' + (ovCount===1?'':'s')
-    + ' &middot; <b>' + flat.length + '</b> allocation' + (flat.length===1?'':'s')
-    + ' &middot; Net total <b>' + netStr + '</b></span>'
-    + '<span class="dim">Click a row to edit</span>'
-    + '</div></div>';
+    + '</div>';
 }
 
 /* ============================================================
@@ -6240,6 +6233,8 @@ function buildMoaCompareListHtml(entries, mA, mB) {
       type: r.e.type || '', entity: r.e.entity || '',
       note: moaEntryDesc(r.e).replace(/<[^>]+>/g,'').replace(/&middot;/g,'·').replace(/&mdash;/g,'—').trim(),
       amount: moaAmtBucket(r.delta || r.amtB || r.amtA),
+      amtA: moaAmtBucket(r.amtA),
+      amtB: moaAmtBucket(r.amtB),
       _row: r
     };
   });
@@ -6275,7 +6270,7 @@ function buildMoaCompareListHtml(entries, mA, mB) {
     filtered.forEach(function(r) {
       var clickable = r.idx !== null && r.idx !== undefined;
       body += '<tr'
-        + (clickable ? ' data-ov-id="' + r.idx + '" onclick="openMoaModal(' + r.idx + ')" title="Click to edit"' : '') + '>'
+        + (clickable ? ' data-ov-id="' + r.idx + '" onclick="openMoaModal(' + r.idx + ')"' : '') + '>'
         + '<td style="padding-left:16px"><span class="ov-type-chip" data-type="' + (r.e.type||'') + '">' + (r.e.type||'&mdash;') + '</span></td>'
         + '<td><span class="ov-entity-tag">' + (r.e.entity||'&mdash;') + '</span></td>'
         + '<td><div class="ov-note">' + moaEntryDesc(r.e) + '</div></td>'
@@ -6286,7 +6281,7 @@ function buildMoaCompareListHtml(entries, mA, mB) {
     });
     var netA = filtered.reduce(function(s,r){ return s+r.amtA; },0);
     var netB = filtered.reduce(function(s,r){ return s+r.amtB; },0);
-    body += '<tr class="ov-grand-row"><td colspan="3" style="padding-left:16px">Grand total</td>'
+    body += '<tr class="ov-grand-row"><td colspan="3" style="padding-left:16px">GRAND TOTAL</td>'
       + moaCmpAmtCell(netA) + moaCmpAmtCell(netB) + moaCmpDeltaCell(netB - netA) + '</tr>';
   }
 
@@ -6297,16 +6292,12 @@ function buildMoaCompareListHtml(entries, mA, mB) {
     + moaThHtml('type', 'Type', {style:'width:100px;padding-left:16px'})
     + moaThHtml('entity', 'Entity', {style:'width:92px'})
     + moaThHtml('note', 'Overlay description', {style:'min-width:280px'})
-    + '<th class="num" style="width:130px">' + moaMonthShortLabel(mA) + '</th>'
-    + '<th class="num" style="width:130px">' + moaMonthShortLabel(mB) + '</th>'
+    + moaThHtml('amtA', moaMonthShortLabel(mA), {num:true, style:'width:130px'})
+    + moaThHtml('amtB', moaMonthShortLabel(mB), {num:true, style:'width:130px'})
     + moaThHtml('amount', 'Δ', {num:true, style:'width:130px;padding-right:16px'})
     + '</tr></thead>'
     + '<tbody>' + body + '</tbody></table></div>'
-    + '<div class="ov-table-foot">'
-    + '<span>Comparing <b>' + moaMonthShortLabel(mA) + '</b> vs <b>' + moaMonthShortLabel(mB) + '</b>'
-    + ' &middot; <b>' + filtered.length + '</b> overlay' + (filtered.length===1?'':'s') + '</span>'
-    + '<span class="dim">Click a row to edit</span>'
-    + '</div></div>';
+    + '</div>';
 }
 
 function buildMoaComparePivotHtml(entries, mA, mB, dim) {
@@ -6351,6 +6342,7 @@ function buildMoaComparePivotHtml(entries, mA, mB, dim) {
   var filt = moaFilters[view];
   var dimFilterSet = filt[dimCol];
   var typeSet = filt.type, entSet = filt.entity, noteSet = filt.note, amtSet = filt.amount;
+  var amtASet = filt.amtA, amtBSet = filt.amtB;
   dimRows = dimRows.filter(function(dr) {
     if (dimFilterSet.size > 0 && !dimFilterSet.has(dr.k)) return false;
     dr.items = dr.items.filter(function(it) {
@@ -6358,6 +6350,8 @@ function buildMoaComparePivotHtml(entries, mA, mB, dim) {
       if (entSet.size  > 0 && !entSet.has(it.e.entity || '')) return false;
       if (noteSet.size > 0 && !noteSet.has(moaEntryDesc(it.e).replace(/<[^>]+>/g,'').replace(/&middot;/g,'·').replace(/&mdash;/g,'—').trim())) return false;
       if (amtSet.size  > 0 && !amtSet.has(moaAmtBucket(it.delta || it.amtB || it.amtA))) return false;
+      if (amtASet && amtASet.size > 0 && !amtASet.has(moaAmtBucket(it.amtA))) return false;
+      if (amtBSet && amtBSet.size > 0 && !amtBSet.has(moaAmtBucket(it.amtB))) return false;
       return true;
     });
     // Recompute dim-level totals after item filter
@@ -6404,7 +6398,7 @@ function buildMoaComparePivotHtml(entries, mA, mB, dim) {
       dr.items.forEach(function(r) {
         var clickable = r.i !== null && r.i !== undefined;
         body += '<tr'
-          + (clickable ? ' data-ov-id="' + r.i + '" onclick="openMoaModal(' + r.i + ')" title="Click to edit"' : '') + '>'
+          + (clickable ? ' data-ov-id="' + r.i + '" onclick="openMoaModal(' + r.i + ')"' : '') + '>'
           + '<td style="padding-left:16px"><span class="ov-type-chip" data-type="' + (r.e.type||'') + '">' + (r.e.type||'&mdash;') + '</span></td>'
           + '<td><span class="ov-entity-tag">' + (r.e.entity||'&mdash;') + '</span></td>'
           + '<td><div class="ov-note">' + moaEntryDesc(r.e) + '</div></td>'
@@ -6414,12 +6408,11 @@ function buildMoaComparePivotHtml(entries, mA, mB, dim) {
     });
     var totA = dimRows.reduce(function(s,r){ return s+r.totA; }, 0);
     var totB = dimRows.reduce(function(s,r){ return s+r.totB; }, 0);
-    body += '<tr class="ov-grand-row"><td colspan="3" style="padding-left:16px">Total across all ' + dimLabel + 's</td>'
+    body += '<tr class="ov-grand-row"><td colspan="3" style="padding-left:16px">GRAND TOTAL</td>'
       + moaCmpAmtCell(totA) + moaCmpAmtCell(totB) + moaCmpDeltaCell(totB - totA) + '</tr>';
   }
 
   var dimColW = dim === 'rc' ? '200px' : '120px';
-  var totalItems = dimRows.reduce(function(s,r){ return s+r.items.length; }, 0);
 
   return '<div class="ov-tcard no-sticky-head">'
     + moaFilterChipsHtml(view)
@@ -6428,17 +6421,12 @@ function buildMoaComparePivotHtml(entries, mA, mB, dim) {
     + moaThHtml(dimCol, dimLabel, {style:'width:' + dimColW + ';padding-left:16px'})
     + moaThHtml('type', 'Type', {style:'width:90px'})
     + moaThHtml('entity', 'Entity', {style:'width:88px'})
-    + '<th class="num" style="width:130px">' + moaMonthShortLabel(mA) + '</th>'
-    + '<th class="num" style="width:130px">' + moaMonthShortLabel(mB) + '</th>'
+    + moaThHtml('amtA', moaMonthShortLabel(mA), {num:true, style:'width:130px'})
+    + moaThHtml('amtB', moaMonthShortLabel(mB), {num:true, style:'width:130px'})
     + moaThHtml('amount', 'Δ', {num:true, style:'width:130px;padding-right:16px'})
     + '</tr></thead>'
     + '<tbody>' + body + '</tbody></table></div>'
-    + '<div class="ov-table-foot">'
-    + '<span>Comparing <b>' + moaMonthShortLabel(mA) + '</b> vs <b>' + moaMonthShortLabel(mB) + '</b>'
-    + ' &middot; <b>' + dimRows.length + '</b> ' + dimLabel + (dimRows.length===1?'':'s')
-    + ' &middot; <b>' + totalItems + '</b> overlay' + (totalItems===1?'':'s') + '</span>'
-    + '<span class="dim">Click a row to edit</span>'
-    + '</div></div>';
+    + '</div>';
 }
 
 /* ============================================================
@@ -6555,9 +6543,6 @@ function buildMoaJournalHtml(entries, allMonths) {
       return 0;
     });
 
-    var totalDr = rows.reduce(function(s, r){ return s + r.dr; }, 0);
-    var totalCr = rows.reduce(function(s, r){ return s + r.cr; }, 0);
-
     var lineRows = rows.map(function(r) {
       allExportRows.push({
         'Entity': ent, 'CCY': r.ccy,
@@ -6593,10 +6578,6 @@ function buildMoaJournalHtml(entries, allMonths) {
       +   '<th class="num">Entered Debit</th><th class="num">Entered Credit</th><th>Remarks</th>'
       + '</tr></thead>'
       + '<tbody>' + lineRows
-      + '<tr class="moa-je-foot"><td colspan="8" style="text-align:right;padding-right:12px">Totals</td>'
-      +   '<td class="num">' + fmtN2(totalDr) + '</td>'
-      +   '<td class="num">' + fmtN2(totalCr) + '</td>'
-      +   '<td></td></tr>'
       + '</tbody></table></div></div>';
   });
 
@@ -7226,7 +7207,7 @@ function moaRenderFilterPop() {
       rows = Array.from(new Set([].concat(Array.from(byIdA.keys()), Array.from(byIdB.keys())))).map(function(k){
         var a = byIdA.get(k), b = byIdB.get(k), s = sample.get(k);
         var amtA = a ? (parseFloat(a.amount)||0) : 0, amtB = b ? (parseFloat(b.amount)||0) : 0;
-        return Object.assign({}, s, { __delta: amtB - amtA, __amt: amtA || amtB });
+        return Object.assign({}, s, { __delta: amtB - amtA, __amt: amtA || amtB, __amtA: amtA, __amtB: amtB });
       });
     } else {
       rows = entries.filter(function(e){ return e.month === mA; });
@@ -7243,7 +7224,13 @@ function moaRenderFilterPop() {
       Object.keys(alloc).forEach(function(k){
         var v = parseFloat(alloc[k])||0;
         if (!k || !v) return;
-        rows.push({ e:e, dimVal:k, v:v });
+        var row = { e:e, dimVal:k, v:v };
+        if (isCompare) {
+          var pair = [mA, mB].filter(Boolean).sort();
+          row.amtA = e.month === pair[0] ? v : 0;
+          row.amtB = e.month === pair[1] ? v : 0;
+        }
+        rows.push(row);
       });
     });
   }
@@ -7275,7 +7262,7 @@ function moaRenderFilterPop() {
   selected.forEach(function(v){ if (!counts.has(v)) counts.set(v, 0); });
 
   var keys = Array.from(counts.keys());
-  if (moaPopCol === 'amount') {
+  if (moaPopCol === 'amount' || moaPopCol === 'amtA' || moaPopCol === 'amtB') {
     var ord = {'Zero':0,'< 500K':1,'500K – 1.5M':2,'1.5M – 5M':3,'5M – 10M':4,'≥ 10M':5};
     keys.sort(function(a,b){ return (ord[a]==null?9:ord[a]) - (ord[b]==null?9:ord[b]); });
   } else if (moaPopCol === 'lob' || moaPopCol === 'rc') {
@@ -7306,7 +7293,7 @@ function moaRenderFilterPop() {
 
   pop.innerHTML = ''
     + '<div class="fp-head">'
-    + '<span class="fp-title">Filter &middot; ' + (MOA_COL_LABELS[moaPopCol] || moaPopCol) + '</span>'
+    + '<span class="fp-title">Filter &middot; ' + moaColLabel(moaPopCol) + '</span>'
     + '<button class="fp-clear"' + (hasSel ? '' : ' disabled') + ' onclick="moaFpClear()">Clear</button>'
     + '</div>'
     + '<div class="fp-search"><input type="text" placeholder="Search values…" value="' + esc(moaPopSearch) + '"'
