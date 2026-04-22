@@ -5453,17 +5453,17 @@ function buildMtmJournalCards(rows) {
     }));
 
     const lineRows = lines.map(l => `<tr>
-      <td class="d-mono">${l.ccy}</td>
-      <td class="d-mono">${l.cc}</td>
-      <td class="d-mono"><b>${l.account}</b></td>
-      <td class="d-mono">${l.prod}</td>
-      <td class="d-mono">${l.ico}</td>
-      <td class="d-mono">${l.f1}</td>
-      <td class="d-mono">${l.sub}</td>
-      <td class="d-mono">${l.f3}</td>
+      <td>${l.ccy}</td>
+      <td>${l.cc}</td>
+      <td><b>${l.account}</b></td>
+      <td>${l.prod}</td>
+      <td>${l.ico}</td>
+      <td>${l.f1}</td>
+      <td>${l.sub}</td>
+      <td>${l.f3}</td>
       <td class="num">${l.dr > 0 ? fmtN2(l.dr) : '<span class="dim">—</span>'}</td>
       <td class="num">${l.cr > 0 ? fmtN2(l.cr) : '<span class="dim">—</span>'}</td>
-      <td class="d-mono">${l.remarks}</td>
+      <td>${l.remarks}</td>
     </tr>`).join('');
 
     html += `<div class="moa-je-entry">
@@ -6433,17 +6433,17 @@ function buildMoaJournalHtml(entries, allMonths) {
         'Remarks': remarks
       });
       return '<tr>'
-        + '<td class="d-mono">' + r.ccy + '</td>'
-        + '<td class="d-mono">' + (r.cc || '<span class="dim">—</span>') + '</td>'
-        + '<td class="d-mono"><b>' + r.account + '</b></td>'
-        + '<td class="d-mono">' + r.prod + '</td>'
-        + '<td class="d-mono">' + r.ico + '</td>'
-        + '<td class="d-mono">' + r.f1 + '</td>'
-        + '<td class="d-mono">' + r.sub + '</td>'
-        + '<td class="d-mono">' + r.f3 + '</td>'
+        + '<td>' + r.ccy + '</td>'
+        + '<td>' + (r.cc || '<span class="dim">—</span>') + '</td>'
+        + '<td><b>' + r.account + '</b></td>'
+        + '<td>' + r.prod + '</td>'
+        + '<td>' + r.ico + '</td>'
+        + '<td>' + r.f1 + '</td>'
+        + '<td>' + r.sub + '</td>'
+        + '<td>' + r.f3 + '</td>'
         + '<td class="num">' + (r.dr > 0 ? fmtN2(r.dr) : '<span class="dim">—</span>') + '</td>'
         + '<td class="num">' + (r.cr > 0 ? fmtN2(r.cr) : '<span class="dim">—</span>') + '</td>'
-        + '<td class="d-mono">' + remarks + '</td>'
+        + '<td>' + remarks + '</td>'
         + '</tr>';
     }).join('');
 
