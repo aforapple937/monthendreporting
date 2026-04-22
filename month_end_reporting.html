@@ -6261,7 +6261,6 @@ function buildMoaComparePivotHtml(entries, mA, mB, dim) {
       body += '<tr class="ov-dim-head">'
         + '<td colspan="4" style="padding-left:16px">' + dimLabel
         + '<span class="grp-label">' + dimDisp + '</span>'
-        + '<span class="grp-count">' + dr.items.length + ' overlay' + (dr.items.length===1?'':'s') + '</span>'
         + '</td>'
         + moaCmpAmtCell(dr.totA) + moaCmpAmtCell(dr.totB) + moaCmpDeltaCell(dr.delta)
         + '</tr>';
