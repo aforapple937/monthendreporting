@@ -4357,7 +4357,9 @@ function openReconFilter(key, triggerEl) {
     const v = rcnRowField(r, key);
     counts.set(v, (counts.get(v) || 0) + 1);
   });
-  const allValues = [...counts.keys()].filter(v => v !== '' && v !== '–').sort();
+  const allValues = [...counts.keys()].filter(v => v !== '' && v !== '–').sort(
+    RCN_NUM_COLS.has(key) ? (a, b) => parseFloat(String(a).replace(/,/g, '')) - parseFloat(String(b).replace(/,/g, '')) : undefined
+  );
   fdOpenDesign(triggerEl, allValues, reconState.filters[key] || null, RCN_COL_LABELS[key], counts, (newFilter) => {
     reconState.filters[key] = fdIsActive(newFilter) ? newFilter : undefined;
     reconState.page = 1;
