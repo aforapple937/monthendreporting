@@ -4683,7 +4683,9 @@ function openTbReconFilter(key, triggerEl) {
     const v = tbrRowField(r, key);
     counts.set(v, (counts.get(v) || 0) + 1);
   });
-  const allValues = [...counts.keys()].filter(v => v !== '' && v !== '–').sort();
+  const allValues = [...counts.keys()].filter(v => v !== '' && v !== '–').sort(
+    TBR_NUM_COLS.has(key) ? (a, b) => parseFloat(String(a).replace(/,/g, '')) - parseFloat(String(b).replace(/,/g, '')) : undefined
+  );
   fdOpenDesign(triggerEl, allValues, tbReconState.filters[key] || null, TBR_COL_LABELS[key], counts, (newFilter) => {
     tbReconState.filters[key] = fdIsActive(newFilter) ? newFilter : undefined;
     tbReconState.page = 1;
