@@ -5949,8 +5949,8 @@ function buildMoaDesignListHtml(entries, month) {
   } else {
     body = list.map(function(x) {
       return '<tr data-ov-id="' + x.__idx + '" onclick="openMoaModal(' + x.__idx + ')">'
-        + '<td style="padding-left:16px"><span class="ov-type-chip" data-type="' + (x.type||'') + '">' + (x.type||'&mdash;') + '</span></td>'
-        + '<td><span class="ov-entity-tag">' + (x.entity||'&mdash;') + '</span></td>'
+        + '<td style="padding-left:16px">' + (x.type||'&mdash;') + '</td>'
+        + '<td>' + (x.entity||'&mdash;') + '</td>'
         + '<td><div class="ov-note">' + moaEntryDesc(x) + '</div></td>'
         + moaAmtCell(x.amount, {padRight:'16px'})
         + '</tr>';
@@ -6009,8 +6009,8 @@ function buildMoaDesignPivotHtml(entries, month, dim) {
       groupAcc.forEach(function(r) {
         body += '<tr data-ov-id="' + r.idx + '" onclick="openMoaModal(' + r.idx + ')">'
           + '<td style="padding-left:16px"></td>'
-          + '<td><span class="ov-type-chip" data-type="' + (r.e.type||'') + '">' + (r.e.type||'&mdash;') + '</span></td>'
-          + '<td><span class="ov-entity-tag">' + (r.e.entity||'&mdash;') + '</span></td>'
+          + '<td>' + (r.e.type||'&mdash;') + '</td>'
+          + '<td>' + (r.e.entity||'&mdash;') + '</td>'
           + '<td><div class="ov-note">' + moaEntryDesc(r.e) + '</div></td>'
           + moaAmtCell(r.v, {padRight:'16px'})
           + '</tr>';
@@ -6134,8 +6134,8 @@ function buildMoaCompareListHtml(entries, mA, mB) {
       var clickable = r.idx !== null && r.idx !== undefined;
       body += '<tr'
         + (clickable ? ' data-ov-id="' + r.idx + '" onclick="openMoaModal(' + r.idx + ')"' : '') + '>'
-        + '<td style="padding-left:16px"><span class="ov-type-chip" data-type="' + (r.e.type||'') + '">' + (r.e.type||'&mdash;') + '</span></td>'
-        + '<td><span class="ov-entity-tag">' + (r.e.entity||'&mdash;') + '</span></td>'
+        + '<td style="padding-left:16px">' + (r.e.type||'&mdash;') + '</td>'
+        + '<td>' + (r.e.entity||'&mdash;') + '</td>'
         + '<td><div class="ov-note">' + moaEntryDesc(r.e) + '</div></td>'
         + moaCmpAmtCell(r.amtA)
         + moaCmpAmtCell(r.amtB)
@@ -6262,8 +6262,8 @@ function buildMoaComparePivotHtml(entries, mA, mB, dim) {
         var clickable = r.i !== null && r.i !== undefined;
         body += '<tr'
           + (clickable ? ' data-ov-id="' + r.i + '" onclick="openMoaModal(' + r.i + ')"' : '') + '>'
-          + '<td style="padding-left:16px"><span class="ov-type-chip" data-type="' + (r.e.type||'') + '">' + (r.e.type||'&mdash;') + '</span></td>'
-          + '<td><span class="ov-entity-tag">' + (r.e.entity||'&mdash;') + '</span></td>'
+          + '<td style="padding-left:16px">' + (r.e.type||'&mdash;') + '</td>'
+          + '<td>' + (r.e.entity||'&mdash;') + '</td>'
           + '<td><div class="ov-note">' + moaEntryDesc(r.e) + '</div></td>'
           + moaCmpAmtCell(r.amtA) + moaCmpAmtCell(r.amtB) + moaCmpDeltaCell(r.delta)
           + '</tr>';
