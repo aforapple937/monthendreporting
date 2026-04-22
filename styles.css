@@ -470,8 +470,6 @@
     border-radius: 5px; background: #fff; color: var(--ink); outline: 0; text-align: right; width: 100%; box-sizing: border-box;
   }
   .ov-alloc-row input:focus { border-color: var(--ink3); }
-  .ov-fill-btn { margin: 6px 8px 8px; font-size: 11px; padding: 5px 10px; border: 1px dashed var(--border); border-radius: 5px; background: transparent; cursor: pointer; color: var(--ink3); font-family: inherit; }
-  .ov-fill-btn:hover { background: #fff; color: var(--ink); border-color: var(--ink3); }
 
   .breakdown-table { width: 100%; border-collapse: collapse; font-size: 12px; }
   .breakdown-table th { font-weight: 500; font-size: 10px; font-family: var(--mono); letter-spacing: 0.06em; color: var(--ink3); padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; }
@@ -1494,32 +1492,20 @@
   .ptb-v2.sf-v table.sf-table tbody tr:last-child td { border-bottom: 0; }
   .ptb-v2.sf-v table.sf-table tbody tr:hover td { background: var(--d-line-2); }
   .ptb-v2.sf-v .sf-table .sf-col-name { width: auto; padding-left: 16px; }
-  .ptb-v2.sf-v .sf-table .sf-col-type { width: 88px; }
+  .ptb-v2.sf-v .sf-table .sf-col-tool { width: 220px; }
   .ptb-v2.sf-v .sf-table .sf-col-up { width: 170px; }
   .ptb-v2.sf-v .sf-table .sf-col-act { width: 120px; text-align: right; padding-right: 16px; }
-  .ptb-v2.sf-v .sf-name-wrap { max-width: 100%; }
   .ptb-v2.sf-v .sf-name {
     font-size: 12.5px; font-weight: 600; color: var(--d-ink);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 100%;
   }
-  .ptb-v2.sf-v .sf-sub {
-    font-size: 11px; color: var(--d-ink-3); margin-top: 1px;
+  .ptb-v2.sf-v .sf-tool {
+    font-size: 12px; color: var(--d-ink-2);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 100%;
   }
-  .ptb-v2.sf-v .sf-sub.sf-legacy { color: var(--d-warn); }
-  .ptb-v2.sf-v .sf-badge {
-    font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
-    font-size: 10px; padding: 2px 6px; border-radius: 4px;
-    background: var(--d-line-2); color: var(--d-ink-2);
-    text-transform: uppercase; font-weight: 500;
-    letter-spacing: 0.04em; white-space: nowrap;
-  }
-  .ptb-v2.sf-v .sf-badge.html { background: color-mix(in srgb, var(--d-accent) 32%, transparent); color: #8A6D00; }
-  .ptb-v2.sf-v .sf-badge.csv,
-  .ptb-v2.sf-v .sf-badge.xlsx { background: var(--d-pos-soft); color: var(--d-pos); }
-  .ptb-v2.sf-v .sf-badge.json,
-  .ptb-v2.sf-v .sf-badge.txt  { background: var(--d-line-2); color: var(--d-ink-2); }
-  .ptb-v2.sf-v .sf-badge.pdf  { background: var(--d-neg-soft); color: var(--d-neg); }
+  .ptb-v2.sf-v .sf-tool.sf-legacy { color: var(--d-warn); }
   .ptb-v2.sf-v .sf-date {
     font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
     font-size: 11px; color: var(--d-ink-3);
