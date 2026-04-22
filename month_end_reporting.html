@@ -4593,8 +4593,6 @@ function renderTbReconResults(container) {
     rowsHtml = pageRows.map(r => {
       const tds = cols.map(c => {
         if (c === 'VARIANCE') return `<td class="num">${stationVarCell(r.VARIANCE||0)}</td>`;
-        if (c === 'GL_NUMBER') return `<td class="d-mono">${r.GL_NUMBER||''}</td>`;
-        if (c === 'CURRENCY') return `<td class="d-mono">${r.CURRENCY||''}</td>`;
         return `<td>${r[c]||STATION_EMPTY_CELL}</td>`;
       }).join('');
       return `<tr>${tds}</tr>`;
@@ -4613,16 +4611,16 @@ function renderTbReconResults(container) {
         : fmtNum(r.PER_RDL||0);
       return `<tr data-status="${st}">
         <td>${stationStatusChip(st)}</td>
-        <td class="d-mono">${r.ACCOUNTS||''}</td>
+        <td>${r.ACCOUNTS||''}</td>
         <td>${r.ACCOUNT_NAME||STATION_EMPTY_CELL}</td>
         <td>${r.ENTITY||STATION_EMPTY_CELL}</td>
         <td>${r.RC||STATION_EMPTY_CELL}</td>
-        <td class="d-mono">${r.GL_NUMBER||''}</td>
+        <td>${r.GL_NUMBER||''}</td>
         <td>${r.GL_NATURE||STATION_EMPTY_CELL}</td>
         <td>${r.PRODUCT_CODE||STATION_EMPTY_CELL}</td>
         <td>${r.INTERCO||STATION_EMPTY_CELL}</td>
         <td>${r.ISLAMIC_INDICATOR||STATION_EMPTY_CELL}</td>
-        <td class="d-mono">${r.CURRENCY||''}</td>
+        <td>${r.CURRENCY||''}</td>
         <td class="num">${fmtNum(r.YTD_ENTERED||0)}</td>
         <td class="num">${perRdlCell}</td>
         <td class="num">${stationVarCell(r.VARIANCE||0)}</td>
