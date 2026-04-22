@@ -3886,7 +3886,9 @@ function openPreTbFilter(key, triggerEl) {
     const v = ptbRowField(r, key);
     counts.set(v, (counts.get(v) || 0) + 1);
   });
-  const allValues = [...counts.keys()].filter(v => v !== '' && v !== '–').sort();
+  const allValues = [...counts.keys()].filter(v => v !== '' && v !== '–').sort(
+    key === 'PTD' ? (a, b) => parseFloat(String(a).replace(/,/g, '')) - parseFloat(String(b).replace(/,/g, '')) : undefined
+  );
   fdOpenDesign(triggerEl, allValues, preTbState.filters[key] || null, PTB_COL_LABELS[key], counts, (newFilter) => {
     preTbState.filters[key] = fdIsActive(newFilter) ? newFilter : undefined;
     preTbState.page = 1;
