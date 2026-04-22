@@ -3755,10 +3755,10 @@ function ptbBuildRowsHtml(pageRows) {
     const ptd = r.HAS_ENTRY ? (r.PTD<0?'-':'')+fmtNum(Math.abs(r.PTD)) : STATION_EMPTY_CELL;
     return `<tr data-status="${st}">
       <td>${stationStatusChip(st)}</td>
-      <td class="d-mono">${r.ACCOUNTS}</td>
+      <td>${r.ACCOUNTS}</td>
       <td>${r.ACCOUNT_NAME||STATION_EMPTY_CELL}</td>
-      <td class="d-mono">${r.GL_NUMBER}</td>
-      <td class="d-mono">${r.CURRENCY}</td>
+      <td>${r.GL_NUMBER}</td>
+      <td>${r.CURRENCY}</td>
       <td class="num">${ptd}</td>
     </tr>`;
   }).join('');
