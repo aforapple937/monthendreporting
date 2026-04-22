@@ -5197,8 +5197,8 @@ function mtmrBuildPagerHtml(totalPages, currentPage) {
 function renderMtmResults(container) {
   const rows = mtmState.results; if (!rows || !rows.length) return;
   const SIX_DP = new Set(['CURR_INT_RT','BASE_RT','WAIR']);
-  const TWO_DP = new Set(['RCY_END_PERIOD_BAL','RCY_ACCRUED_INT','EXCHG_RT','LCY_END_PERIOD_BAL','LCY_ACCRUED_INT','PERIODIC_PAYT','MKT_VALUE_PERIODIC','MKT_VALUE_FINAL','MKT_VALUE_TOTAL','LCY_MKT_VALUE_CHG','RCY_MKT_VALUE_CHG','PREV_MTH_LCY_FAIR_VALUE','LCY_MKT_VALUE_CHG_VS_PREV']);
-  const INT_FMT = new Set(['RESIDUAL_MTH','MOB','INT_PYM_FREQ']);
+  const TWO_DP = new Set(['RCY_END_PERIOD_BAL','RCY_ACCRUED_INT','EXCHG_RT','LCY_END_PERIOD_BAL','LCY_ACCRUED_INT','PERIODIC_PAYT','MKT_VALUE_PERIODIC','MKT_VALUE_FINAL','MKT_VALUE_TOTAL','LCY_MKT_VALUE_CHG','RCY_MKT_VALUE_CHG','PREV_MTH_LCY_FAIR_VALUE','LCY_MKT_VALUE_CHG_VS_PREV','RESIDUAL_MTH']);
+  const INT_FMT = new Set(['MOB','INT_PYM_FREQ']);
   const DATE_COLS = new Set(['PROC_DTE','MATURITY_DTE']);
   const isNumRight = col => SIX_DP.has(col)||TWO_DP.has(col)||INT_FMT.has(col);
   const formatCell = (col, v) => {
@@ -5537,7 +5537,10 @@ function openMtmFilter(colId, triggerEl) {
     const v = mtmrRowField(r, colId);
     counts.set(v, (counts.get(v) || 0) + 1);
   });
-  const allValues = [...counts.keys()].filter(v => v !== '').sort();
+  const MTM_NUM_COLS = new Set(['CURR_INT_RT','BASE_RT','WAIR','RCY_END_PERIOD_BAL','RCY_ACCRUED_INT','EXCHG_RT','LCY_END_PERIOD_BAL','LCY_ACCRUED_INT','PERIODIC_PAYT','MKT_VALUE_PERIODIC','MKT_VALUE_FINAL','MKT_VALUE_TOTAL','LCY_MKT_VALUE_CHG','RCY_MKT_VALUE_CHG','PREV_MTH_LCY_FAIR_VALUE','LCY_MKT_VALUE_CHG_VS_PREV','RESIDUAL_MTH','MOB','INT_PYM_FREQ']);
+  const allValues = [...counts.keys()].filter(v => v !== '').sort(
+    MTM_NUM_COLS.has(colId) ? (a, b) => parseFloat(String(a).replace(/,/g, '')) - parseFloat(String(b).replace(/,/g, '')) : undefined
+  );
   const label = MTM_COL_LABELS[colId] || colId;
   fdOpenDesign(triggerEl, allValues, mtmFilters[colId] || null, label, counts, (newFilter) => {
     mtmFilters[colId] = fdIsActive(newFilter) ? newFilter : undefined;
