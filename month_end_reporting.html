@@ -5813,14 +5813,8 @@ function moaColLabel(col) {
 }
 var moaPopCol = null, moaPopSearch = '';
 
-function moaAmtBucket(v) {
-  var a = Math.abs(parseFloat(v) || 0);
-  if (a === 0) return 'Zero';
-  if (a < 500000) return '< 500K';
-  if (a < 1500000) return '500K – 1.5M';
-  if (a < 5000000) return '1.5M – 5M';
-  if (a < 10000000) return '5M – 10M';
-  return '≥ 10M';
+function moaAmtKey(v) {
+  return fmtN2(parseFloat(v) || 0);
 }
 
 /* Return the current viewMode key for moaFilters */
@@ -5835,9 +5829,9 @@ function moaOvField(e, col) {
   if (col === 'type')   return e.type || '';
   if (col === 'entity') return e.entity || '';
   if (col === 'note')   return moaEntryDesc(e).replace(/&middot;/g, '·').replace(/&mdash;/g, '—').replace(/<[^>]+>/g, '').trim();
-  if (col === 'amount') return moaAmtBucket(e.amount);
-  if (col === 'amtA')   return moaAmtBucket(e.__amtA || 0);
-  if (col === 'amtB')   return moaAmtBucket(e.__amtB || 0);
+  if (col === 'amount') return moaAmtKey(e.amount);
+  if (col === 'amtA')   return moaAmtKey(e.__amtA || 0);
+  if (col === 'amtB')   return moaAmtKey(e.__amtB || 0);
   return '';
 }
 /* Extract filter value for a flat row (overlay + dim allocation) at a column */
@@ -5846,9 +5840,9 @@ function moaOvFieldFlat(row, col) {
   if (col === 'type')   return row.e.type || '';
   if (col === 'entity') return row.e.entity || '';
   if (col === 'note')   return moaEntryDesc(row.e).replace(/&middot;/g, '·').replace(/&mdash;/g, '—').replace(/<[^>]+>/g, '').trim();
-  if (col === 'amount') return moaAmtBucket(row.v);
-  if (col === 'amtA')   return moaAmtBucket(row.amtA || 0);
-  if (col === 'amtB')   return moaAmtBucket(row.amtB || 0);
+  if (col === 'amount') return moaAmtKey(row.v);
+  if (col === 'amtA')   return moaAmtKey(row.amtA || 0);
+  if (col === 'amtB')   return moaAmtKey(row.amtB || 0);
   return '';
 }
 
@@ -6014,12 +6008,10 @@ function buildMoaDesignPivotHtml(entries, month, dim) {
     var flushGroup = function() {
       if (curDim === null) return;
       var groupSum = groupAcc.reduce(function(s,r){ return s + r.v; }, 0);
-      var count = groupAcc.length;
       var sumStr = fmtN2(groupSum);
       var dimDisp = dim === 'rc' ? moaRcLabel(curDim) : curDim;
       body += '<tr class="ov-dim-head"><td colspan="4" style="padding-left:16px">'
         + dimLabel + '<span class="grp-label">' + dimDisp + '</span>'
-        + '<span class="grp-count">' + count + ' allocation' + (count===1?'':'s') + '</span>'
         + '</td><td class="num" style="padding-right:16px;color:var(--d-ink);font-weight:500">' + sumStr + '</td></tr>';
       groupAcc.forEach(function(r) {
         body += '<tr data-ov-id="' + r.idx + '" onclick="openMoaModal(' + r.idx + ')">'
@@ -6110,9 +6102,9 @@ function buildMoaCompareListHtml(entries, mA, mB) {
     return {
       type: r.e.type || '', entity: r.e.entity || '',
       note: moaEntryDesc(r.e).replace(/<[^>]+>/g,'').replace(/&middot;/g,'·').replace(/&mdash;/g,'—').trim(),
-      amount: moaAmtBucket(r.delta || r.amtB || r.amtA),
-      amtA: moaAmtBucket(r.amtA),
-      amtB: moaAmtBucket(r.amtB),
+      amount: moaAmtKey(r.delta || r.amtB || r.amtA),
+      amtA: moaAmtKey(r.amtA),
+      amtB: moaAmtKey(r.amtB),
       _row: r
     };
   });
@@ -6227,9 +6219,9 @@ function buildMoaComparePivotHtml(entries, mA, mB, dim) {
       if (typeSet.size > 0 && !typeSet.has(it.e.type || '')) return false;
       if (entSet.size  > 0 && !entSet.has(it.e.entity || '')) return false;
       if (noteSet.size > 0 && !noteSet.has(moaEntryDesc(it.e).replace(/<[^>]+>/g,'').replace(/&middot;/g,'·').replace(/&mdash;/g,'—').trim())) return false;
-      if (amtSet.size  > 0 && !amtSet.has(moaAmtBucket(it.delta || it.amtB || it.amtA))) return false;
-      if (amtASet && amtASet.size > 0 && !amtASet.has(moaAmtBucket(it.amtA))) return false;
-      if (amtBSet && amtBSet.size > 0 && !amtBSet.has(moaAmtBucket(it.amtB))) return false;
+      if (amtSet.size  > 0 && !amtSet.has(moaAmtKey(it.delta || it.amtB || it.amtA))) return false;
+      if (amtASet && amtASet.size > 0 && !amtASet.has(moaAmtKey(it.amtA))) return false;
+      if (amtBSet && amtBSet.size > 0 && !amtBSet.has(moaAmtKey(it.amtB))) return false;
       return true;
     });
     // Recompute dim-level totals after item filter
@@ -6743,7 +6735,7 @@ function exportMoaXlsx() {
         if (filt.type.size   > 0 && !filt.type.has(r.e.type||''))     return false;
         if (filt.entity.size > 0 && !filt.entity.has(r.e.entity||'')) return false;
         if (filt.note.size   > 0 && !filt.note.has(moaEntryDesc(r.e).replace(/<[^>]+>/g,'').replace(/&middot;/g,'·').replace(/&mdash;/g,'—').trim())) return false;
-        if (filt.amount.size > 0 && !filt.amount.has(moaAmtBucket(r.delta || r.amtB || r.amtA))) return false;
+        if (filt.amount.size > 0 && !filt.amount.has(moaAmtKey(r.delta || r.amtB || r.amtA))) return false;
         return true;
       });
       var groupSums = new Map();
@@ -6778,7 +6770,7 @@ function exportMoaXlsx() {
         if (filt2.type.size   > 0 && !filt2.type.has(e.type||''))     return false;
         if (filt2.entity.size > 0 && !filt2.entity.has(e.entity||'')) return false;
         if (filt2.note.size   > 0 && !filt2.note.has(moaEntryDesc(e).replace(/<[^>]+>/g,'').replace(/&middot;/g,'·').replace(/&mdash;/g,'—').trim())) return false;
-        if (filt2.amount.size > 0 && !filt2.amount.has(moaAmtBucket(e.amount))) return false;
+        if (filt2.amount.size > 0 && !filt2.amount.has(moaAmtKey(e.amount))) return false;
         return true;
       });
       moaSortListView(filtered);
@@ -6835,7 +6827,7 @@ function exportMoaXlsx() {
           if (filt3.type.size   > 0 && !filt3.type.has(r.e.type||''))     return false;
           if (filt3.entity.size > 0 && !filt3.entity.has(r.e.entity||'')) return false;
           if (filt3.note.size   > 0 && !filt3.note.has(moaEntryDesc(r.e).replace(/<[^>]+>/g,'').replace(/&middot;/g,'·').replace(/&mdash;/g,'—').trim())) return false;
-          if (filt3.amount.size > 0 && !filt3.amount.has(moaAmtBucket(r.delta || r.amtB || r.amtA))) return false;
+          if (filt3.amount.size > 0 && !filt3.amount.has(moaAmtKey(r.delta || r.amtB || r.amtA))) return false;
           return true;
         });
         if (!items.length) return;
@@ -7062,10 +7054,10 @@ function moaRenderFilterPop() {
   // Apply OTHER filters for dynamic counts
   var getField;
   if (view === 'list') {
-    // In compare mode, amount bucket should reflect the delta; wrap getter
+    // In compare mode, amount key should reflect the delta; wrap getter
     if (isCompare) {
       getField = function(r, col){
-        if (col === 'amount') return moaAmtBucket(r.__delta || r.__amt || 0);
+        if (col === 'amount') return moaAmtKey(r.__delta || r.__amt || 0);
         return moaOvField(r, col);
       };
     } else {
@@ -7087,8 +7079,9 @@ function moaRenderFilterPop() {
 
   var keys = Array.from(counts.keys());
   if (moaPopCol === 'amount' || moaPopCol === 'amtA' || moaPopCol === 'amtB') {
-    var ord = {'Zero':0,'< 500K':1,'500K – 1.5M':2,'1.5M – 5M':3,'5M – 10M':4,'≥ 10M':5};
-    keys.sort(function(a,b){ return (ord[a]==null?9:ord[a]) - (ord[b]==null?9:ord[b]); });
+    keys.sort(function(a,b){
+      return parseFloat(String(a).replace(/,/g, '')) - parseFloat(String(b).replace(/,/g, ''));
+    });
   } else if (moaPopCol === 'lob' || moaPopCol === 'rc') {
     keys.sort(function(a,b){ return String(a).localeCompare(String(b)); });
   } else {
