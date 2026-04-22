@@ -21,6 +21,28 @@
     --sans: 'IBM Plex Sans', sans-serif;
     --radius: 6px;
     --radius-lg: 10px;
+
+    /* Modern design-file palette — hoisted from .ptb-v2 so it is available
+       to .dt-modern tables that render outside the .ptb-v2 scope. */
+    --d-bg: #FAFAF7;
+    --d-surface: #FFFFFF;
+    --d-ink: #0A0A0A;
+    --d-ink-2: #3A3A38;
+    --d-ink-3: #6B6B68;
+    --d-ink-4: #A3A39F;
+    --d-line: #EAEAE4;
+    --d-line-2: #F2F2EC;
+    --d-accent: #FFCC00;
+    --d-accent-ink: #1A1A00;
+    --d-pos: #137A3F;
+    --d-pos-soft: #E4F3EA;
+    --d-neg: #B5292A;
+    --d-neg-soft: #F7E4E4;
+    --d-warn: #B8740E;
+    --d-warn-soft: #FBEFD6;
+    --d-row-h: 40px;
+    --d-pad: 20px;
+    --d-radius: 10px;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -368,6 +390,30 @@
     position: static;
     color: inherit !important;
   }
+
+  /* .dt-modern: re-skins .data-table using the modern --d-* palette.
+     Opt-in per table — unstyled .data-table instances keep the legacy dark header. */
+  table.data-table.dt-modern thead th {
+    background: var(--d-line-2);
+    color: var(--d-ink-3);
+    font-family: var(--sans);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    border-right: 1px solid var(--d-line);
+  }
+  table.data-table.dt-modern thead th:last-child { border-right: none; }
+  table.data-table.dt-modern thead th.th-filterable:hover { background: var(--d-line); }
+  table.data-table.dt-modern thead th.th-filtered {
+    background: var(--d-line) !important;
+    color: var(--d-ink) !important;
+    box-shadow: inset 0 -2px 0 var(--d-accent);
+  }
+  table.data-table.dt-modern thead th.th-filtered:hover { background: var(--d-line) !important; }
+  table.data-table.dt-modern tbody tr { border-bottom: 1px solid var(--d-line-2); }
+  table.data-table.dt-modern tbody tr:hover { background: var(--d-line-2); }
+  table.data-table.dt-modern tbody td { color: var(--d-ink-2); }
+  table.data-table.dt-modern tbody tr.row-break { background: var(--d-neg-soft); }
+  table.data-table.dt-modern tbody tr.row-break td { color: var(--d-ink); }
 
   .mono-val { font-family: var(--mono); font-size: 11px; }
 
