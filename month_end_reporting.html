@@ -5966,7 +5966,7 @@ function buildMoaDesignListHtml(entries, month) {
       return '<tr data-ov-id="' + x.__idx + '" onclick="openMoaModal(' + x.__idx + ')">'
         + '<td style="padding-left:16px">' + (x.type||'&mdash;') + '</td>'
         + '<td>' + (x.entity||'&mdash;') + '</td>'
-        + '<td><div class="ov-note">' + moaEntryDesc(x) + '</div></td>'
+        + '<td>' + moaEntryDesc(x) + '</td>'
         + moaAmtCell(x.amount, {padRight:'16px'})
         + '</tr>';
     }).join('');
@@ -6026,7 +6026,7 @@ function buildMoaDesignPivotHtml(entries, month, dim) {
           + '<td style="padding-left:16px"></td>'
           + '<td>' + (r.e.type||'&mdash;') + '</td>'
           + '<td>' + (r.e.entity||'&mdash;') + '</td>'
-          + '<td><div class="ov-note">' + moaEntryDesc(r.e) + '</div></td>'
+          + '<td>' + moaEntryDesc(r.e) + '</td>'
           + moaAmtCell(r.v, {padRight:'16px'})
           + '</tr>';
       });
@@ -6151,7 +6151,7 @@ function buildMoaCompareListHtml(entries, mA, mB) {
         + (clickable ? ' data-ov-id="' + r.idx + '" onclick="openMoaModal(' + r.idx + ')"' : '') + '>'
         + '<td style="padding-left:16px">' + (r.e.type||'&mdash;') + '</td>'
         + '<td>' + (r.e.entity||'&mdash;') + '</td>'
-        + '<td><div class="ov-note">' + moaEntryDesc(r.e) + '</div></td>'
+        + '<td>' + moaEntryDesc(r.e) + '</td>'
         + moaCmpAmtCell(r.amtA)
         + moaCmpAmtCell(r.amtB)
         + moaCmpDeltaCell(r.delta)
@@ -6279,7 +6279,7 @@ function buildMoaComparePivotHtml(entries, mA, mB, dim) {
           + (clickable ? ' data-ov-id="' + r.i + '" onclick="openMoaModal(' + r.i + ')"' : '') + '>'
           + '<td style="padding-left:16px">' + (r.e.type||'&mdash;') + '</td>'
           + '<td>' + (r.e.entity||'&mdash;') + '</td>'
-          + '<td><div class="ov-note">' + moaEntryDesc(r.e) + '</div></td>'
+          + '<td>' + moaEntryDesc(r.e) + '</td>'
           + moaCmpAmtCell(r.amtA) + moaCmpAmtCell(r.amtB) + moaCmpDeltaCell(r.delta)
           + '</tr>';
       });
