@@ -3984,14 +3984,14 @@ function revBuildRowsHtml(pageRows) {
       <td>${stationStatusChip(st)}</td>
       <td>${r.ENTITY||STATION_EMPTY_CELL}</td>
       <td>${r.RC||STATION_EMPTY_CELL}</td>
-      <td class="d-mono">${r.GL_NUMBER||STATION_EMPTY_CELL}</td>
+      <td>${r.GL_NUMBER||STATION_EMPTY_CELL}</td>
       <td>${r.PRODUCT_CODE||STATION_EMPTY_CELL}</td>
       <td>${r.INTERCO||STATION_EMPTY_CELL}</td>
       <td>${r.ISLAMIC_INDICATOR||STATION_EMPTY_CELL}</td>
-      <td class="d-mono">${r.CURRENCY||''}</td>
-      <td class="d-mono">${r.PREV_DRCR||''}</td>
+      <td>${r.CURRENCY||''}</td>
+      <td>${r.PREV_DRCR||''}</td>
       <td class="num">${fmtNum(r.PREV_AMT||0)}</td>
-      <td class="d-mono">${r.REV_DRCR||''}</td>
+      <td>${r.REV_DRCR||''}</td>
       <td class="num">${fmtNum(r.REV_AMT||0)}</td>
       <td class="num">${stationVarCell(r.VARIANCE||0)}</td>
     </tr>`;
@@ -4232,14 +4232,14 @@ function rcnBuildRowsHtml(pageRows) {
       <td>${stationStatusChip(st)}</td>
       <td>${r.ENTITY||STATION_EMPTY_CELL}</td>
       <td>${r.RC||STATION_EMPTY_CELL}</td>
-      <td class="d-mono">${r.GL_ACC||STATION_EMPTY_CELL}</td>
+      <td>${r.GL_ACC||STATION_EMPTY_CELL}</td>
       <td>${r.GL_NATURE||STATION_EMPTY_CELL}</td>
       <td>${r.BS_PL||STATION_EMPTY_CELL}</td>
       <td>${r.PRODUCT_CODE||STATION_EMPTY_CELL}</td>
       <td>${r.INTERCO||STATION_EMPTY_CELL}</td>
       <td>${r.ISLAMIC_INDICATOR||STATION_EMPTY_CELL}</td>
-      <td class="d-mono">${r.CURRENCY||''}</td>
-      <td class="d-mono">${r.DEBIT_CREDIT||''}</td>
+      <td>${r.CURRENCY||''}</td>
+      <td>${r.DEBIT_CREDIT||''}</td>
       <td class="num">${perRdlCell}</td>
       <td class="num">${fmtNum(r.POSTING_FILE||0)}</td>
       <td class="num">${stationVarCell(r.VARIANCE||0)}</td>
@@ -5343,7 +5343,6 @@ function buildMtmListingCard(rows, filtered, tableCols, dataCols, isNumRight, fo
     const tds = dataCols.map(c => {
       const v = formatCell(c, r[c]);
       if (isNumRight(c)) return `<td class="num">${v}</td>`;
-      if (c === 'AC_CODE' || c === 'CIF_NO' || c === 'AA_FAC_REF' || c === 'CURCY_CODE' || c === 'LEGAL_ENTITY_CODE') return `<td class="d-mono">${v}</td>`;
       return `<td>${v}</td>`;
     }).join('');
     return `<tr data-status="${st}" style="cursor:pointer" onclick="openMtmSim(${absIdx})" title="Click to simulate"><td>${chip}</td>${tds}</tr>`;
