@@ -259,7 +259,7 @@
       These accounts could not be matched to a row in the EGL Mapping table (LEVEL_3 + SEC_CLS_CD + F_SHORT_TERM_IND + F_SHORT_TERM_INCEP_IND). They are excluded from the reconciliation.
     </div>
     <div class="modal-body" style="padding:0;max-height:60vh;overflow:auto;">
-      <table class="data-table" style="font-size:11px;">
+      <table class="data-table dt-modern" style="font-size:11px;">
         <thead><tr><th>Account No.</th><th>Entity</th><th>Level 3</th><th>SEC CLS</th><th>ST Ind</th><th>ST Incep</th><th>Currency</th></tr></thead>
         <tbody id="unmapped-body"></tbody>
       </table>
@@ -3154,7 +3154,7 @@ function runQuery() {
   area.innerHTML=`
     <div class="query-result-header"><div class="qrh-id">${accN}</div><div class="qrh-meta"><span><b>Entity:</b> ${dim.ent}</span><span><b>Currency:</b> ${dim.cur}</span><span><b>Level 3:</b> ${l3}</span><span><b>SEC CLS:</b> ${acc.SEC_CLS_CD}</span><span><b>Product:</b> ${dim.prod}</span><span><b>Islamic:</b> ${acc.V_FINANCING_CODE==='I'?'Yes':'No'}</span></div></div>
     <div class="journal-entries"><div class="je-header">Expected Journal Entries</div>
-    <div class="table-wrap" style="max-height:400px;overflow:auto;"><table class="data-table"><thead><tr><th>Entity</th><th>RC</th><th>GL Number</th><th>GL Nature</th><th>BS/PL</th><th>Product</th><th>Interco</th><th>Islamic</th><th>Currency</th><th>DR/CR</th><th style="text-align:right">Amount</th></tr></thead>
+    <div class="table-wrap" style="max-height:400px;overflow:auto;"><table class="data-table dt-modern"><thead><tr><th>Entity</th><th>RC</th><th>GL Number</th><th>GL Nature</th><th>BS/PL</th><th>Product</th><th>Interco</th><th>Islamic</th><th>Currency</th><th>DR/CR</th><th style="text-align:right">Amount</th></tr></thead>
     <tbody>${rows||'<tr><td colspan="11" style="text-align:center;color:var(--ink3);padding:20px">No entries with non-zero amounts found.</td></tr>'}</tbody></table></div></div>`;
 }
 
@@ -3646,7 +3646,7 @@ function renderGlteResults(container) {
     const varDisplay = row.isBreak ? renderVarianceCell(row.variance) : `<span class="vp-zero mono-val">–</span>`;
     return `<tr class="${row.isBreak ? 'row-break' : ''}">${cells}<td class="mono-val">${fmtNum(row.tNet)}</td><td class="mono-val">${fmtNum(row.vNet)}</td><td>${varDisplay}</td></tr>`;
   }).join('');
-  container.innerHTML = `<div class="results-view">${kpiHtml}${toolbarHtml}<div class="table-wrap"><table class="data-table"><thead><tr>${thHtml}</tr></thead><tbody>${rowsHtml}</tbody></table></div></div>`;
+  container.innerHTML = `<div class="results-view">${kpiHtml}${toolbarHtml}<div class="table-wrap"><table class="data-table dt-modern"><thead><tr>${thHtml}</tr></thead><tbody>${rowsHtml}</tbody></table></div></div>`;
 }
 
 function openGlteFilter(key, triggerEl) {
