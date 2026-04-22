@@ -4118,7 +4118,9 @@ function openReversalFilter(key, triggerEl) {
     const v = revRowField(r, key);
     counts.set(v, (counts.get(v) || 0) + 1);
   });
-  const allValues = [...counts.keys()].filter(v => v !== '' && v !== '–').sort();
+  const allValues = [...counts.keys()].filter(v => v !== '' && v !== '–').sort(
+    REV_NUM_COLS.has(key) ? (a, b) => parseFloat(String(a).replace(/,/g, '')) - parseFloat(String(b).replace(/,/g, '')) : undefined
+  );
   fdOpenDesign(triggerEl, allValues, revState.filters[key] || null, REV_COL_LABELS[key], counts, (newFilter) => {
     revState.filters[key] = fdIsActive(newFilter) ? newFilter : undefined;
     revState.page = 1;
