@@ -189,7 +189,6 @@
             <div class="ov-alloc-sum" id="moa-lob-sum">—</div>
           </div>
           <div class="ov-alloc-list" id="moa-lob-list"></div>
-          <button class="ov-fill-btn" type="button" onclick="moaFillEvenly('lob')">Distribute evenly</button>
         </div>
         <div class="ov-alloc-col">
           <div class="ov-alloc-head">
@@ -197,7 +196,6 @@
             <div class="ov-alloc-sum" id="moa-rc-sum">—</div>
           </div>
           <div class="ov-alloc-list" id="moa-rc-list"></div>
-          <button class="ov-fill-btn" type="button" onclick="moaFillEvenly('rc')">Distribute evenly</button>
         </div>
       </div>
     </div>
@@ -1455,7 +1453,7 @@ function renderView(name) {
   // Pre-Check TB uses the design-handoff page-head as its title; hide the
   // shared main-topbar so it doesn't double up.
   const topbar = document.querySelector('.main-topbar');
-  if (topbar) topbar.style.display = (name === 'pretb' || name === 'reversal' || name === 'recon' || name === 'tb' || name === 'moa' || name === 'files' || name === 'mtmfvoci' || name === 'loanrecon' || name === 'dq' || name === 'majmov') ? 'none' : '';
+  if (topbar) topbar.style.display = (name === 'pretb' || name === 'reversal' || name === 'recon' || name === 'tb' || name === 'moa' || name === 'files' || name === 'mtmfvoci' || name === 'loanrecon' || name === 'dq' || name === 'majmov' || name === 'query' || name === 'glte') ? 'none' : '';
   const views = {
     'pretb':     renderPreTb,
     'loanrecon': renderLoanRecon,
@@ -2786,8 +2784,6 @@ async function runTb(name) {
 //  ACCOUNT QUERY (uses shared classify + posting points)
 // ============================================================
 function renderQuery() {
-  document.getElementById('topbar-title').textContent    = 'Account Query';
-  document.getElementById('topbar-subtitle').textContent = 'Look up expected journal entries for any account number';
   const container = document.getElementById('view-query');
   const f = S.files;
   const rdlLoaded     = f.rdl_pre || f.rdl_post;
@@ -2816,22 +2812,26 @@ function renderQuerySearch(container) {
   const rdlRow = queryRdl.find(r => r.PROC_DTE);
   const rdlDate = rdlRow ? parseSasDate(rdlRow.PROC_DTE) : null;
   const reportingMonth = fmtMMMyyyy(rdlDate);
-  const kpiHtml = reportingMonth
-    ? `<div class="kpi-strip"><div class="kpi-card"><div class="kpi-label">Reporting Month</div><div class="kpi-value">${reportingMonth}</div></div></div>`
-    : '';
   container.innerHTML = `
-    <div class="results-view" style="display:flex;flex-direction:column;overflow:hidden;">
-      ${kpiHtml}
-      <div class="table-toolbar">
+    <div class="ptb-v2" style="display:flex;flex-direction:column;overflow:hidden;">
+      <div class="ptb-page-head">
+        <div class="ptb-page-title">
+          <h1>Account Query</h1>
+          <div class="ptb-meta">
+            ${reportingMonth ? `<span>Period <b>${reportingMonth}</b></span>` : ''}
+          </div>
+        </div>
+      </div>
+      <div class="ptb-table-toolbar">
         <label style="font-size:12px;font-weight:600;white-space:nowrap;color:var(--ink);">Account No.</label>
         <input type="text" id="acc-input" placeholder="e.g. 0012345678"
           style="font-family:var(--mono);font-size:13px;font-weight:500;border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;width:220px;outline:none;color:var(--ink);"
           onkeydown="if(event.key==='Enter') runQuery()">
-        <button class="btn btn-primary" onclick="runQuery()">Search</button>
+        <button class="ptb-btn primary" onclick="runQuery()" title="Search">
+          <svg><use href="#i-search"/></svg>Search
+        </button>
       </div>
-      <div id="query-result-area" style="flex:1;overflow:auto;padding:12px 20px;display:flex;flex-direction:column;gap:12px;">
-        <div style="padding:60px;text-align:center;color:var(--ink3);font-size:13px">Enter an account number above and press Search.</div>
-      </div>
+      <div id="query-result-area" style="flex:1;overflow:auto;padding:12px 20px;display:flex;flex-direction:column;gap:12px;"></div>
     </div>`;
 }
 
@@ -2906,17 +2906,6 @@ const IDB_KEY_LABELS = {
 let _sfSearch = '';
 let _sfEntries = [];
 
-function sfExtOf(name) { const m = /\.([a-z0-9]+)$/i.exec(name || ''); return (m ? m[1] : '').toLowerCase(); }
-function sfTypeCat(name) {
-  const e = sfExtOf(name);
-  if (e === 'html' || e === 'htm') return 'html';
-  if (e === 'csv') return 'csv';
-  if (e === 'xlsx' || e === 'xls') return 'xlsx';
-  if (e === 'json') return 'json';
-  if (e === 'pdf') return 'pdf';
-  if (e === 'txt') return 'txt';
-  return 'other';
-}
 function sfFmtDate(ts) {
   if (!ts) return '—';
   const d = new Date(ts);
@@ -2967,19 +2956,17 @@ function sfRenderRows() {
   }
   if (emptyEl) emptyEl.style.display = 'none';
   const html = list.map(it => {
-    const cat = sfTypeCat(it.filename);
-    const extLabel = (sfExtOf(it.filename) || '—').toUpperCase();
-    const primary = it.filename || it.slotLabel;
-    const secondary = it.filename ? it.slotLabel : (it.isLegacy ? 'Legacy cache entry — safe to remove' : '');
-    const secondaryCls = it.filename ? 'sf-sub' : (it.isLegacy ? 'sf-sub sf-legacy' : 'sf-sub');
+    const fileName = it.filename || '—';
+    const toolName = it.slotLabel || '';
+    const toolCls = !it.filename && it.isLegacy ? 'sf-tool sf-legacy' : 'sf-tool';
+    const toolDisplay = !it.filename && it.isLegacy ? 'Legacy cache entry — safe to remove' : toolName;
     return `<tr data-key="${it.key}">
       <td class="sf-col-name">
-        <div class="sf-name-wrap">
-          <div class="sf-name" title="${primary.replace(/"/g, '&quot;')}">${primary}</div>
-          ${secondary ? `<div class="${secondaryCls}">${secondary}</div>` : ''}
-        </div>
+        <div class="sf-name" title="${fileName.replace(/"/g, '&quot;')}">${fileName}</div>
       </td>
-      <td class="sf-col-type"><span class="sf-badge ${cat}">${extLabel}</span></td>
+      <td class="sf-col-tool">
+        <div class="${toolCls}" title="${toolDisplay.replace(/"/g, '&quot;')}">${toolDisplay}</div>
+      </td>
       <td class="sf-col-up"><span class="sf-date">${sfFmtDate(it.savedAt)}</span></td>
       <td class="sf-col-act">
         <div class="sf-row-act">
@@ -3019,8 +3006,8 @@ async function renderFilesView(container) {
         <table class="sf-table" id="sf-table">
           <thead>
             <tr>
-              <th class="sf-col-name">Filename</th>
-              <th class="sf-col-type">Type</th>
+              <th class="sf-col-name">File name</th>
+              <th class="sf-col-tool">Tool</th>
               <th class="sf-col-up">Uploaded</th>
               <th class="sf-col-act">Actions</th>
             </tr>
@@ -3231,8 +3218,6 @@ function closeFinfoModal(e) { if (e && e.target !== document.getElementById('fin
 const glteFilters = {};
 
 function renderGlte() {
-  document.getElementById('topbar-title').textContent    = 'GLTE Validation';
-  document.getElementById('topbar-subtitle').textContent = 'Compare two GLTE .xlsm files line by line';
   const container = document.getElementById('view-glte');
   if (!glteState.template || !glteState.validation) renderGlteUpload(container);
   else renderGlteResults(container);
@@ -4512,7 +4497,6 @@ function renderTbReconResults(container) {
   const matchedRows = results.length - breakRows.length;
   const reportingMonth = data.__reportingMonth || null;
   const unmappedCount = (data.unmapped || []).length;
-  const netVariance = results.reduce((s, r) => s + (r.VARIANCE||0), 0);
   if (!tbReconState.filters) tbReconState.filters = {};
   if (!tbReconState.statusFilter) tbReconState.statusFilter = 'all';
   if (!tbReconState.page) tbReconState.page = 1;
@@ -4565,15 +4549,9 @@ function renderTbReconResults(container) {
       </div>
     </div>`;
 
-  const netVarColor = Math.abs(netVariance) > 0 ? 'var(--d-neg)' : 'var(--d-pos)';
-  const netVarDisplay = (netVariance < 0 ? '-' : '') + fmtNum(Math.abs(netVariance));
   const kpiHtml = `
     <div class="ptb-grid">
       ${stationKpiStatusHtml(matchedRows, breakRows.length, results.length)}
-      <div class="ptb-card ptb-kpi ptb-col-3">
-        <div class="ptb-label">Net Variance</div>
-        <div class="ptb-value" style="font-family:'JetBrains Mono','IBM Plex Mono',monospace;color:${netVarColor};">${netVarDisplay}</div>
-      </div>
     </div>`;
 
   const sf = tbReconState.statusFilter;
@@ -5744,18 +5722,6 @@ function moaAllocBalanceUpdate() {
   });
 }
 
-function moaFillEvenly(kind) {
-  var total = moaAmtFromInput(document.getElementById('moa-f-amount'));
-  var items = kind === 'lob' ? MOA_LOB_OPTIONS : MOA_RC_OPTIONS.map(function(o){ return o.code; });
-  var draft = kind === 'lob' ? _moaLobDraft : _moaRcDraft;
-  var empties = items.filter(function(c){ return draft[c] === undefined || draft[c] === ''; });
-  var filled = items.reduce(function(s,c){ return s + (parseFloat(draft[c])||0); }, 0);
-  if (!empties.length) return;
-  var share = parseFloat(((total - filled) / empties.length).toFixed(2));
-  empties.forEach(function(c){ draft[c] = share; });
-  moaRenderAllocList(kind);
-}
-
 function moaTypeChanged() {
   var type = document.getElementById('moa-f-type') ? document.getElementById('moa-f-type').value : '';
   var cifF = document.getElementById('moa-field-cif'), bF = document.getElementById('moa-field-borrower'), gF = document.getElementById('moa-field-group'), mF = document.getElementById('moa-field-model');
@@ -6410,7 +6376,7 @@ function buildMoaJournalHtml(entries, allMonths) {
     });
   });
 
-  var html = '<div style="font-size:11px;color:var(--ink3);margin-bottom:12px;">Delta: <b>' + curMonth + '</b> vs <b>' + prevMonth + '</b></div>';
+  var html = '';
   var allExportRows = [];
 
   ENTITIES.forEach(function(ent) {
@@ -6967,9 +6933,7 @@ function updateRfPreview() {
       + ' (SGD ' + fmtN2(existing.reduce(function(s,o){ return s + (parseFloat(o.amount)||0); }, 0))
       + '). Roll-forward will <b>replace</b> these existing overlays.</div>'
     : '';
-  document.getElementById('rf-preview').innerHTML = '<b>' + src.length + '</b> overlay' + (src.length===1?'':'s')
-    + ' will be copied from <b>' + fmt(from) + '</b> to <b>' + fmt(to) + '</b>'
-    + ' &middot; net amount <b>SGD ' + fmtN2(netSrc) + '</b>' + warn;
+  document.getElementById('rf-preview').innerHTML = warn;
 }
 
 async function confirmRfModal() {
