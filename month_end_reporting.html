@@ -5918,10 +5918,8 @@ function moaEntryDesc(e) {
 function moaAmtCell(v, opts) {
   opts = opts || {};
   var n = parseFloat(v) || 0;
-  var cls = n >= 0 ? 'ov-amt-pos' : 'ov-amt-neg';
-  var s = (n > 0 ? '+' : '') + fmtN2(n);
   var tdStyle = 'padding-right:' + (opts.padRight || '10px');
-  return '<td class="num" style="' + tdStyle + '"><span class="' + cls + '">' + s + '</span></td>';
+  return '<td class="num" style="' + tdStyle + '">' + fmtN2(n) + '</td>';
 }
 
 /* ============================================================
@@ -6092,7 +6090,7 @@ function buildMoaDesignListHtml(entries, month) {
   }
 
   var net = list.reduce(function(s,x){ return s + (parseFloat(x.amount)||0); }, 0);
-  var netStr = (net > 0 ? '+' : '') + fmtN2(net);
+  var netStr = fmtN2(net);
 
   return '<div class="ov-tcard">'
     + moaFilterChipsHtml('list')
@@ -6138,7 +6136,7 @@ function buildMoaDesignPivotHtml(entries, month, dim) {
       if (curDim === null) return;
       var groupSum = groupAcc.reduce(function(s,r){ return s + r.v; }, 0);
       var count = groupAcc.length;
-      var sumStr = (groupSum > 0 ? '+' : '') + fmtN2(groupSum);
+      var sumStr = fmtN2(groupSum);
       var dimDisp = dim === 'rc' ? moaRcLabel(curDim) : curDim;
       body += '<tr class="ov-dim-head"><td colspan="4" style="padding-left:16px">'
         + dimLabel + '<span class="grp-label">' + dimDisp + '</span>'
@@ -6161,14 +6159,14 @@ function buildMoaDesignPivotHtml(entries, month, dim) {
     flushGroup();
 
     var grand = flat.reduce(function(s,r){ return s + r.v; }, 0);
-    var grandStr = (grand > 0 ? '+' : '') + fmtN2(grand);
+    var grandStr = fmtN2(grand);
     body += '<tr class="ov-grand-row"><td colspan="4" style="padding-left:16px">Total across all ' + dimLabel + 's</td>'
       + '<td class="num" style="padding-right:16px">' + grandStr + '</td></tr>';
   }
 
   var ovCount = new Set(flat.map(function(r){ return r.idx; })).size;
   var net = flat.reduce(function(s,r){ return s + r.v; }, 0);
-  var netStr = (net > 0 ? '+' : '') + fmtN2(net);
+  var netStr = fmtN2(net);
   var dimColW = dim === 'rc' ? '200px' : '120px';
   var dimCol = dim === 'lob' ? 'lob' : 'rc';
 
@@ -6207,22 +6205,13 @@ function moaIdentityKey(e) {
   if (e.type === 'Model') return (e.entity||'') + '|Model|' + (e.modelDesc||'');
   return (e.entity||'') + '|' + (e.type||'') + '|' + moaEntryDesc(e);
 }
-function moaCmpBadge(status) {
-  if (status === 'new')     return '<span class="ov-badge-new">NEW</span>';
-  if (status === 'removed') return '<span class="ov-badge-removed">REMOVED</span>';
-  return '';
-}
 function moaCmpAmtCell(v) {
   if (!v || Math.abs(v) < 0.005) return '<td class="num"><span style="color:var(--d-ink-4,#aaa)">—</span></td>';
-  var cls = v >= 0 ? 'ov-amt-pos' : 'ov-amt-neg';
-  var s = (v > 0 ? '+' : '') + fmtN2(v);
-  return '<td class="num"><span class="' + cls + '">' + s + '</span></td>';
+  return '<td class="num">' + fmtN2(v) + '</td>';
 }
 function moaCmpDeltaCell(d) {
   if (Math.abs(d) < 0.005) return '<td class="num ov-delta-flat">—</td>';
-  var cls = d > 0 ? 'ov-delta-pos' : 'ov-delta-neg';
-  var s = (d > 0 ? '+' : '') + fmtN2(d);
-  return '<td class="num ' + cls + '">' + s + '</td>';
+  return '<td class="num">' + fmtN2(d) + '</td>';
 }
 
 function buildMoaCompareListHtml(entries, mA, mB) {
@@ -6284,14 +6273,12 @@ function buildMoaCompareListHtml(entries, mA, mB) {
     body = '<tr><td colspan="6" class="ov-empty">No overlays to compare for the selected months</td></tr>';
   } else {
     filtered.forEach(function(r) {
-      var rowCls = r.status === 'new' ? 'ov-new-row' : r.status === 'removed' ? 'ov-removed-row' : '';
-      var badge = moaCmpBadge(r.status);
       var clickable = r.idx !== null && r.idx !== undefined;
-      body += '<tr class="' + rowCls + '"'
+      body += '<tr'
         + (clickable ? ' data-ov-id="' + r.idx + '" onclick="openMoaModal(' + r.idx + ')" title="Click to edit"' : '') + '>'
         + '<td style="padding-left:16px"><span class="ov-type-chip" data-type="' + (r.e.type||'') + '">' + (r.e.type||'&mdash;') + '</span></td>'
         + '<td><span class="ov-entity-tag">' + (r.e.entity||'&mdash;') + '</span></td>'
-        + '<td><div class="ov-note">' + moaEntryDesc(r.e) + badge + '</div></td>'
+        + '<td><div class="ov-note">' + moaEntryDesc(r.e) + '</div></td>'
         + moaCmpAmtCell(r.amtA)
         + moaCmpAmtCell(r.amtB)
         + moaCmpDeltaCell(r.delta)
@@ -6406,25 +6393,21 @@ function buildMoaComparePivotHtml(entries, mA, mB, dim) {
     body = '<tr><td colspan="6" class="ov-empty">No ' + dimLabel + ' allocations to compare for the selected months</td></tr>';
   } else {
     dimRows.forEach(function(dr) {
-      var badge = moaCmpBadge(dr.status);
       var dimDisp = dim === 'rc' ? moaRcLabel(dr.k) : dr.k;
       body += '<tr class="ov-dim-head">'
         + '<td colspan="3" style="padding-left:16px">' + dimLabel
-        + '<span class="grp-label">' + dimDisp + '</span>' + badge
+        + '<span class="grp-label">' + dimDisp + '</span>'
         + '<span class="grp-count">' + dr.items.length + ' overlay' + (dr.items.length===1?'':'s') + '</span>'
         + '</td>'
         + moaCmpAmtCell(dr.totA) + moaCmpAmtCell(dr.totB) + moaCmpDeltaCell(dr.delta)
         + '</tr>';
       dr.items.forEach(function(r) {
-        var rowStatus = r.amtA === 0 ? 'new' : r.amtB === 0 ? 'removed' : 'changed';
-        var rowCls = rowStatus === 'new' ? 'ov-new-row' : rowStatus === 'removed' ? 'ov-removed-row' : '';
-        var rBadge = moaCmpBadge(rowStatus);
         var clickable = r.i !== null && r.i !== undefined;
-        body += '<tr class="' + rowCls + '"'
+        body += '<tr'
           + (clickable ? ' data-ov-id="' + r.i + '" onclick="openMoaModal(' + r.i + ')" title="Click to edit"' : '') + '>'
           + '<td style="padding-left:16px"><span class="ov-type-chip" data-type="' + (r.e.type||'') + '">' + (r.e.type||'&mdash;') + '</span></td>'
           + '<td><span class="ov-entity-tag">' + (r.e.entity||'&mdash;') + '</span></td>'
-          + '<td><div class="ov-note">' + moaEntryDesc(r.e) + rBadge + '</div></td>'
+          + '<td><div class="ov-note">' + moaEntryDesc(r.e) + '</div></td>'
           + moaCmpAmtCell(r.amtA) + moaCmpAmtCell(r.amtB) + moaCmpDeltaCell(r.delta)
           + '</tr>';
       });
