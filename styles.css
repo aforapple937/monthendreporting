@@ -1057,7 +1057,6 @@
   .ptb-v2 table.ov-data tbody tr[data-ov-id] { cursor: pointer; }
   .ptb-v2 table.ov-data tbody tr[data-ov-id]:hover td { background: var(--d-line-2); }
 
-  .ptb-v2 .ov-note { font-weight: 500; font-size: 12px; color: var(--d-ink); }
   .ptb-v2 .ov-meta { font-size: 10.5px; color: var(--d-ink-4); margin-top: 2px; }
 
   /* Dim-head subtotal row (by-LOB / by-RC views) */
