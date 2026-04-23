@@ -5455,7 +5455,7 @@ function buildMtmJournalCards(rows) {
     const lineRows = lines.map(l => `<tr>
       <td>${l.ccy}</td>
       <td>${l.cc}</td>
-      <td><b>${l.account}</b></td>
+      <td>${l.account}</td>
       <td>${l.prod}</td>
       <td>${l.ico}</td>
       <td>${l.f1}</td>
@@ -6428,7 +6428,7 @@ function buildMoaJournalHtml(entries, allMonths) {
       return '<tr>'
         + '<td>' + r.ccy + '</td>'
         + '<td>' + (r.cc || '<span class="dim">—</span>') + '</td>'
-        + '<td><b>' + r.account + '</b></td>'
+        + '<td>' + r.account + '</td>'
         + '<td>' + r.prod + '</td>'
         + '<td>' + r.ico + '</td>'
         + '<td>' + r.f1 + '</td>'
