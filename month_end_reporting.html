@@ -1010,7 +1010,7 @@ const loanReconState = { tbMapping: null, fifo: null, results: null, files: { tb
 const mtmState = { fvoci: null, fvociLoaded: false, disb: null, disbLoaded: false, prevFvoci: null, prevFvociLoaded: false, results: null };
 const moaState = { entries: [], dashView: 'type', journalMonth: '', journalRows: [], compareMonths: [], mode: 'single', monthA: '', monthB: '' };
 const preTbState = { results: null, effectiveDate: null, statusFilter: 'all', filters: {}, page: 1, stats: null };
-const dqState = { DS: [], AD: [], LA: '', LB: '', CF: 'all', TH: 0.10, sort: 'psi', allExpanded: false, activeProduct: 'all' };
+const dqState = { DS: [], AD: [], LA: '', LB: '', CF: 'all', TH: 0.10, activeProduct: '' };
 const DQ_PRODS = ['LN','CC','OD','GUARANTEE','INVMT','RATING'];
 const DQ_PRODUCT_NAMES = { LN:'Loans', CC:'Credit Cards', OD:'Overdrafts', GUARANTEE:'Guarantees', INVMT:'Investments', RATING:'Ratings' };
 const glteState = { template: null, validation: null, isFiltered: false, results: [] };
@@ -3412,7 +3412,7 @@ async function dqHandleFiles(files) {
   if(bar)bar.style.width='100%'; renderDq();
 }
 
-function dqReload() { dqState.AD=[];dqState.LA='';dqState.LB='';dqState.CF='all';dqState.allExpanded=false;dqState.activeProduct='all';blockAutoRun('dq');renderDq(); }
+function dqReload() { dqState.AD=[];dqState.LA='';dqState.LB='';dqState.CF='all';dqState.activeProduct='';blockAutoRun('dq');renderDq(); }
 
 function dqCompute() {
   if (!dqState.DS.length) return;
@@ -3468,64 +3468,92 @@ function dqCompute() {
 }
 
 function renderDqDashboard(container) {
-  const TH=dqState.TH,AD=dqState.AD,CF=dqState.CF,sort=dqState.sort||'psi';
-  const activeProduct=dqState.activeProduct||'all';
-  let pa=0,db=0;for(const pd of AD)for(const c of pd){if(c.psi>TH)pa++;if(c.dq>0)db++;}
-  let mx=TH*2;for(const pd of AD)for(const c of pd)if(c.psi>mx)mx=c.psi;if(mx<0.01)mx=0.01;
-  let blocksHtml='';
-  for(const pd of AD){
-    if (activeProduct !== 'all' && pd.px !== activeProduct) continue;
-    let cols=[...pd];
-    if(CF==='psi')cols=cols.filter(c=>c.psi>TH);else if(CF==='dq')cols=cols.filter(c=>c.dq>0);
-    if(!cols.length)continue;
-    if(sort==='psi')cols.sort((a,b)=>b.psi-a.psi);else cols.sort((a,b)=>a.title.localeCompare(b.title));
-    const psiA=cols.filter(c=>c.psi>TH).length,dqA=cols.filter(c=>c.dq>0).length;
-    const bdr=dqA>0?'var(--red)':psiA>0?'var(--amber)':'var(--green)';
-    let pills='';
-    if(dqA>0)pills+=`<span class="status-badge sb-breaks">${dqA} DQ Break${dqA>1?'s':''}</span>`;
-    if(psiA>0)pills+=`<span class="status-badge" style="background:var(--amber-bg);color:var(--amber)">${psiA} PSI Alert${psiA>1?'s':''}</span>`;
-    if(!dqA&&!psiA)pills+=`<span class="status-badge sb-ok">All clear</span>`;
-    const psiCols=cols.filter(c=>c.psi>TH);
-    let psiRows='';
-    if(!psiCols.length){psiRows='<div style="font-size:11px;color:var(--ink3);padding:8px 4px;display:flex;align-items:center;gap:6px"><span style="color:var(--green)">✓</span>All columns within threshold</div>';}
-    else{for(const c of psiCols){const bp=Math.min((c.psi/mx)*100,100),col=c.dq>0?'var(--red)':c.psi>TH*3?'var(--red)':'var(--amber)';psiRows+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 4px;border-radius:4px;cursor:pointer;font-size:11px" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''" onclick="dqOpenModal(${AD.indexOf(pd)},${c._i})"><span style="flex:1;font-weight:500;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.title}</span><div style="width:60px;height:4px;background:var(--paper2);border-radius:2px;overflow:hidden;flex-shrink:0"><div style="height:100%;width:${bp}%;background:${col};border-radius:2px"></div></div><span style="font-family:var(--mono);font-size:10px;color:${col};width:44px;text-align:right;flex-shrink:0">${c.psi.toFixed(4)}</span>${c.dq>0?`<span class="status-badge sb-breaks" style="font-size:9px;padding:1px 5px">+DQ</span>`:''}</div>`;}}
-    const stbl=cols.filter(c=>c.psi<=TH&&c.dq===0);
-    if(stbl.length&&CF==='all'){psiRows+=`<details style="margin-top:4px"><summary style="font-size:11px;color:var(--ink3);cursor:pointer;padding:3px 4px;list-style:none;border-radius:4px">${stbl.length} stable column${stbl.length>1?'s':''}</summary>`;for(const c of stbl){const bp=Math.min((c.psi/mx)*100,100);psiRows+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 4px;border-radius:4px;cursor:pointer;font-size:11px" onclick="dqOpenModal(${AD.indexOf(pd)},${c._i})"><span style="flex:1;font-weight:500;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.title}</span><div style="width:60px;height:4px;background:var(--paper2);border-radius:2px;overflow:hidden;flex-shrink:0"><div style="height:100%;width:${bp}%;background:var(--green);opacity:.5;border-radius:2px"></div></div><span style="font-family:var(--mono);font-size:10px;color:var(--ink4);width:44px;text-align:right;flex-shrink:0">${c.psi.toFixed(4)}</span></div>`;}psiRows+='</details>';}
-    const dqCols=cols.filter(c=>c.dq>0);let dqRows='';
-    if(!dqCols.length){dqRows='<div style="font-size:11px;color:var(--ink3);padding:8px 4px;display:flex;align-items:center;gap:6px"><span style="color:var(--green)">✓</span>No rule violations found</div>';}
-    else{for(const c of dqCols){const inv=c.rows.filter(r=>r.isInvalid&&r.valB>0);const det=inv.map(r=>r.label+(r.valB?' ('+r.valB.toLocaleString()+')':'')).join(', ');dqRows+=`<div style="display:flex;align-items:flex-start;gap:8px;padding:5px 4px;border-radius:4px;cursor:pointer;font-size:11px" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''" onclick="dqOpenModal(${AD.indexOf(pd)},${c._i})"><span style="color:var(--red);flex-shrink:0;margin-top:1px">⚠</span><span style="flex:1;font-weight:500;color:var(--ink)">${c.title}</span><span style="color:var(--red);font-size:10px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0">${det}</span></div>`;}}
-    const isOpen=dqA>0||psiA>0;
-    blocksHtml+=`<div style="margin-bottom:8px;border-radius:10px;overflow:hidden;border:1px solid var(--border)"><div style="display:flex;align-items:center;gap:12px;padding:10px 16px;background:#fff;cursor:pointer;border-left:3px solid ${bdr}" onclick="dqToggle('dqb-${pd.px}')"><span style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--ink2);min-width:72px">${pd.px}</span><div style="display:flex;gap:6px;flex:1;flex-wrap:wrap">${pills}</div><span style="font-size:10px;color:var(--ink4)" id="dqchev-${pd.px}">${isOpen?'▲':'▼'}</span></div><div id="dqb-${pd.px}" style="display:${isOpen?'grid':'none'};grid-template-columns:1fr 1fr;background:#fff;border-top:1px solid var(--border)"><div style="padding:12px 14px;border-right:1px solid var(--border)"><div style="font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--ink3);text-transform:uppercase;margin-bottom:8px">Distribution Shift (PSI)</div>${psiRows}</div><div style="padding:12px 14px"><div style="font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--ink3);text-transform:uppercase;margin-bottom:8px">DQ Rule Breaks</div>${dqRows}</div></div></div>`;
+  const TH = dqState.TH;
+  const AD = dqState.AD;
+  const CF = dqState.CF;
+
+  // Resolve active product. Default to first available; fall back if the
+  // saved one is no longer in the loaded set.
+  const productCodes = AD.map(pd => pd.px);
+  let activeProduct = dqState.activeProduct;
+  if (!activeProduct || !productCodes.includes(activeProduct)) {
+    activeProduct = productCodes[0] || '';
+    dqState.activeProduct = activeProduct;
   }
+
   const reportingMonth = dqState.LB || '';
-  const totalCols = AD.reduce((s,pd)=>s+pd.length,0);
 
-  // Product bar — one tab per product, plus a leading "All" tab
-  const productTabs = [{px:'all',name:'All products',cols:totalCols,dq:db,psi:pa}]
-    .concat(AD.map(pd => ({
-      px: pd.px,
-      name: DQ_PRODUCT_NAMES[pd.px] || pd.px,
-      cols: pd.length,
-      dq: pd.filter(c=>c.dq>0).length,
-      psi: pd.filter(c=>c.psi>TH).length
-    })));
-
-  const tabsHtml = productTabs.map(t => {
-    const dot = t.dq>0 ? 'bad' : t.psi>0 ? 'warn' : 'ok';
-    const pill = t.dq>0
-      ? `<span class="tab-pill bad">${t.dq} DQ</span>`
-      : t.psi>0
-        ? `<span class="tab-pill warn">${t.psi} PSI</span>`
+  // Product bar — one tab per loaded product (no ALL card).
+  const tabsHtml = AD.map(pd => {
+    const dq = pd.filter(c => c.dq > 0).length;
+    const psi = pd.filter(c => c.psi > TH).length;
+    const dot = dq > 0 ? 'bad' : psi > 0 ? 'warn' : 'ok';
+    const pill = dq > 0
+      ? `<span class="tab-pill bad">${dq} DQ</span>`
+      : psi > 0
+        ? `<span class="tab-pill warn">${psi} PSI</span>`
         : `<span class="tab-pill">OK</span>`;
-    const on = t.px === activeProduct ? 'on' : '';
-    return `<button class="odq-tab ${on}" onclick="dqSetActiveProduct('${t.px}')">
-      <div class="tab-code"><span class="tab-dot ${dot}"></span>${t.px==='all'?'ALL':t.px}</div>
-      <div class="tab-name">${t.name}</div>
-      <div class="tab-stats"><span>${t.cols} cols</span>${pill}</div>
+    const on = pd.px === activeProduct ? 'on' : '';
+    const name = DQ_PRODUCT_NAMES[pd.px] || pd.px;
+    return `<button class="odq-tab ${on}" onclick="dqSetActiveProduct('${pd.px}')">
+      <div class="tab-code"><span class="tab-dot ${dot}"></span>${pd.px}</div>
+      <div class="tab-name">${name}</div>
+      <div class="tab-stats"><span>${pd.length} cols</span>${pill}</div>
     </button>`;
   }).join('');
 
-  container.innerHTML=`
+  const pd = AD.find(p => p.px === activeProduct);
+  const pi = pd ? AD.indexOf(pd) : -1;
+
+  // Column rows for the active product, after applying the toolbar filter
+  // and sorting (DQ fails first, then PSI desc, then alphabetical).
+  let cols = pd ? [...pd] : [];
+  if (CF === 'psi') cols = cols.filter(c => c.psi > TH);
+  else if (CF === 'dq') cols = cols.filter(c => c.dq > 0);
+  cols.sort((a, b) => {
+    const af = a.dq > 0 ? 1 : 0;
+    const bf = b.dq > 0 ? 1 : 0;
+    if (af !== bf) return bf - af;
+    if (a.psi !== b.psi) return b.psi - a.psi;
+    return String(a.title).localeCompare(String(b.title));
+  });
+
+  const totalCols = pd ? pd.length : 0;
+  const dqA = pd ? pd.filter(c => c.dq > 0).length : 0;
+  const psiA = pd ? pd.filter(c => c.psi > TH).length : 0;
+
+  const rowsHtml = cols.map(c => {
+    const failingRows = (c.rows || [])
+      .filter(r => r.isInvalid && r.valB > 0)
+      .reduce((s, r) => s + (r.valB || 0), 0);
+    const dqStatus = c.dq > 0 ? 'fail' : 'pass';
+    const psiStatus = c.psi > TH ? 'warn' : 'pass';
+    const dqChip = dqStatus === 'fail'
+      ? `<span class="status-chip break"><span class="dot"></span>FAIL</span>`
+      : `<span class="status-chip matched"><span class="dot"></span>PASS</span>`;
+    const psiChip = psiStatus === 'warn'
+      ? `<span class="status-chip warn"><span class="dot"></span>WARN</span>`
+      : `<span class="status-chip matched"><span class="dot"></span>PASS</span>`;
+    const trAttrs = dqStatus === 'fail' ? ' data-status="break"' : '';
+    return `<tr${trAttrs} style="cursor:pointer" onclick="dqOpenModal(${pi},${c._i})">
+      <td class="d-mono">${escapeHtmlAttr(c.title)}</td>
+      <td>${escapeHtmlAttr(c.rule || '—')}</td>
+      <td class="num">${failingRows ? failingRows.toLocaleString() : '<span style="color:var(--d-ink-4)">—</span>'}</td>
+      <td>${dqChip}</td>
+      <td class="num">${c.psi.toFixed(4)}</td>
+      <td>${psiChip}</td>
+    </tr>`;
+  }).join('');
+
+  const emptyRow = cols.length === 0
+    ? `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--d-ink-3);height:auto">No columns match the current filter.</td></tr>`
+    : '';
+
+  const productHeadHtml = pd
+    ? `<div class="ptb-meta"><span>Product <b>${pd.px}</b> · ${escapeHtmlAttr(DQ_PRODUCT_NAMES[pd.px] || pd.px)}</span><span>·</span><span>Baseline <b>${escapeHtmlAttr(dqState.LA || '—')}</b></span></div>`
+    : '';
+
+  container.innerHTML = `
     <div class="ptb-v2">
       <div class="ptb-page-head">
         <div class="ptb-page-title">
@@ -3539,19 +3567,33 @@ function renderDqDashboard(container) {
 
       <div class="odq-tabs">${tabsHtml}</div>
 
-      <div style="display:flex;align-items:center;gap:8px;padding:8px 0;flex-shrink:0;flex-wrap:wrap;margin-bottom:10px">
-        <div style="display:flex;gap:5px">
-          <button class="btn btn-sm ${CF==='all'?'btn-primary':''}" onclick="dqSetFilter('all')">All</button>
-          <button class="btn btn-sm ${CF==='psi'?'btn-primary':''}" onclick="dqSetFilter('psi')">PSI Alerts${pa?' ('+pa+')':''}</button>
-          <button class="btn btn-sm ${CF==='dq'?'btn-primary':''}" onclick="dqSetFilter('dq')">DQ Breaks${db?' ('+db+')':''}</button>
+      <div class="ptb-card ptb-table-card">
+        <div class="ptb-table-toolbar">
+          <div class="ptb-seg">
+            <button class="${CF==='all'?'active':''}" onclick="dqSetFilter('all')">All<span class="ptb-count dim">${totalCols}</span></button>
+            <button class="${CF==='dq'?'active':''}" onclick="dqSetFilter('dq')">DQ Fail<span class="ptb-count dim">${dqA}</span></button>
+            <button class="${CF==='psi'?'active':''}" onclick="dqSetFilter('psi')">PSI Alert<span class="ptb-count dim">${psiA}</span></button>
+          </div>
+          ${productHeadHtml}
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--d-ink-3)">PSI threshold:<input type="number" value="${TH}" step="0.01" min="0" max="1" style="width:60px;font-family:'JetBrains Mono','IBM Plex Mono',monospace;font-size:11px;padding:4px 6px;border:1px solid var(--d-line);border-radius:6px;outline:none;background:var(--d-surface);color:var(--d-ink)" onchange="dqState.TH=Math.min(1,Math.max(0,parseFloat(this.value)||0.10));renderDqDashboard(document.getElementById('view-dq'))"></div>
         </div>
-        <div style="display:flex;align-items:center;gap:6px;margin-left:8px;font-size:11px;color:var(--ink3)">PSI threshold: <input type="number" value="${TH}" step="0.01" min="0" max="1" style="width:56px;font-family:var(--mono);font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;outline:none" onchange="dqState.TH=Math.min(1,Math.max(0,parseFloat(this.value)||0.10));renderDqDashboard(document.getElementById('view-dq'))"></div>
-        <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
-          <button class="btn btn-sm" onclick="dqState.sort=(dqState.sort==='psi'?'name':'psi');renderDqDashboard(document.getElementById('view-dq'))">Sort: ${sort==='psi'?'PSI ↓':'Name A–Z'}</button>
-          <button class="btn btn-sm" onclick="dqExpandAll()">Expand All</button>
+        <div class="ptb-scroll">
+          <table class="ptb-data">
+            <thead>
+              <tr>
+                <th style="width:200px">Column</th>
+                <th>DQ Rule</th>
+                <th class="num" style="width:130px">Failing Rows</th>
+                <th style="width:80px">DQ</th>
+                <th class="num" style="width:80px">PSI</th>
+                <th style="width:100px">PSI Status</th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml || emptyRow}</tbody>
+          </table>
         </div>
       </div>
-      <div id="dq-blocks">${blocksHtml||'<div style="padding:60px;text-align:center;color:var(--ink3);font-size:13px">No products match the current filter.</div>'}</div>
     </div>`;
 }
 
@@ -3559,9 +3601,6 @@ function dqSetActiveProduct(px) {
   dqState.activeProduct = px;
   renderDqDashboard(document.getElementById('view-dq'));
 }
-
-function dqToggle(id){const el=document.getElementById(id);if(!el)return;const o=el.style.display!=='none';el.style.display=o?'none':'grid';const px=id.replace('dqb-','');const ch=document.getElementById('dqchev-'+px);if(ch)ch.textContent=o?'▼':'▲';}
-function dqExpandAll(){dqState.allExpanded=!dqState.allExpanded;for(const pd of dqState.AD){const el=document.getElementById('dqb-'+pd.px),ch=document.getElementById('dqchev-'+pd.px);if(el)el.style.display=dqState.allExpanded?'grid':'none';if(ch)ch.textContent=dqState.allExpanded?'▲':'▼';if(el){const det=el.querySelectorAll('details');det.forEach(d=>{if(dqState.allExpanded)d.setAttribute('open','');else d.removeAttribute('open');});}}const btn=document.querySelector('[onclick="dqExpandAll()"]');if(btn)btn.textContent=dqState.allExpanded?'Collapse All':'Expand All';}
 function dqSetFilter(f){dqState.CF=f;renderDqDashboard(document.getElementById('view-dq'));}
 function dqOpenModal(pi,mi){const AD=dqState.AD,d=AD[pi][mi],fmt=v=>d.isAmt?v.toLocaleString(undefined,{maximumFractionDigits:0}):v.toLocaleString();document.getElementById('dq-modal-title').textContent=`${AD[pi].px} — ${d.title}`;document.getElementById('dq-modal-rule').textContent=d.rule;document.getElementById('dq-th-a').textContent=dqState.LA;document.getElementById('dq-th-b').textContent=dqState.LB;const tbody=document.getElementById('dq-modal-body');tbody.innerHTML='';const frag=document.createDocumentFragment();for(const r of d.rows){const dv=r.valB-r.valA,bad=r.isInvalid&&r.valB>0,hi=r.pc>dqState.TH;const tr=document.createElement('tr');if(bad)tr.style.background='var(--red-bg)';tr.innerHTML=`<td style="font-weight:500;color:${bad?'var(--red)':'var(--ink2)'}">${bad?'<span style="margin-right:4px;font-size:10px">⚠</span>':''}${r.label}</td><td class="mono-val" style="text-align:right">${fmt(r.valA)}</td><td class="mono-val" style="text-align:right">${fmt(r.valB)}</td><td class="mono-val" style="text-align:right;color:${dv>0?'var(--green)':dv<0?'var(--red)':'var(--ink3)'}">${(dv>=0?'+':'')+fmt(dv)}</td><td class="mono-val" style="text-align:right;color:${hi?'var(--amber)':'var(--ink4)'}">${r.pc.toFixed(4)}</td>`;frag.appendChild(tr);}const td2=d.tB-d.tA,tot=document.createElement('tr');tot.style.background='var(--paper2)';tot.style.borderTop='2px solid var(--border)';tot.innerHTML=`<td style="font-weight:700">TOTAL</td><td class="mono-val" style="text-align:right;font-weight:700">${fmt(d.tA)}</td><td class="mono-val" style="text-align:right;font-weight:700">${fmt(d.tB)}</td><td class="mono-val" style="text-align:right;font-weight:700;color:${td2>0?'var(--green)':td2<0?'var(--red)':'var(--ink3)'}">${(td2>=0?'+':'')+fmt(td2)}</td><td class="mono-val" style="text-align:right;font-weight:700;color:${d.psi>dqState.TH?'var(--amber)':'var(--ink4)'}">${d.psi.toFixed(4)}</td>`;frag.appendChild(tot);tbody.appendChild(frag);document.getElementById('dq-modal-bg').classList.add('show');}
 function dqCloseModal(e){if(e&&e.target!==document.getElementById('dq-modal-bg'))return;document.getElementById('dq-modal-bg').classList.remove('show');}

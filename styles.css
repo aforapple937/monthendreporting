@@ -852,6 +852,12 @@
     color: var(--d-pos);
   }
   .ptb-v2 .status-chip.matched .dot { background: var(--d-pos); }
+  .ptb-v2 .status-chip.warn {
+    background: color-mix(in srgb, var(--d-warn) 12%, transparent);
+    border-color: color-mix(in srgb, var(--d-warn) 26%, transparent);
+    color: var(--d-warn);
+  }
+  .ptb-v2 .status-chip.warn .dot { background: var(--d-warn); }
 
   /* Table footer (count + pagination) */
   .ptb-v2 .ptb-table-foot {
