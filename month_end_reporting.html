@@ -1010,8 +1010,9 @@ const loanReconState = { tbMapping: null, fifo: null, results: null, files: { tb
 const mtmState = { fvoci: null, fvociLoaded: false, disb: null, disbLoaded: false, prevFvoci: null, prevFvociLoaded: false, results: null };
 const moaState = { entries: [], dashView: 'type', journalMonth: '', journalRows: [], compareMonths: [], mode: 'single', monthA: '', monthB: '' };
 const preTbState = { results: null, effectiveDate: null, statusFilter: 'all', filters: {}, page: 1, stats: null };
-const dqState = { DS: [], AD: [], LA: '', LB: '', CF: 'all', TH: 0.10, sort: 'psi', allExpanded: false };
+const dqState = { DS: [], AD: [], LA: '', LB: '', CF: 'all', TH: 0.10, sort: 'psi', allExpanded: false, activeProduct: 'all' };
 const DQ_PRODS = ['LN','CC','OD','GUARANTEE','INVMT','RATING'];
+const DQ_PRODUCT_NAMES = { LN:'Loans', CC:'Credit Cards', OD:'Overdrafts', GUARANTEE:'Guarantees', INVMT:'Investments', RATING:'Ratings' };
 const glteState = { template: null, validation: null, isFiltered: false, results: [] };
 
 // ============================================================
@@ -3411,7 +3412,7 @@ async function dqHandleFiles(files) {
   if(bar)bar.style.width='100%'; renderDq();
 }
 
-function dqReload() { dqState.AD=[];dqState.LA='';dqState.LB='';dqState.CF='all';dqState.allExpanded=false;blockAutoRun('dq');renderDq(); }
+function dqReload() { dqState.AD=[];dqState.LA='';dqState.LB='';dqState.CF='all';dqState.allExpanded=false;dqState.activeProduct='all';blockAutoRun('dq');renderDq(); }
 
 function dqCompute() {
   if (!dqState.DS.length) return;
@@ -3468,13 +3469,12 @@ function dqCompute() {
 
 function renderDqDashboard(container) {
   const TH=dqState.TH,AD=dqState.AD,CF=dqState.CF,sort=dqState.sort||'psi';
+  const activeProduct=dqState.activeProduct||'all';
   let pa=0,db=0;for(const pd of AD)for(const c of pd){if(c.psi>TH)pa++;if(c.dq>0)db++;}
-  let verdIcon='✓',verdTitle='Ready to Send — All checks passed',verdSub='No DQ rule breaks and no distribution shifts.',verdClass='ok';
-  if(db>0){verdClass='breaks';verdIcon='✕';verdTitle='Review Required — DQ rule breaks detected';verdSub=db+' column'+(db>1?'s have':' has')+' invalid values.'+(pa>0?' Also '+pa+' PSI alert'+(pa>1?'s':'')+'.':'');}
-  else if(pa>0){verdClass='amber';verdIcon='!';verdTitle='Review Recommended — Distribution shifts detected';verdSub=pa+' column'+(pa>1?'s show':' shows')+' PSI above '+TH+'.';}
   let mx=TH*2;for(const pd of AD)for(const c of pd)if(c.psi>mx)mx=c.psi;if(mx<0.01)mx=0.01;
   let blocksHtml='';
   for(const pd of AD){
+    if (activeProduct !== 'all' && pd.px !== activeProduct) continue;
     let cols=[...pd];
     if(CF==='psi')cols=cols.filter(c=>c.psi>TH);else if(CF==='dq')cols=cols.filter(c=>c.dq>0);
     if(!cols.length)continue;
@@ -3497,15 +3497,49 @@ function renderDqDashboard(container) {
     const isOpen=dqA>0||psiA>0;
     blocksHtml+=`<div style="margin-bottom:8px;border-radius:10px;overflow:hidden;border:1px solid var(--border)"><div style="display:flex;align-items:center;gap:12px;padding:10px 16px;background:#fff;cursor:pointer;border-left:3px solid ${bdr}" onclick="dqToggle('dqb-${pd.px}')"><span style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--ink2);min-width:72px">${pd.px}</span><div style="display:flex;gap:6px;flex:1;flex-wrap:wrap">${pills}</div><span style="font-size:10px;color:var(--ink4)" id="dqchev-${pd.px}">${isOpen?'▲':'▼'}</span></div><div id="dqb-${pd.px}" style="display:${isOpen?'grid':'none'};grid-template-columns:1fr 1fr;background:#fff;border-top:1px solid var(--border)"><div style="padding:12px 14px;border-right:1px solid var(--border)"><div style="font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--ink3);text-transform:uppercase;margin-bottom:8px">Distribution Shift (PSI)</div>${psiRows}</div><div style="padding:12px 14px"><div style="font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--ink3);text-transform:uppercase;margin-bottom:8px">DQ Rule Breaks</div>${dqRows}</div></div></div>`;
   }
+  const reportingMonth = dqState.LB || '';
   const totalCols = AD.reduce((s,pd)=>s+pd.length,0);
+
+  // Product bar — one tab per product, plus a leading "All" tab
+  const productTabs = [{px:'all',name:'All products',cols:totalCols,dq:db,psi:pa}]
+    .concat(AD.map(pd => ({
+      px: pd.px,
+      name: DQ_PRODUCT_NAMES[pd.px] || pd.px,
+      cols: pd.length,
+      dq: pd.filter(c=>c.dq>0).length,
+      psi: pd.filter(c=>c.psi>TH).length
+    })));
+
+  const tabsHtml = productTabs.map(t => {
+    const dot = t.dq>0 ? 'bad' : t.psi>0 ? 'warn' : 'ok';
+    const pill = t.dq>0
+      ? `<span class="tab-pill bad">${t.dq} DQ</span>`
+      : t.psi>0
+        ? `<span class="tab-pill warn">${t.psi} PSI</span>`
+        : `<span class="tab-pill">OK</span>`;
+    const on = t.px === activeProduct ? 'on' : '';
+    return `<button class="odq-tab ${on}" onclick="dqSetActiveProduct('${t.px}')">
+      <div class="tab-code"><span class="tab-dot ${dot}"></span>${t.px==='all'?'ALL':t.px}</div>
+      <div class="tab-name">${t.name}</div>
+      <div class="tab-stats"><span>${t.cols} cols</span>${pill}</div>
+    </button>`;
+  }).join('');
+
   container.innerHTML=`
-    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0">
-      <div style="display:flex;gap:1px;background:var(--border);border-bottom:1px solid var(--border);flex-shrink:0">
-        <div style="flex:1;background:#fff;padding:14px 20px"><div style="font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3)">Total Columns</div><div style="font-family:var(--mono);font-size:20px;font-weight:600;letter-spacing:-.02em">${totalCols.toLocaleString()}</div></div>
-        <div style="flex:1;background:#fff;padding:14px 20px"><div style="font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3)">PSI Alerts</div><div style="font-family:var(--mono);font-size:20px;font-weight:600;letter-spacing:-.02em;color:${pa?'var(--amber)':'var(--green)'}">${pa}</div><div style="font-size:10px;color:var(--ink3)">above ${TH} threshold</div></div>
-        <div style="flex:1;background:#fff;padding:14px 20px"><div style="font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3)">DQ Breaks</div><div style="font-family:var(--mono);font-size:20px;font-weight:600;letter-spacing:-.02em;color:${db?'var(--red)':'var(--green)'}">${db}</div><div style="font-size:10px;color:var(--ink3)">rule violations in Period B</div></div>
+    <div class="ptb-v2">
+      <div class="ptb-page-head">
+        <div class="ptb-page-title">
+          <h1>Outbound DQ</h1>
+          <div class="ptb-meta">
+            ${reportingMonth ? `<span>Period <b>${reportingMonth}</b></span>` : ''}
+          </div>
+        </div>
+        <div class="ptb-page-actions"></div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px;padding:8px 20px;background:#fff;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap">
+
+      <div class="odq-tabs">${tabsHtml}</div>
+
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 0;flex-shrink:0;flex-wrap:wrap;margin-bottom:10px">
         <div style="display:flex;gap:5px">
           <button class="btn btn-sm ${CF==='all'?'btn-primary':''}" onclick="dqSetFilter('all')">All</button>
           <button class="btn btn-sm ${CF==='psi'?'btn-primary':''}" onclick="dqSetFilter('psi')">PSI Alerts${pa?' ('+pa+')':''}</button>
@@ -3515,11 +3549,15 @@ function renderDqDashboard(container) {
         <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
           <button class="btn btn-sm" onclick="dqState.sort=(dqState.sort==='psi'?'name':'psi');renderDqDashboard(document.getElementById('view-dq'))">Sort: ${sort==='psi'?'PSI ↓':'Name A–Z'}</button>
           <button class="btn btn-sm" onclick="dqExpandAll()">Expand All</button>
-          
         </div>
       </div>
-      <div style="flex:1;overflow-y:auto;padding:16px 20px 40px" id="dq-blocks">${blocksHtml||'<div style="padding:60px;text-align:center;color:var(--ink3);font-size:13px">No products match the current filter.</div>'}</div>
+      <div id="dq-blocks">${blocksHtml||'<div style="padding:60px;text-align:center;color:var(--ink3);font-size:13px">No products match the current filter.</div>'}</div>
     </div>`;
+}
+
+function dqSetActiveProduct(px) {
+  dqState.activeProduct = px;
+  renderDqDashboard(document.getElementById('view-dq'));
 }
 
 function dqToggle(id){const el=document.getElementById(id);if(!el)return;const o=el.style.display!=='none';el.style.display=o?'none':'grid';const px=id.replace('dqb-','');const ch=document.getElementById('dqchev-'+px);if(ch)ch.textContent=o?'▼':'▲';}

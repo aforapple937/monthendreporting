@@ -1486,3 +1486,58 @@
     font-size: 12px; padding: 24px !important; height: auto !important;
   }
   .ptb-v2.sf-v .sf-loading.sf-err { color: var(--d-neg); }
+
+  /* ============================================================
+     OUTBOUND DQ — product tab bar (scoped to .ptb-v2)
+     Mirrors .odq-tabs / .odq-tab from the design's outbound-dq.js.
+     ============================================================ */
+  .ptb-v2 .odq-tabs {
+    display: flex; gap: 4px;
+    background: var(--d-surface); border: 1px solid var(--d-line);
+    border-radius: var(--d-radius); padding: 6px; margin-bottom: 14px;
+    overflow-x: auto;
+  }
+  .ptb-v2 .odq-tab {
+    flex: 1; min-width: 140px;
+    padding: 10px 14px; border-radius: 6px; cursor: pointer;
+    display: flex; flex-direction: column; gap: 4px;
+    border: 1px solid transparent; transition: background 0.12s;
+    background: transparent; color: var(--d-ink);
+    font: inherit; text-align: left;
+  }
+  .ptb-v2 .odq-tab:hover:not(.on) { background: var(--d-line-2); }
+  .ptb-v2 .odq-tab.on {
+    background: var(--d-ink); color: var(--d-accent); border-color: var(--d-ink);
+  }
+  .ptb-v2 .odq-tab .tab-code {
+    font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+    font-size: 13px; font-weight: 600; letter-spacing: 0.03em;
+  }
+  .ptb-v2 .odq-tab .tab-name {
+    font-size: 10.5px; color: var(--d-ink-3); font-weight: 500;
+  }
+  .ptb-v2 .odq-tab.on .tab-name { color: rgba(255,204,0,0.55); }
+  .ptb-v2 .odq-tab .tab-stats {
+    display: flex; gap: 8px; align-items: center;
+    font-size: 10px; font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+    color: var(--d-ink-4); margin-top: 2px;
+  }
+  .ptb-v2 .odq-tab.on .tab-stats { color: rgba(255,204,0,0.6); }
+  .ptb-v2 .odq-tab .tab-dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    margin-right: 4px; vertical-align: 1px; background: var(--d-ink-4);
+  }
+  .ptb-v2 .odq-tab .tab-dot.ok { background: var(--d-pos); }
+  .ptb-v2 .odq-tab .tab-dot.warn { background: var(--d-warn); }
+  .ptb-v2 .odq-tab .tab-dot.bad { background: var(--d-neg); }
+
+  .ptb-v2 .odq-tab .tab-pill {
+    font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+    font-size: 10px; padding: 1px 6px; border-radius: 999px;
+    background: var(--d-line-2); color: var(--d-ink-3);
+  }
+  .ptb-v2 .odq-tab.on .tab-pill { background: rgba(255,255,255,0.12); color: var(--d-accent); }
+  .ptb-v2 .odq-tab .tab-pill.bad { background: var(--d-neg-soft); color: var(--d-neg); }
+  .ptb-v2 .odq-tab.on .tab-pill.bad { background: var(--d-neg); color: #fff; }
+  .ptb-v2 .odq-tab .tab-pill.warn { background: var(--d-warn-soft); color: var(--d-warn); }
+  .ptb-v2 .odq-tab.on .tab-pill.warn { background: var(--d-warn); color: var(--d-accent-ink); }
