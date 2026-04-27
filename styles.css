@@ -1591,5 +1591,11 @@
   .ptb-v2 .dq-delta-neg { color: var(--d-neg); }
   .ptb-v2 table.ptb-data td.dq-delta-flat,
   .ptb-v2 .dq-delta-flat { color: var(--d-ink-4); }
+  .ptb-v2 table.ov-data td.ov-delta-pos,
+  .ptb-v2 .ov-delta-pos { color: var(--d-pos); }
+  .ptb-v2 table.ov-data td.ov-delta-neg,
+  .ptb-v2 .ov-delta-neg { color: var(--d-neg); }
+  .ptb-v2 table.ov-data td.ov-delta-flat,
+  .ptb-v2 .ov-delta-flat { color: var(--d-ink-4); }
   .ptb-v2 table.ptb-data tbody tr.dq-detail-tot td.dq-delta-pos { color: var(--d-pos); }
   .ptb-v2 table.ptb-data tbody tr.dq-detail-tot td.dq-delta-neg { color: var(--d-neg); }

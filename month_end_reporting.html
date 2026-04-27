@@ -1424,7 +1424,12 @@ function handleGlobalShortcut(e) {
   const key = e.key;
   const keyLower = key.toLowerCase();
 
-  if (keyLower === 'r' && RELOAD_HANDLERS[v]) { e.preventDefault(); RELOAD_HANDLERS[v](); }
+  if (keyLower === 'r') {
+    const viewEl = v ? document.getElementById('view-' + v) : null;
+    const onLanding = viewEl && viewEl.querySelector('.upload-view');
+    if (onLanding) { e.preventDefault(); triggerUpload(); }
+    else if (RELOAD_HANDLERS[v]) { e.preventDefault(); RELOAD_HANDLERS[v](); }
+  }
   else if (keyLower === 'f' && SHORTCUT_HANDLERS.resetFilters[v]) { e.preventDefault(); SHORTCUT_HANDLERS.resetFilters[v](); }
   else if (keyLower === 'e' && SHORTCUT_HANDLERS.exportData[v]) { e.preventDefault(); SHORTCUT_HANDLERS.exportData[v](); }
   else if (keyLower === 's' && v === 'moa') { e.preventDefault(); exportMoaJson(); }
@@ -5302,8 +5307,8 @@ const MTM_COL_LABELS = {
   PREV_MTH_LCY_FAIR_VALUE:'Prev Mth LCY FV',
   LCY_MKT_VALUE_CHG_VS_PREV:'LCY Chg vs Prev'
 };
-const MTM_SIX_DP = new Set(['CURR_INT_RT','BASE_RT','WAIR']);
-const MTM_TWO_DP = new Set(['RCY_END_PERIOD_BAL','RCY_ACCRUED_INT','EXCHG_RT','LCY_END_PERIOD_BAL','LCY_ACCRUED_INT','PERIODIC_PAYT','MKT_VALUE_PERIODIC','MKT_VALUE_FINAL','MKT_VALUE_TOTAL','LCY_MKT_VALUE_CHG','RCY_MKT_VALUE_CHG','PREV_MTH_LCY_FAIR_VALUE','LCY_MKT_VALUE_CHG_VS_PREV','RESIDUAL_MTH']);
+const MTM_SIX_DP = new Set(['CURR_INT_RT','BASE_RT','WAIR','EXCHG_RT']);
+const MTM_TWO_DP = new Set(['RCY_END_PERIOD_BAL','RCY_ACCRUED_INT','LCY_END_PERIOD_BAL','LCY_ACCRUED_INT','PERIODIC_PAYT','MKT_VALUE_PERIODIC','MKT_VALUE_FINAL','MKT_VALUE_TOTAL','LCY_MKT_VALUE_CHG','RCY_MKT_VALUE_CHG','PREV_MTH_LCY_FAIR_VALUE','LCY_MKT_VALUE_CHG_VS_PREV','RESIDUAL_MTH']);
 const MTM_INT_FMT = new Set(['MOB','INT_PYM_FREQ']);
 const MTM_DATE_COLS = new Set(['PROC_DTE','MATURITY_DTE']);
 const mtmIsNumRight = col => MTM_SIX_DP.has(col) || MTM_TWO_DP.has(col) || MTM_INT_FMT.has(col);
@@ -6204,7 +6209,9 @@ function moaCmpAmtCell(v) {
 }
 function moaCmpDeltaCell(d) {
   if (Math.abs(d) < 0.005) return '<td class="num ov-delta-flat">—</td>';
-  return '<td class="num">' + fmtN2(d) + '</td>';
+  var cls = d > 0 ? 'pos' : 'neg';
+  var sign = d > 0 ? '+' : '';
+  return '<td class="num ov-delta-' + cls + '">' + sign + fmtN2(d) + '</td>';
 }
 
 function buildMoaCompareListHtml(entries, mA, mB) {
