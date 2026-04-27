@@ -269,21 +269,6 @@
   </div>
 </div>
 
-<!-- DQ Detail Modal -->
-<div class="modal-bg" id="dq-modal-bg" onclick="dqCloseModal(event)">
-  <div class="modal" style="width:640px" onclick="event.stopPropagation()">
-    <div class="modal-head"><h3 id="dq-modal-title">—</h3><span class="modal-close" onclick="dqCloseModal()">&times;</span></div>
-    <div style="padding:8px 20px 6px;font-size:11px;color:var(--ink3);border-bottom:1px solid var(--border);font-family:var(--mono)" id="dq-modal-rule">—</div>
-    <div class="modal-body" style="padding:0">
-      <table class="data-table dt-modern" style="font-size:11px">
-        <thead><tr><th>Category</th><th id="dq-th-a" style="text-align:right">Period A</th><th id="dq-th-b" style="text-align:right">Period B</th><th style="text-align:right">Δ Qty</th><th style="text-align:right">PSI</th></tr></thead>
-        <tbody id="dq-modal-body"></tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-
 <!-- Field Info Modal -->
 <div class="modal-bg" id="finfo-modal-bg" onclick="closeFinfoModal(event)">
   <div class="modal finfo-modal" onclick="event.stopPropagation()">
@@ -3346,7 +3331,7 @@ function exportGlteCSV() { const rows = glteState.isFiltered ? glteState.results
 //  OUTBOUND DQ MODULE (all logic preserved identically)
 // ============================================================
 const dqIsBlk = v => v===null||v===undefined||String(v).trim()===''||String(v).trim().toUpperCase()==='BLANK';
-const dqFmtD  = s => { const p=String(s).split(':')[0]; return p.substring(2,5)+' '+p.substring(5); };
+const dqFmtD  = s => { const p=String(s).split(':')[0]; return p.substring(2,5).toUpperCase()+'-'+p.substring(5); };
 function dqPsiC(vA,vB,tA,tB){let a=tA?vA/tA:0,b=tB?vB/tB:0;if(!a&&!b)return 0;if(!a)a=1e-4;if(!b)b=1e-4;return(b-a)*Math.log(b/a);}
 function dqTally(data,key,vk,tf){const m=new Map();for(const r of data){const v=r[key];let k=dqIsBlk(v)?'[BLANK]':String(v).trim();if(tf)k=tf(v);const a=vk==='CNT'?(parseInt(r[vk])||0):(parseFloat(r[vk])||0);m.set(k,(m.get(k)||0)+a);}return m;}
 function dqAggD(dA,dB,key,badFn){if(!dA.length&&!dB.length)return[];const mA=dqTally(dA,key,'CNT'),mB=dqTally(dB,key,'CNT');return[...new Set([...mA.keys(),...mB.keys()])].sort().map(k=>({label:k,valA:mA.get(k)||0,valB:mB.get(k)||0,isInvalid:badFn?badFn(k):false})).filter(r=>r.valA>0||r.valB>0);}
@@ -3537,8 +3522,8 @@ function renderDqDashboard(container) {
       ? `<span class="status-chip warn"><span class="dot"></span>WARN</span>`
       : `<span class="status-chip matched"><span class="dot"></span>PASS</span>`;
     const trAttrs = dqStatus === 'fail' ? ' data-status="break"' : '';
-    return `<tr${trAttrs} style="cursor:pointer" onclick="dqOpenModal(${pi},${c._i})">
-      <td class="d-mono">${escapeHtmlAttr(c.title)}</td>
+    return `<tr class="dq-row"${trAttrs} onclick="dqToggleRow(${pi},${c._i},this)">
+      <td class="d-mono"><span class="dq-caret">▶</span>${escapeHtmlAttr(c.title)}</td>
       <td>${escapeHtmlAttr(c.rule || '—')}</td>
       <td class="num">${failingRows ? failingRows.toLocaleString() : '<span style="color:var(--d-ink-4)">—</span>'}</td>
       <td>${dqChip}</td>
@@ -3598,8 +3583,73 @@ function dqSetActiveProduct(px) {
   renderDqDashboard(document.getElementById('view-dq'));
 }
 function dqSetFilter(f){dqState.CF=f;renderDqDashboard(document.getElementById('view-dq'));}
-function dqOpenModal(pi,mi){const AD=dqState.AD,d=AD[pi][mi],fmt=v=>d.isAmt?v.toLocaleString(undefined,{maximumFractionDigits:0}):v.toLocaleString();document.getElementById('dq-modal-title').textContent=`${AD[pi].px} — ${d.title}`;document.getElementById('dq-modal-rule').textContent=d.rule;document.getElementById('dq-th-a').textContent=dqState.LA;document.getElementById('dq-th-b').textContent=dqState.LB;const tbody=document.getElementById('dq-modal-body');tbody.innerHTML='';const frag=document.createDocumentFragment();for(const r of d.rows){const dv=r.valB-r.valA,bad=r.isInvalid&&r.valB>0,hi=r.pc>dqState.TH;const tr=document.createElement('tr');if(bad)tr.style.background='var(--red-bg)';tr.innerHTML=`<td style="font-weight:500;color:${bad?'var(--red)':'var(--ink2)'}">${bad?'<span style="margin-right:4px;font-size:10px">⚠</span>':''}${r.label}</td><td class="mono-val" style="text-align:right">${fmt(r.valA)}</td><td class="mono-val" style="text-align:right">${fmt(r.valB)}</td><td class="mono-val" style="text-align:right;color:${dv>0?'var(--green)':dv<0?'var(--red)':'var(--ink3)'}">${(dv>=0?'+':'')+fmt(dv)}</td><td class="mono-val" style="text-align:right;color:${hi?'var(--amber)':'var(--ink4)'}">${r.pc.toFixed(4)}</td>`;frag.appendChild(tr);}const td2=d.tB-d.tA,tot=document.createElement('tr');tot.style.background='var(--paper2)';tot.style.borderTop='2px solid var(--border)';tot.innerHTML=`<td style="font-weight:700">TOTAL</td><td class="mono-val" style="text-align:right;font-weight:700">${fmt(d.tA)}</td><td class="mono-val" style="text-align:right;font-weight:700">${fmt(d.tB)}</td><td class="mono-val" style="text-align:right;font-weight:700;color:${td2>0?'var(--green)':td2<0?'var(--red)':'var(--ink3)'}">${(td2>=0?'+':'')+fmt(td2)}</td><td class="mono-val" style="text-align:right;font-weight:700;color:${d.psi>dqState.TH?'var(--amber)':'var(--ink4)'}">${d.psi.toFixed(4)}</td>`;frag.appendChild(tot);tbody.appendChild(frag);document.getElementById('dq-modal-bg').classList.add('show');}
-function dqCloseModal(e){if(e&&e.target!==document.getElementById('dq-modal-bg'))return;document.getElementById('dq-modal-bg').classList.remove('show');}
+
+// ============================================================
+//  DQ COLUMN DETAIL — inline expandable distribution table
+// ============================================================
+function dqToggleRow(pi, mi, rowEl) {
+  const next = rowEl.nextElementSibling;
+  const wasOpen = next && next.classList && next.classList.contains('dq-detail-row');
+  // Collapse any other open detail row in the table
+  const tbody = rowEl.parentNode;
+  tbody.querySelectorAll('tr.dq-detail-row').forEach(tr => tr.remove());
+  tbody.querySelectorAll('tr.dq-row.open').forEach(tr => tr.classList.remove('open'));
+  if (wasOpen) return;
+  const c = dqState.AD[pi][mi];
+  if (!c) return;
+  const colSpan = rowEl.children.length;
+  const tr = document.createElement('tr');
+  tr.className = 'dq-detail-row';
+  tr.innerHTML = `<td colspan="${colSpan}">${dqRenderColDetail(c)}</td>`;
+  rowEl.classList.add('open');
+  tbody.insertBefore(tr, rowEl.nextSibling);
+}
+
+function dqRenderColDetail(c) {
+  const fmt = v => c.isAmt
+    ? Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 })
+    : Number(v).toLocaleString();
+  const rows = c.rows || [];
+  const rowsHtml = rows.map(r => {
+    const dv = (r.valB || 0) - (r.valA || 0);
+    const bad = r.isInvalid && r.valB > 0;
+    const dCls = dv > 0 ? 'pos' : dv < 0 ? 'neg' : 'flat';
+    const dSign = dv > 0 ? '+' : '';
+    return `<tr${bad ? ' data-status="break"' : ''}>
+      <td>${bad ? '<span style="margin-right:4px;color:var(--d-neg)">⚠</span>' : ''}${escapeHtmlAttr(r.label)}</td>
+      <td class="num">${fmt(r.valA || 0)}</td>
+      <td class="num">${fmt(r.valB || 0)}</td>
+      <td class="num dq-delta-${dCls}">${dSign}${fmt(dv)}</td>
+      <td class="num">${(r.pc || 0).toFixed(4)}</td>
+    </tr>`;
+  }).join('');
+  const tA = c.tA || 0, tB = c.tB || 0, tDv = tB - tA;
+  const tCls = tDv > 0 ? 'pos' : tDv < 0 ? 'neg' : 'flat';
+  const tSign = tDv > 0 ? '+' : '';
+  return `<div class="dq-detail">
+    <table class="ptb-data dq-detail-tbl">
+      <thead>
+        <tr>
+          <th>Value</th>
+          <th class="num">Previous count</th>
+          <th class="num">Current count</th>
+          <th class="num">Δ count</th>
+          <th class="num">PSI</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml}
+        <tr class="dq-detail-tot">
+          <td>Total</td>
+          <td class="num">${fmt(tA)}</td>
+          <td class="num">${fmt(tB)}</td>
+          <td class="num dq-delta-${tCls}">${tSign}${fmt(tDv)}</td>
+          <td class="num">${(c.psi || 0).toFixed(4)}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>`;
+}
 
 // ============================================================
 //  PRE-CHECK TB VIEW
@@ -7278,7 +7328,6 @@ document.addEventListener('keydown', e => {
     fdClose();
     // Route through closeBreakdownModal so breakdownData is released.
     closeBreakdownModal();
-    document.getElementById('dq-modal-bg').classList.remove('show');
     document.getElementById('finfo-modal-bg').classList.remove('show');
     document.getElementById('unmapped-modal-bg').classList.remove('show');
     document.getElementById('loan-drill-bg').classList.remove('show');
