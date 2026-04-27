@@ -3510,6 +3510,7 @@ function renderDqDashboard(container) {
   let cols = pd ? [...pd] : [];
   if (CF === 'psi') cols = cols.filter(c => c.psi > TH);
   else if (CF === 'dq') cols = cols.filter(c => c.dq > 0);
+  else if (CF === 'any') cols = cols.filter(c => c.dq > 0 || c.psi > TH);
   cols.sort((a, b) => {
     const af = a.dq > 0 ? 1 : 0;
     const bf = b.dq > 0 ? 1 : 0;
@@ -3521,6 +3522,7 @@ function renderDqDashboard(container) {
   const totalCols = pd ? pd.length : 0;
   const dqA = pd ? pd.filter(c => c.dq > 0).length : 0;
   const psiA = pd ? pd.filter(c => c.psi > TH).length : 0;
+  const anyA = pd ? pd.filter(c => c.dq > 0 || c.psi > TH).length : 0;
 
   const rowsHtml = cols.map(c => {
     const failingRows = (c.rows || [])
@@ -3549,10 +3551,6 @@ function renderDqDashboard(container) {
     ? `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--d-ink-3);height:auto">No columns match the current filter.</td></tr>`
     : '';
 
-  const productHeadHtml = pd
-    ? `<div class="ptb-meta"><span>Product <b>${pd.px}</b> · ${escapeHtmlAttr(DQ_PRODUCT_NAMES[pd.px] || pd.px)}</span><span>·</span><span>Baseline <b>${escapeHtmlAttr(dqState.LA || '—')}</b></span></div>`
-    : '';
-
   container.innerHTML = `
     <div class="ptb-v2">
       <div class="ptb-page-head">
@@ -3573,10 +3571,8 @@ function renderDqDashboard(container) {
             <button class="${CF==='all'?'active':''}" onclick="dqSetFilter('all')">All<span class="ptb-count dim">${totalCols}</span></button>
             <button class="${CF==='dq'?'active':''}" onclick="dqSetFilter('dq')">DQ Fail<span class="ptb-count dim">${dqA}</span></button>
             <button class="${CF==='psi'?'active':''}" onclick="dqSetFilter('psi')">PSI Alert<span class="ptb-count dim">${psiA}</span></button>
+            <button class="${CF==='any'?'active':''}" onclick="dqSetFilter('any')">All Issues<span class="ptb-count dim">${anyA}</span></button>
           </div>
-          ${productHeadHtml}
-          <div style="flex:1"></div>
-          <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--d-ink-3)">PSI threshold:<input type="number" value="${TH}" step="0.01" min="0" max="1" style="width:60px;font-family:'JetBrains Mono','IBM Plex Mono',monospace;font-size:11px;padding:4px 6px;border:1px solid var(--d-line);border-radius:6px;outline:none;background:var(--d-surface);color:var(--d-ink)" onchange="dqState.TH=Math.min(1,Math.max(0,parseFloat(this.value)||0.10));renderDqDashboard(document.getElementById('view-dq'))"></div>
         </div>
         <div class="ptb-scroll">
           <table class="ptb-data">
