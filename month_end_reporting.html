@@ -384,7 +384,7 @@
   <span class="upb-count" id="upb-count"></span>
 </div>
 
-<input type="file" id="file-input-hidden" multiple onchange="handleFiles(this.files)">
+<input type="file" id="file-input-hidden" multiple onchange="processFiles(Array.from(this.files))">
 
 <script src="src/utils.js"></script>
 <script src="src/storage.js"></script>
@@ -419,6 +419,39 @@ function downloadXlsx(rows, sheetName, filename) {
 function unmappedFootChip(stationName, count) {
   if (!count) return '';
   return `<span>·</span><span style="cursor:pointer;color:var(--d-warn,#B8740E);text-decoration:underline;text-underline-offset:2px;" onclick="openUnmappedModal('${stationName}')" title="View unmapped accounts">⚠ ${count.toLocaleString()} unmapped</span>`;
+}
+
+/** Centered progress spinner with progress-track + label + sub-label.
+ *  Used by stations whose run() drives setProgress(name, …). */
+function centeredSpinnerHtml(name) {
+  return `<div style="display:flex;align-items:center;justify-content:center;height:200px;"><div id="prog-${name}" style="text-align:center"><div class="progress-track" style="width:200px;margin-bottom:8px"><div class="progress-bar" id="prog-bar-${name}" style="width:10%"></div></div><div style="font-size:11px;color:var(--ink3)" id="prog-label-${name}">Processing…</div><div style="font-size:10px;color:var(--ink4);margin-top:4px" id="prog-sub-${name}"></div></div></div>`;
+}
+
+/** Plain "Processing…" placeholder (no progress bar) for views that
+ *  briefly show a transient state during async re-renders. */
+function processingPlaceholderHtml() {
+  return `<div style="display:flex;align-items:center;justify-content:center;height:200px;"><div style="text-align:center"><div style="font-size:11px;color:var(--ink3)">Processing…</div></div></div>`;
+}
+
+/** Date Mismatch warning card. Two visual styles share identical structure:
+ *  'ptb' — modern design (used by Posting Validation, Reversal Check)
+ *  'red' — legacy red-bg (used by TB Reconciliation, MTM FVOCI) */
+function renderDateMismatchCard(opts) {
+  const { title, message, backOnclick, style } = opts;
+  if (style === 'red') {
+    return `<div class="results-view" style="padding:24px">
+      <div style="background:var(--red-bg);border:1px solid #f5c4c0;border-radius:var(--radius);padding:16px 20px;max-width:600px">
+        <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:8px">⚠ Date Mismatch</div>
+        <div style="font-size:12px;color:var(--ink);line-height:1.6">${message}</div>
+        <button class="btn btn-sm" style="margin-top:14px" onclick="${backOnclick}">Back</button>
+      </div></div>`;
+  }
+  return `<div class="ptb-v2"><div class="ptb-page-head"><div class="ptb-page-title"><h1>${title}</h1></div></div>
+    <div class="ptb-card" style="max-width:600px;background:var(--d-neg-soft);border-color:color-mix(in srgb, var(--d-neg) 22%, transparent);">
+      <div style="font-size:13px;font-weight:600;color:var(--d-neg);margin-bottom:8px">⚠ Date Mismatch</div>
+      <div style="font-size:12px;color:var(--d-ink);line-height:1.6">${message}</div>
+      <button class="ptb-btn" style="margin-top:14px" onclick="${backOnclick}">Back</button>
+    </div></div>`;
 }
 
 // ============================================================
@@ -1087,7 +1120,6 @@ async function clearIDB() {
 //  FILE HANDLING
 // ============================================================
 function triggerUpload() { document.getElementById('file-input-hidden').click(); }
-function handleFiles(files) { processFiles(Array.from(files)); }
 
 function setUploadBar(show, label, filename, idx, total) {
   const bar = document.getElementById('upload-bar');
@@ -1624,7 +1656,7 @@ function renderStation(name) {
   if (!S.results[name]) {
     // Auto-run if all files are ready and no prior date error
     if (cfg.isReady() && shouldAutoRun(name)) {
-      container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:200px;"><div id="prog-${name}" style="text-align:center"><div class="progress-track" style="width:200px;margin-bottom:8px"><div class="progress-bar" id="prog-bar-${name}" style="width:10%"></div></div><div style="font-size:11px;color:var(--ink3)" id="prog-label-${name}">Processing…</div><div style="font-size:10px;color:var(--ink4);margin-top:4px" id="prog-sub-${name}"></div></div></div>`;
+      container.innerHTML = centeredSpinnerHtml(name);
       runStation(name);
       return;
     }
@@ -1765,7 +1797,7 @@ function renderMajorMovement() {
   const avail = mmAvailableMonths();
   if (avail.length && shouldAutoRun('majmov')) {
     if (!majMovState.month || !avail.includes(majMovState.month)) majMovState.month = avail[0];
-    container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:200px;"><div id="prog-majmov" style="text-align:center"><div class="progress-track" style="width:200px;margin-bottom:8px"><div class="progress-bar" id="prog-bar-majmov" style="width:10%"></div></div><div style="font-size:11px;color:var(--ink3)" id="prog-label-majmov">Processing…</div><div style="font-size:10px;color:var(--ink4);margin-top:4px" id="prog-sub-majmov"></div></div></div>`;
+    container.innerHTML = centeredSpinnerHtml('majmov');
     runMajorMovement();
     return;
   }
@@ -1873,19 +1905,22 @@ async function runMajorMovement() {
 
   // Build Presentation data — filter |ECL P&L FTM| > 1M, split by entity, attach breakdowns
   const THRESHOLD = 1000000;
-  // Helper: attach currSubs/prevSubs breakdown to a row
+  // Build a (rating,stage) sub-row list out of an aggregation Map.
+  const subsFrom = (bm) => [...bm.values()]
+    .filter(s => Math.abs(s.ecl) > 0.005)
+    .sort((a,b) => Math.abs(b.ecl) - Math.abs(a.ecl))
+    .map(s => ({ rating: s.rating, stage: s.stage, ecl: roundCents(s.ecl), ead: roundCents(s.ead) }));
   const attachBreakdown = (r) => {
     const k = `${r.CIF_NO}||${r.ENTITY}`;
-    const currBM = currBreakdown.get(k) || new Map();
-    const prevBM = prevBreakdown.get(k) || new Map();
-    const currSubs = [...currBM.values()].filter(s => Math.abs(s.ecl) > 0.005).sort((a,b) => Math.abs(b.ecl) - Math.abs(a.ecl)).map(s => ({ rating: s.rating, stage: s.stage, ecl: roundCents(s.ecl), ead: roundCents(s.ead) }));
-    const prevSubs = [...prevBM.values()].filter(s => Math.abs(s.ecl) > 0.005).sort((a,b) => Math.abs(b.ecl) - Math.abs(a.ecl)).map(s => ({ rating: s.rating, stage: s.stage, ecl: roundCents(s.ecl), ead: roundCents(s.ead) }));
-    return { ...r, currSubs, prevSubs };
+    return { ...r, currSubs: subsFrom(currBreakdown.get(k) || new Map()), prevSubs: subsFrom(prevBreakdown.get(k) || new Map()) };
   };
-  // Full map of all rows keyed by CIF||ENTITY with their breakdown attached (used when user adds below-threshold CIFs)
+  // Build the full map once, then derive presentation rows from it (avoids
+  // calling attachBreakdown twice for the above-threshold subset).
   const allWithBreakdown = {};
   results.forEach(r => { allWithBreakdown[`${r.CIF_NO}||${r.ENTITY}`] = attachBreakdown(r); });
-  const presRows = results.filter(r => Math.abs(r.ECL_PNL_FTM) > THRESHOLD).map(attachBreakdown);
+  const presRows = results
+    .filter(r => Math.abs(r.ECL_PNL_FTM) > THRESHOLD)
+    .map(r => allWithBreakdown[`${r.CIF_NO}||${r.ENTITY}`]);
   const mbs = presRows.filter(r => r.ENTITY === '001');
   const msl = presRows.filter(r => r.ENTITY === '003');
 
@@ -2299,9 +2334,12 @@ function buildMajMovPresTab() {
   </div>`;
 }
 
+// Active month-popup cleanup hook — all close paths route through this so
+// the keydown + mousedown listeners can never outlive the popup.
+let _majMovMonthPopupClose = null;
+
 function openMajMovMonthPopup(anchorEl) {
-  const existing = document.getElementById('majmov-month-popup');
-  if (existing) { existing.remove(); return; }
+  if (_majMovMonthPopupClose) { _majMovMonthPopupClose(); return; }
   const avail = mmAvailableMonths();
   if (!avail.length) return;
   const rect = anchorEl.getBoundingClientRect();
@@ -2312,27 +2350,40 @@ function openMajMovMonthPopup(anchorEl) {
   popup.innerHTML = `<div style="font-size:11px;font-weight:600;color:var(--ink);margin-bottom:10px;">Select reporting month</div>
     <select id="majmov-month-select" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius);outline:none;background:#fff;margin-bottom:12px;">${opts}</select>
     <div style="display:flex;gap:6px;justify-content:flex-end;">
-      <button class="btn btn-sm" onclick="document.getElementById('majmov-month-popup').remove()">Cancel</button>
+      <button class="btn btn-sm" onclick="closeMajMovMonthPopup()">Cancel</button>
       <button class="btn btn-sm btn-primary" onclick="applyMajMovMonth()">Apply</button>
     </div>`;
   document.body.appendChild(popup);
-  const selectEl = popup.querySelector('#majmov-month-select'); selectEl.focus();
+  popup.querySelector('#majmov-month-select').focus();
+
   const keyHandler = (e) => {
-    if (e.key === 'Escape') { e.preventDefault(); popup.remove(); document.removeEventListener('keydown', keyHandler, true); }
-    else if (e.key === 'Enter') { e.preventDefault(); applyMajMovMonth(); document.removeEventListener('keydown', keyHandler, true); }
+    if (e.key === 'Escape') { e.preventDefault(); closeMajMovMonthPopup(); }
+    else if (e.key === 'Enter') { e.preventDefault(); applyMajMovMonth(); }
+  };
+  let closer = null;
+  _majMovMonthPopupClose = () => {
+    document.removeEventListener('keydown', keyHandler, true);
+    if (closer) document.removeEventListener('mousedown', closer);
+    popup.remove();
+    _majMovMonthPopupClose = null;
   };
   document.addEventListener('keydown', keyHandler, true);
   setTimeout(() => {
-    const closer = (e) => { if (!popup.contains(e.target) && e.target !== anchorEl && !anchorEl.contains(e.target)) { popup.remove(); document.removeEventListener('mousedown', closer); document.removeEventListener('keydown', keyHandler, true); } };
+    closer = (e) => { if (!popup.contains(e.target) && e.target !== anchorEl && !anchorEl.contains(e.target)) closeMajMovMonthPopup(); };
     document.addEventListener('mousedown', closer);
   }, 0);
+}
+
+function closeMajMovMonthPopup() {
+  if (_majMovMonthPopupClose) _majMovMonthPopupClose();
 }
 
 function applyMajMovMonth() {
   const sel = document.getElementById('majmov-month-select');
   if (!sel) return;
-  const popup = document.getElementById('majmov-month-popup'); if (popup) popup.remove();
-  majMovState.month = sel.value; majMovState.results = null; clearAutoRunBlock('majmov'); runMajorMovement();
+  const newMonth = sel.value;
+  closeMajMovMonthPopup();
+  majMovState.month = newMonth; majMovState.results = null; clearAutoRunBlock('majmov'); runMajorMovement();
 }
 
 function openMajMovFilter(colId, triggerEl) {
@@ -2591,14 +2642,12 @@ async function runRecon(name) {
 
   if (dateWarning) {
     blockAutoRun('recon');
-    // Harmonised warning look — matches the Reversal Check ptb-v2 design.
-    const container = document.getElementById('view-recon');
-    container.innerHTML = `<div class="ptb-v2"><div class="ptb-page-head"><div class="ptb-page-title"><h1>Posting Validation</h1></div></div>
-      <div class="ptb-card" style="max-width:600px;background:var(--d-neg-soft);border-color:color-mix(in srgb, var(--d-neg) 22%, transparent);">
-        <div style="font-size:13px;font-weight:600;color:var(--d-neg);margin-bottom:8px">⚠ Date Mismatch</div>
-        <div style="font-size:12px;color:var(--d-ink);line-height:1.6">${dateWarning}</div>
-        <button class="ptb-btn" style="margin-top:14px" onclick="S.results['recon']=null;renderStation('recon')">Back</button>
-      </div></div>`;
+    document.getElementById('view-recon').innerHTML = renderDateMismatchCard({
+      style: 'ptb',
+      title: 'Posting Validation',
+      message: dateWarning,
+      backOnclick: "S.results['recon']=null;renderStation('recon')"
+    });
     const wrap = document.getElementById('prog-recon'); if (wrap) wrap.classList.remove('show');
     return;
   }
@@ -2728,13 +2777,12 @@ async function runTb(name) {
 
   if (dateWarning) {
     blockAutoRun('tb');
-    const container = document.getElementById('view-tb');
-    container.innerHTML = `<div class="results-view" style="padding:24px">
-      <div style="background:var(--red-bg);border:1px solid #f5c4c0;border-radius:var(--radius);padding:16px 20px;max-width:600px">
-        <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:8px">⚠ Date Mismatch</div>
-        <div style="font-size:12px;color:var(--ink);line-height:1.6">${dateWarning}</div>
-        <button class="btn btn-sm" style="margin-top:14px" onclick="S.results['tb']=null;blockAutoRun('tb');renderStation('tb')">Back</button>
-      </div></div>`;
+    document.getElementById('view-tb').innerHTML = renderDateMismatchCard({
+      style: 'red',
+      title: 'TB Reconciliation',
+      message: dateWarning,
+      backOnclick: "S.results['tb']=null;blockAutoRun('tb');renderStation('tb')"
+    });
     const wrap = document.getElementById('prog-tb'); if (wrap) wrap.classList.remove('show');
     return;
   }
@@ -3359,7 +3407,7 @@ function renderDq() {
   const container = document.getElementById('view-dq');
   if (!dqState.AD.length) {
     if (dqState.DS.length && shouldAutoRun('dq')) {
-      container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:200px;"><div style="text-align:center"><div style="font-size:11px;color:var(--ink3)">Processing…</div></div></div>`;
+      container.innerHTML = processingPlaceholderHtml();
       setTimeout(() => { dqCompute(); }, 20);
       return;
     }
@@ -3673,7 +3721,7 @@ function renderPreTb() {
   if (preTbState.results) { renderPreTbResults(container); return; }
   const f = S.files;
   if (f['mbs-tb'] && f['msl-tb'] && f.mapping && shouldAutoRun('pretb')) {
-    container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:200px;"><div style="text-align:center"><div style="font-size:11px;color:var(--ink3)">Processing…</div></div></div>`;
+    container.innerHTML = processingPlaceholderHtml();
     setTimeout(() => { runPreTb(); }, 20);
     return;
   }
@@ -4157,12 +4205,12 @@ function renderReversalResults(container) {
 
   // Date-mismatch gate (unchanged behaviour, re-skinned on the design background)
   if (data.__dateWarning) {
-    container.innerHTML = `<div class="ptb-v2"><div class="ptb-page-head"><div class="ptb-page-title"><h1>Reversal Check</h1></div></div>
-      <div class="ptb-card" style="max-width:600px;background:var(--d-neg-soft);border-color:color-mix(in srgb, var(--d-neg) 22%, transparent);">
-        <div style="font-size:13px;font-weight:600;color:var(--d-neg);margin-bottom:8px">⚠ Date Mismatch</div>
-        <div style="font-size:12px;color:var(--d-ink);line-height:1.6">${data.__dateWarning}</div>
-        <button class="ptb-btn" style="margin-top:14px" onclick="S.results['reversal']=null;renderStation('reversal')">Back</button>
-      </div></div>`;
+    container.innerHTML = renderDateMismatchCard({
+      style: 'ptb',
+      title: 'Reversal Check',
+      message: data.__dateWarning,
+      backOnclick: "S.results['reversal']=null;renderStation('reversal')"
+    });
     return;
   }
 
@@ -4923,7 +4971,7 @@ function renderLoanRecon() {
     const tbLoaded = S.files['mbs-tb'] && S.files['msl-tb'], mapLoaded = loanReconState.files.tbMapping, fifoLoaded = loanReconState.files.fifo;
     const hasProducts = LOAN_PRODUCTS.some(p => dqState.DS.some(d => d.dn === p));
     if (hasProducts && tbLoaded && mapLoaded && fifoLoaded && shouldAutoRun('loanrecon')) {
-      container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:200px;"><div style="text-align:center"><div style="font-size:11px;color:var(--ink3)">Processing…</div></div></div>`;
+      container.innerHTML = processingPlaceholderHtml();
       setTimeout(() => { runLoanRecon(); }, 20);
       return;
     }
@@ -5160,7 +5208,7 @@ function renderMtmFvoci() {
   const container = document.getElementById('view-mtmfvoci');
   if (mtmState.results) { renderMtmResults(container); return; }
   if (mtmState.fvociLoaded && mtmState.disbLoaded && mtmState.prevFvociLoaded && shouldAutoRun('mtmfvoci')) {
-    container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:200px;"><div id="prog-mtmfvoci" style="text-align:center"><div class="progress-track" style="width:200px;margin-bottom:8px"><div class="progress-bar" id="prog-bar-mtmfvoci" style="width:10%"></div></div><div style="font-size:11px;color:var(--ink3)" id="prog-label-mtmfvoci">Processing…</div><div style="font-size:10px;color:var(--ink4);margin-top:4px" id="prog-sub-mtmfvoci"></div></div></div>`;
+    container.innerHTML = centeredSpinnerHtml('mtmfvoci');
     runMtmFvoci();
     return;
   }
@@ -5215,13 +5263,12 @@ async function runMtmFvoci() {
 
   if (dateWarning) {
     blockAutoRun('mtmfvoci');
-    const container = document.getElementById('view-mtmfvoci');
-    container.innerHTML = `<div class="results-view" style="padding:24px">
-      <div style="background:var(--red-bg);border:1px solid #f5c4c0;border-radius:var(--radius);padding:16px 20px;max-width:600px">
-        <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:8px">⚠ Date Mismatch</div>
-        <div style="font-size:12px;color:var(--ink);line-height:1.6">${dateWarning}</div>
-        <button class="btn btn-sm" style="margin-top:14px" onclick="mtmState.results=null;blockAutoRun('mtmfvoci');renderMtmFvoci()">Back</button>
-      </div></div>`;
+    document.getElementById('view-mtmfvoci').innerHTML = renderDateMismatchCard({
+      style: 'red',
+      title: 'MTM FVOCI',
+      message: dateWarning,
+      backOnclick: "mtmState.results=null;blockAutoRun('mtmfvoci');renderMtmFvoci()"
+    });
     const wrap = document.getElementById('prog-mtmfvoci'); if (wrap) wrap.classList.remove('show');
     return;
   }
