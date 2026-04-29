@@ -5391,6 +5391,9 @@ function renderMtmResults(container) {
   };
   const groupBtnClass = isWair ? 'ptb-btn ptb-btn-active' : 'ptb-btn';
   const groupBtnLabel = isWair ? 'Grouped · WAIR' : 'Group by';
+  const groupBtnHtml = `<button class="${groupBtnClass}" onclick="mtmToggleWairGroup()" title="Group by WAIR">
+    <svg><use href="#i-layers"/></svg>${groupBtnLabel}
+  </button>`;
   const pageHeadHtml = `
     <div class="ptb-page-head">
       <div class="ptb-page-title">
@@ -5404,9 +5407,6 @@ function renderMtmResults(container) {
           ${tabBtn('listing', 'List')}
           ${tabBtn('journal', 'Journal entries')}
         </div>`}
-        <button class="${groupBtnClass}" onclick="mtmToggleWairGroup()" title="Group by WAIR">
-          <svg><use href="#i-layers"/></svg>${groupBtnLabel}
-        </button>
         <button class="ptb-btn primary" onclick="exportMtmXlsx()" title="Export (E)">
           <svg><use href="#i-download"/></svg>Export
         </button>
@@ -5451,14 +5451,14 @@ function renderMtmResults(container) {
     </div>`;
 
   let bodyHtml;
-  if (isListing)      bodyHtml = buildMtmListingCard(rows, filtered, tableCols, dataCols, isNumRight, formatCell, aboveThresholdCount, belowThresholdCount);
-  else if (isJournal) bodyHtml = buildMtmJournalCards(rows);
-  else                bodyHtml = buildMtmWairCard();
+  if (isListing)      bodyHtml = buildMtmListingCard(rows, filtered, tableCols, dataCols, isNumRight, formatCell, aboveThresholdCount, belowThresholdCount, groupBtnHtml);
+  else if (isJournal) bodyHtml = buildMtmJournalCards(rows, groupBtnHtml);
+  else                bodyHtml = buildMtmWairCard(groupBtnHtml);
 
   container.innerHTML = `<div class="ptb-v2">${pageHeadHtml}${kpiHtml}${bodyHtml}</div>`;
 }
 
-function buildMtmListingCard(rows, filtered, tableCols, dataCols, isNumRight, formatCell, aboveThresholdCount, belowThresholdCount) {
+function buildMtmListingCard(rows, filtered, tableCols, dataCols, isNumRight, formatCell, aboveThresholdCount, belowThresholdCount, groupBtnHtml) {
   const totalPages = Math.max(1, Math.ceil(filtered.length / MTM_PAGE_SIZE));
   if (_mtmPage > totalPages) _mtmPage = totalPages;
   if (_mtmPage < 1) _mtmPage = 1;
@@ -5510,6 +5510,8 @@ function buildMtmListingCard(rows, filtered, tableCols, dataCols, isNumRight, fo
         ${segBtn('break','Above 1M', aboveThresholdCount, 'neg')}
         ${segBtn('matched','Below 1M', belowThresholdCount, 'dim')}
       </div>
+      <div style="flex:1"></div>
+      ${groupBtnHtml || ''}
     </div>`;
 
   return `<div class="ptb-card ptb-table-card">
@@ -5525,7 +5527,7 @@ function buildMtmListingCard(rows, filtered, tableCols, dataCols, isNumRight, fo
   </div>`;
 }
 
-function buildMtmJournalCards(rows) {
+function buildMtmJournalCards(rows, groupBtnHtml) {
   const BS_AC = '1220001', OCI_AC = '4121514', COST_CENTRE = '82101';
   const PRODUCT = '00000', INTERCO = '000', FUTURE1 = '00000', SUB_ACC = '0000', FUTURE3 = '0000';
   const procRaw = rows[0]?.PROC_DTE || '';
@@ -5619,11 +5621,12 @@ function buildMtmJournalCards(rows) {
   });
 
   mtmState.journalRows = allExportRows;
-  if (!html) return `<div class="ptb-card" style="padding:40px;text-align:center;color:var(--d-ink-3);font-size:13px">No journal entries to post.</div>`;
-  return html;
+  const toolbar = groupBtnHtml ? `<div class="ptb-table-toolbar"><div style="flex:1"></div>${groupBtnHtml}</div>` : '';
+  if (!html) return `<div class="ptb-card ptb-table-card">${toolbar}<div style="padding:40px;text-align:center;color:var(--d-ink-3);font-size:13px">No journal entries to post.</div></div>`;
+  return `<div class="ptb-card ptb-table-card" style="padding:0">${toolbar}<div style="padding:16px">${html}</div></div>`;
 }
 
-function buildMtmWairCard() {
+function buildMtmWairCard(groupBtnHtml) {
   const entries = [...mtmState.wairByKey.entries()]
     .map(([k, w]) => { const [rt, ccy] = k.split('||'); return { rt, ccy, wair: w }; })
     .sort((a,b) => a.rt.localeCompare(b.rt) || a.ccy.localeCompare(b.ccy));
@@ -5636,7 +5639,9 @@ function buildMtmWairCard() {
     <td colspan="2">Average WAIR (fallback)</td>
     <td class="num">${fmtN6(mtmState.avgWair || 0)}</td>
   </tr>`;
+  const toolbar = groupBtnHtml ? `<div class="ptb-table-toolbar"><div style="flex:1"></div>${groupBtnHtml}</div>` : '';
   return `<div class="ptb-card ptb-table-card">
+    ${toolbar}
     <div class="ptb-scroll">
       <table class="ptb-data">
         <thead><tr>
@@ -5924,6 +5929,34 @@ function moaCycleGroupBy() {
   var idx = cycle.indexOf(moaState.dashView);
   moaState.dashView = cycle[(idx + 1) % cycle.length];
   renderMoa();
+}
+
+function moaCloseExportMenu() {
+  var el = document.getElementById('moa-export-menu');
+  if (el) el.remove();
+  document.removeEventListener('mousedown', moaExportMenuOutside, true);
+}
+function moaExportMenuOutside(ev) {
+  var menu = document.getElementById('moa-export-menu');
+  if (menu && !menu.contains(ev.target)) moaCloseExportMenu();
+}
+function moaOpenExportMenu(triggerEl) {
+  if (document.getElementById('moa-export-menu')) { moaCloseExportMenu(); return; }
+  var rect = triggerEl.getBoundingClientRect();
+  var menu = document.createElement('div');
+  menu.id = 'moa-export-menu';
+  menu.style.cssText = 'position:fixed;top:' + (rect.bottom + 6) + 'px;right:' + (window.innerWidth - rect.right) + 'px;background:var(--d-surface,#fff);border:1px solid var(--d-line,#e5e5e2);border-radius:8px;padding:4px;box-shadow:0 6px 20px rgba(0,0,0,0.12);z-index:9999;display:flex;flex-direction:column;min-width:180px';
+  menu.innerHTML = ''
+    + '<button class="ptb-btn" style="border:0;background:transparent;justify-content:flex-start;padding:8px 12px" onclick="moaPickExport(\'xlsx\')">Excel (.xlsx)</button>'
+    + '<button class="ptb-btn" style="border:0;background:transparent;justify-content:flex-start;padding:8px 12px" onclick="moaPickExport(\'json\')">JSON (.json)</button>';
+  document.body.appendChild(menu);
+  setTimeout(function(){ document.addEventListener('mousedown', moaExportMenuOutside, true); }, 0);
+}
+function moaPickExport(fmt) {
+  moaCloseExportMenu();
+  if (fmt === 'json') { exportMoaJson(); return; }
+  if (moaState.dashView === 'journal') exportMoaJournalXlsx();
+  else exportMoaXlsx();
 }
 
 function moaSetView(v) {
@@ -6695,9 +6728,6 @@ function renderMoa() {
     : ' onclick="moaCycleGroupBy()" title="Cycle: List → By LOB → By RC"';
 
   // ===== Top panel (design-file layout) =====
-  var journalExportBtn = view === 'journal'
-    ? '<button class="ptb-btn" onclick="exportMoaJournalXlsx()" title="Export current view to XLSX (E)"><svg><use href="#i-download"/></svg>Export</button>'
-    : '<button class="ptb-btn" onclick="exportMoaXlsx()" title="Export current view to XLSX (E)"><svg><use href="#i-download"/></svg>Export</button>';
   var pageHeadHtml = ''
     + '<div class="ptb-page-head">'
     +   '<div class="ptb-page-title"><h1>Management Overlay</h1></div>'
@@ -6707,12 +6737,15 @@ function renderMoa() {
     +       primaryBtn("moaSetPrimary('compare')", 'Compare 2 months', moaState.mode === 'compare' && !isJournal)
     +       primaryBtn("moaSetPrimary('journal')", 'Journal entries',  isJournal)
     +     '</div>'
-    +     '<button class="' + groupBtnClass + '"' + groupBtnAttrs + '><svg><use href="#i-layers"/></svg>' + groupBtnLabel + '</button>'
     +     '<button class="ptb-btn" onclick="openMoaDuplicateModal()" title="Roll-forward overlays from one month to another"><svg><use href="#i-refresh"/></svg>Roll-forward</button>'
-    +     journalExportBtn
-    +     '<button class="ptb-btn" onclick="exportMoaJson()" title="Save to cache and export JSON (S)"><svg><use href="#i-download"/></svg>Export JSON</button>'
+    +     '<button class="ptb-btn" onclick="moaOpenExportMenu(this)" title="Export current view (E)"><svg><use href="#i-download"/></svg>Export</button>'
     +     '<button class="ptb-btn primary" onclick="openMoaModal(null)" title="New overlay (N)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>New overlay</button>'
     +   '</div>'
+    + '</div>';
+
+  // Group-by toolbar — sits above the table at the upper-right (mirrors TB recon).
+  var groupByToolbarHtml = '<div class="ptb-table-toolbar" style="background:transparent;border:0;padding:0 0 8px"><div style="flex:1"></div>'
+    + '<button class="' + groupBtnClass + '"' + groupBtnAttrs + '><svg><use href="#i-layers"/></svg>' + groupBtnLabel + '</button>'
     + '</div>';
 
   // ===== Month picker strip =====
@@ -6740,6 +6773,7 @@ function renderMoa() {
     + monthStripHtml
     + '<div style="flex:1;overflow:auto;">'
     + (view !== 'journal' ? incompleteHtml : '')
+    + (isJournal ? '' : groupByToolbarHtml)
     + mainHtml
     + '</div>'
     + '</div>';
