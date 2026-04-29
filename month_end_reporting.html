@@ -1867,8 +1867,11 @@ async function runMajorMovement() {
   });
 
   // Sort aggregated rows by descending |ECL P&L FTM|
-  const results = [...cifMap.values()].sort((a,b) => Math.abs(b.ECL_PNL_FTM) - Math.abs(a.ECL_PNL_FTM));
+  let results = [...cifMap.values()].sort((a,b) => Math.abs(b.ECL_PNL_FTM) - Math.abs(a.ECL_PNL_FTM));
   results.forEach(r => { r.CURR_ECL = roundCents(r.CURR_ECL); r.PREV_ECL = roundCents(r.PREV_ECL); r.ECL_PNL_FTM = roundCents(r.ECL_PNL_FTM); r.CURR_EAD = roundCents(r.CURR_EAD); r.PREV_EAD = roundCents(r.PREV_EAD); });
+  // Drop CIFs whose net ECL P&L FTM rounds to zero (or is blank). Done in-memory
+  // here only — the source RDL is shared with other pipelines and is left untouched.
+  results = results.filter(r => Math.abs(r.ECL_PNL_FTM || 0) >= 0.005);
 
   // Build Presentation data — filter |ECL P&L FTM| > 1M, split by entity, attach breakdowns
   const THRESHOLD = 1000000;
@@ -1941,6 +1944,59 @@ function mmrSetPage(p) {
   renderMajMovResults(document.getElementById('view-majmov'));
 }
 
+function mmToggleRowDetail(cifKey, rowEl) {
+  const next = rowEl.nextElementSibling;
+  const wasOpen = next && next.classList && next.classList.contains('dq-detail-row');
+  const tbody = rowEl.parentNode;
+  tbody.querySelectorAll('tr.dq-detail-row').forEach(tr => tr.remove());
+  tbody.querySelectorAll('tr.dq-row.open').forEach(tr => tr.classList.remove('open'));
+  if (wasOpen) return;
+  const row = (majMovState.allWithBreakdown || {})[cifKey];
+  if (!row) return;
+  const colSpan = rowEl.children.length;
+  const tr = document.createElement('tr');
+  tr.className = 'dq-detail-row';
+  tr.innerHTML = `<td colspan="${colSpan}">${mmRenderRowDetail(row)}</td>`;
+  rowEl.classList.add('open');
+  tbody.insertBefore(tr, rowEl.nextSibling);
+}
+
+function mmRenderRowDetail(row) {
+  const curr = row.currSubs || [];
+  const prev = row.prevSubs || [];
+  const maxLen = Math.max(curr.length, prev.length, 1);
+  const dash = '<span style="color:var(--d-ink-4)">—</span>';
+  const lines = [];
+  for (let i = 0; i < maxLen; i++) {
+    const c = curr[i], p = prev[i];
+    lines.push(`<tr>
+      <td>${c ? (c.rating || dash) : dash}</td>
+      <td>${c ? (c.stage || dash) : dash}</td>
+      <td class="num">${c ? fmtN2(c.ead) : dash}</td>
+      <td class="num">${c ? fmtN2(c.ecl) : dash}</td>
+      <td>${p ? (p.rating || dash) : dash}</td>
+      <td>${p ? (p.stage || dash) : dash}</td>
+      <td class="num">${p ? fmtN2(p.ead) : dash}</td>
+      <td class="num">${p ? fmtN2(p.ecl) : dash}</td>
+    </tr>`);
+  }
+  return `<div class="dq-detail">
+    <table class="ptb-data dq-detail-tbl">
+      <thead><tr>
+        <th>CURR RATING</th>
+        <th>CURRENT STAGE</th>
+        <th class="num">CURRENT EAD</th>
+        <th class="num">CURRENT ECL</th>
+        <th>PREVIOUS RATING</th>
+        <th>PREVIOUS STAGE</th>
+        <th class="num">PREVIOUS EAD</th>
+        <th class="num">PREVIOUS ECL</th>
+      </tr></thead>
+      <tbody>${lines.join('')}</tbody>
+    </table>
+  </div>`;
+}
+
 function buildMajMovDataTab() {
   const results = majMovState.results;
   // Collect only the columns that actually have an active filter so the
@@ -1975,7 +2031,7 @@ function buildMajMovDataTab() {
     const toggleCell = inPres
       ? `<td style="text-align:center"><span onclick="event.stopPropagation();mmTogglePresFromData('${cifKey}')" title="Remove from presentation" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:3px;background:var(--d-accent);color:var(--d-accent-ink);cursor:pointer;font-size:13px;font-weight:600;line-height:1;border:1px solid var(--d-accent);" onmouseover="this.style.background='transparent'" onmouseout="this.style.background='var(--d-accent)'">✓</span></td>`
       : `<td style="text-align:center"><span onclick="event.stopPropagation();mmTogglePresFromData('${cifKey}')" title="Add to presentation" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:3px;background:transparent;color:var(--d-accent-ink);cursor:pointer;font-size:13px;font-weight:600;line-height:1;border:1px solid var(--d-accent);" onmouseover="this.style.background='var(--d-accent)'" onmouseout="this.style.background='transparent'">+</span></td>`;
-    return `<tr>${toggleCell}${MM_COLS.map(c => {
+    return `<tr class="dq-row" onclick="mmToggleRowDetail('${cifKey}',this)">${toggleCell}${MM_COLS.map(c => {
       if (c.type === 'number') {
         const v = r[c.id];
         const color = c.id === 'ECL_PNL_FTM' && Math.abs(v) > 0 ? (v < 0 ? 'color:var(--d-pos)' : 'color:var(--d-neg)') : '';
@@ -2018,37 +2074,34 @@ function mmrClearAllColFilters() {
   renderMajMovResults(document.getElementById('view-majmov'));
 }
 
-const MM_KPI_SEGMENTS = ['GWB-CB','GWB-GM','CFS-CMG','CFS-BB','CFS-SME','CFS-IND'];
-const MM_KPI_ENTITIES = ['001','003'];
+const MM_KPI_BUCKETS = [
+  { key: '001-OTHERS',  label: '001 · OTHERS',  match: r => String(r.ENTITY||'') === '001' },
+  { key: '003-CFS-SME', label: '003 · CFS-SME', match: r => String(r.ENTITY||'') === '003' && String(r.MKT_SUB_SEG_DESC||'').trim().toUpperCase() === 'CFS-SME' },
+  { key: '003-CFS-IND', label: '003 · CFS-IND', match: r => String(r.ENTITY||'') === '003' && String(r.MKT_SUB_SEG_DESC||'').trim().toUpperCase() === 'CFS-IND' },
+  { key: '003-OTHERS',  label: '003 · OTHERS',  match: r => String(r.ENTITY||'') === '003' && !['CFS-SME','CFS-IND'].includes(String(r.MKT_SUB_SEG_DESC||'').trim().toUpperCase()) }
+];
 function buildMajMovDataKpis() {
   const results = majMovState.results || [];
-  const totals = {};
-  MM_KPI_ENTITIES.forEach(ent => {
-    totals[ent] = Object.fromEntries(MM_KPI_SEGMENTS.map(s => [s, 0]));
-  });
+  const totals = Object.fromEntries(MM_KPI_BUCKETS.map(b => [b.key, 0]));
   results.forEach(r => {
     const cifKey = `${r.CIF_NO}||${r.ENTITY}`;
     if (mmIsInPresentation(cifKey)) return;
-    const ent = String(r.ENTITY||'');
-    if (!totals[ent]) return;
-    const seg = String(r.MKT_SUB_SEG_DESC||'').trim().toUpperCase();
-    if (seg in totals[ent]) totals[ent][seg] += (r.ECL_PNL_FTM || 0);
+    for (const b of MM_KPI_BUCKETS) {
+      if (b.match(r)) { totals[b.key] += (r.ECL_PNL_FTM || 0); break; }
+    }
   });
-  const cards = [];
-  MM_KPI_ENTITIES.forEach(ent => {
-    MM_KPI_SEGMENTS.forEach(seg => {
-      const v = totals[ent][seg];
-      if (Math.abs(v) < 0.005) return;
-      const color = v < 0 ? 'var(--d-pos)' : 'var(--d-neg)';
-      const disp = (v < 0 ? '-' : '') + fmtN2(Math.abs(v));
-      cards.push(`<div class="ptb-card ptb-kpi" style="padding:14px 16px;">
-        <div class="ptb-label">${ent} · ${seg}</div>
-        <div class="ptb-value mono" style="font-size:18px;color:${color};margin:6px 0 0;">${disp}</div>
-      </div>`);
-    });
+  const cards = MM_KPI_BUCKETS.flatMap(b => {
+    const v = totals[b.key];
+    if (Math.abs(v) < 0.005) return [];
+    const color = v < 0 ? 'var(--d-pos)' : 'var(--d-neg)';
+    const disp = (v < 0 ? '-' : '') + fmtN2(Math.abs(v));
+    return [`<div class="ptb-card ptb-kpi" style="padding:14px 16px;">
+      <div class="ptb-label">${b.label}</div>
+      <div class="ptb-value mono" style="font-size:18px;color:${color};margin:6px 0 0;">${disp}</div>
+    </div>`];
   });
   if (!cards.length) return '';
-  return `<div class="ptb-grid" style="grid-template-columns:repeat(6,1fr);">${cards.join('')}</div>`;
+  return `<div class="ptb-grid" style="grid-template-columns:repeat(4,1fr);">${cards.join('')}</div>`;
 }
 
 /** Compute the effective presentation rows for the current month, applying hide/add overrides */
