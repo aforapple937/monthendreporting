@@ -382,22 +382,6 @@
   .clickable-cell { color: var(--ink); cursor: pointer; }
   .clickable-cell:hover { opacity: 0.7; }
 
-  .query-result-header {
-    background: #fff; border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 14px 18px;
-  }
-  .qrh-id { font-family: var(--mono); font-size: 18px; font-weight: 600; color: var(--ink); }
-  .qrh-meta { font-size: 12px; color: var(--ink3); display: flex; gap: 16px; flex-wrap: wrap; }
-  .qrh-meta b { color: var(--ink2); font-weight: 500; }
-
-  .journal-entries {
-    background: #fff; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden;
-  }
-  .je-header {
-    padding: 12px 16px; border-bottom: 1px solid var(--border);
-    font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 8px;
-  }
-
   .modal-bg {
     position: fixed; inset: 0;
     background: rgba(0,0,0,0.4);

@@ -364,11 +364,6 @@
         <div class="kbd-row"><span class="desc">New overlay</span><span class="keys"><span class="k">N</span></span></div>
         <div class="kbd-row"><span class="desc">Save &amp; export JSON</span><span class="keys"><span class="k">S</span></span></div>
       </div>
-      <div class="kbd-group">
-        <h4>Major Movement</h4>
-        <div class="kbd-row"><span class="desc">Cycle tabs (Presentation &harr; Data)</span><span class="keys"><span class="k">[</span><span class="k">]</span></span></div>
-        <div class="kbd-row"><span class="desc">Toggle million / whole units</span><span class="keys"><span class="k">M</span></span></div>
-      </div>
     </div>
     <div class="kbd-foot">
       <span>Tip:</span> shortcuts are suppressed while typing in an input or when a modal is open.
@@ -1356,7 +1351,7 @@ const RELOAD_HANDLERS = {
   reversal:  () => { revState.statusFilter = 'all'; revState.filters = {}; revState.page = 1; reupload('reversal'); },
   recon:     () => { reconState.statusFilter = 'all'; reconState.filters = {}; reconState.page = 1; reupload('recon'); },
   tb:        () => { tbReconState.statusFilter = 'all'; tbReconState.filters = {}; tbReconState.page = 1; tbReconState.groupMode = null; reupload('tb'); },
-  majmov:    () => { majMovState.results = null; majMovState.presentation = null; blockAutoRun('majmov'); renderMajorMovement(); },
+  majmov:    () => { majMovState.results = null; blockAutoRun('majmov'); renderMajorMovement(); },
   moa:       () => importMoaJson(),
   query:     () => renderQueryUpload(document.getElementById('view-query')),
   glte:      () => resetGlte()
@@ -1398,14 +1393,6 @@ const SHORTCUT_HANDLERS = {
     majmov:    () => exportMajMov(),
     glte:      () => exportGlteCSV()
   },
-  // [ / ] = cycle tabs within the current view
-  cycleTab: {
-    majmov:    (dir) => { const order = ['presentation','data']; const i = order.indexOf(majMovState.tab); const ni = (i + dir + order.length) % order.length; majMovState.tab = order[ni]; renderMajMovResults(document.getElementById('view-majmov')); }
-  },
-  // M = toggle million/whole units (Major Movement presentation view)
-  toggleUnit: {
-    majmov:    () => { majMovState.unit = (majMovState.unit === 'million') ? 'whole' : 'million'; renderMajMovResults(document.getElementById('view-majmov')); }
-  }
 };
 
 /** Global keyboard shortcut handler — suppressed when typing in inputs */
@@ -1433,8 +1420,6 @@ function handleGlobalShortcut(e) {
   else if (keyLower === 'e' && SHORTCUT_HANDLERS.exportData[v]) { e.preventDefault(); SHORTCUT_HANDLERS.exportData[v](); }
   else if (keyLower === 's' && v === 'moa') { e.preventDefault(); exportMoaJson(); }
   else if (keyLower === 'n' && v === 'moa') { e.preventDefault(); openMoaModal(null); }
-  else if ((key === '[' || key === ']') && SHORTCUT_HANDLERS.cycleTab[v]) { e.preventDefault(); SHORTCUT_HANDLERS.cycleTab[v](key === ']' ? 1 : -1); }
-  else if (keyLower === 'm' && SHORTCUT_HANDLERS.toggleUnit[v]) { e.preventDefault(); SHORTCUT_HANDLERS.toggleUnit[v](); }
 }
 
 document.addEventListener('keydown', handleGlobalShortcut);
@@ -1724,16 +1709,11 @@ function exportUnmappedCSV() {
 //  MAJOR MOVEMENT — ECL movement by CIF (current vs previous month)
 // ============================================================
 const majMovState = {
-  results: null,        // aggregated rows for Data tab
-  presentation: null,   // { mbs: [...], msl: [...] } for Presentation tab
+  results: null,
   month: null,
   filters: {},
   page: 0,
-  pageSize: 50,
-  tab: 'presentation',  // 'data' or 'presentation'
-  unit: 'whole',        // 'whole' or 'million'
-  hidden: {},           // { monthKey: Set of CIF||ENTITY keys that were manually hidden from presentation }
-  added: {}             // { monthKey: Set of CIF||ENTITY keys that were manually added to presentation }
+  pageSize: 50
 };
 
 const MM_COLS = [
@@ -1873,9 +1853,6 @@ async function runMajorMovement() {
   const results = [...cifMap.values()].sort((a,b) => Math.abs(b.ECL_PNL_FTM) - Math.abs(a.ECL_PNL_FTM));
   results.forEach(r => { r.CURR_ECL = roundCents(r.CURR_ECL); r.PREV_ECL = roundCents(r.PREV_ECL); r.ECL_PNL_FTM = roundCents(r.ECL_PNL_FTM); r.CURR_EAD = roundCents(r.CURR_EAD); r.PREV_EAD = roundCents(r.PREV_EAD); });
 
-  // Build Presentation data — filter |ECL P&L FTM| > 1M, split by entity, attach breakdowns
-  const THRESHOLD = 1000000;
-  // Helper: attach currSubs/prevSubs breakdown to a row
   const attachBreakdown = (r) => {
     const k = `${r.CIF_NO}||${r.ENTITY}`;
     const currBM = currBreakdown.get(k) || new Map();
@@ -1884,18 +1861,13 @@ async function runMajorMovement() {
     const prevSubs = [...prevBM.values()].filter(s => Math.abs(s.ecl) > 0.005).sort((a,b) => Math.abs(b.ecl) - Math.abs(a.ecl)).map(s => ({ rating: s.rating, stage: s.stage, ecl: roundCents(s.ecl), ead: roundCents(s.ead) }));
     return { ...r, currSubs, prevSubs };
   };
-  // Full map of all rows keyed by CIF||ENTITY with their breakdown attached (used when user adds below-threshold CIFs)
   const allWithBreakdown = {};
   results.forEach(r => { allWithBreakdown[`${r.CIF_NO}||${r.ENTITY}`] = attachBreakdown(r); });
-  const presRows = results.filter(r => Math.abs(r.ECL_PNL_FTM) > THRESHOLD).map(attachBreakdown);
-  const mbs = presRows.filter(r => r.ENTITY === '001');
-  const msl = presRows.filter(r => r.ENTITY === '003');
 
   setProgress('majmov', 1, 'Done');
   await new Promise(r => setTimeout(r, 100));
 
   majMovState.results = results;
-  majMovState.presentation = { mbs, msl };
   majMovState.allWithBreakdown = allWithBreakdown;
   majMovState.page = 0;
   majMovState.filters = {};
@@ -1910,11 +1882,6 @@ function renderMajMovResults(container) {
   const [y,m] = mk.split('-').map(Number);
   const reportingMonth = fmtMMMyyyy(new Date(y, m-1, 1));
 
-  const isData = majMovState.tab === 'data', isPres = majMovState.tab === 'presentation';
-  if (!majMovState.unit) majMovState.unit = 'whole';
-
-  const tabBtn = (k, label, active) => `<button class="${active?'active':''}" onclick="majMovState.tab='${k}';renderMajMovResults(document.getElementById('view-majmov'))">${label}</button>`;
-
   const pageHeadHtml = `
     <div class="ptb-page-head">
       <div class="ptb-page-title">
@@ -1924,19 +1891,13 @@ function renderMajMovResults(container) {
         </div>
       </div>
       <div class="ptb-page-actions">
-        <div class="ptb-seg">
-          ${tabBtn('presentation', 'Presentation', isPres)}
-          ${tabBtn('data', 'Data', isData)}
-        </div>
         <button class="ptb-btn primary" onclick="exportMajMov()" title="Export (E)">
           <svg><use href="#i-download"/></svg>Export
         </button>
       </div>
     </div>`;
 
-  const bodyHtml = isData ? buildMajMovDataTab() : buildMajMovPresTab();
-
-  container.innerHTML = `<div class="ptb-v2">${pageHeadHtml}${bodyHtml}</div>`;
+  container.innerHTML = `<div class="ptb-v2">${pageHeadHtml}${buildMajMovDataTab()}</div>`;
 }
 
 function mmrSetPage(p) {
@@ -2020,18 +1981,14 @@ function buildMajMovDataTab() {
   const pageStart = majMovState.page * ps + 1;
   const pageEnd = Math.min((majMovState.page + 1) * ps, filtered.length);
 
-  const thHtml = '<th style="width:32px"></th>' + MM_COLS.map(c => {
+  const thHtml = MM_COLS.map(c => {
     const cf = majMovState.filters[c.id]; const active = fdIsActive(cf);
     const numCls = c.type === 'number' ? ' num' : '';
     return `<th class="${active?'filtered':''}${numCls}" data-col="${c.id}" onclick="openMajMovFilter('${c.id}',this)">${c.label}<span class="fcol"></span></th>`;
   }).join('');
   const rowsHtml = pageRows.map(r => {
     const cifKey = `${r.CIF_NO}||${r.ENTITY}`;
-    const inPres = mmIsInPresentation(cifKey);
-    const toggleCell = inPres
-      ? `<td style="text-align:center"><span onclick="event.stopPropagation();mmTogglePresFromData('${cifKey}')" title="Remove from presentation" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:3px;background:var(--d-accent);color:var(--d-accent-ink);cursor:pointer;font-size:13px;font-weight:600;line-height:1;border:1px solid var(--d-accent);" onmouseover="this.style.background='transparent'" onmouseout="this.style.background='var(--d-accent)'">✓</span></td>`
-      : `<td style="text-align:center"><span onclick="event.stopPropagation();mmTogglePresFromData('${cifKey}')" title="Add to presentation" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:3px;background:transparent;color:var(--d-accent-ink);cursor:pointer;font-size:13px;font-weight:600;line-height:1;border:1px solid var(--d-accent);" onmouseover="this.style.background='var(--d-accent)'" onmouseout="this.style.background='transparent'">+</span></td>`;
-    return `<tr class="dq-row" onclick="mmToggleRowDetail('${cifKey}',this)">${toggleCell}${MM_COLS.map(c => {
+    return `<tr class="dq-row" onclick="mmToggleRowDetail('${cifKey}',this)">${MM_COLS.map(c => {
       if (c.type === 'number') {
         const v = r[c.id];
         const color = c.id === 'ECL_PNL_FTM' && Math.abs(v) > 0 ? (v < 0 ? 'color:var(--d-pos)' : 'color:var(--d-neg)') : '';
@@ -2056,7 +2013,7 @@ function buildMajMovDataTab() {
     <div class="ptb-scroll">
       <table class="ptb-data">
         <thead><tr>${thHtml}</tr></thead>
-        <tbody>${rowsHtml || `<tr><td colspan="${MM_COLS.length+1}" style="text-align:center;padding:40px;color:var(--d-ink-4)">No rows match the current filters</td></tr>`}</tbody>
+        <tbody>${rowsHtml || `<tr><td colspan="${MM_COLS.length}" style="text-align:center;padding:40px;color:var(--d-ink-4)">No rows match the current filters</td></tr>`}</tbody>
       </table>
     </div>
     ${footerHtml}
@@ -2084,8 +2041,6 @@ function buildMajMovDataKpis() {
   const results = majMovState.results || [];
   const totals = Object.fromEntries(MM_KPI_BUCKETS.map(b => [b.key, 0]));
   results.forEach(r => {
-    const cifKey = `${r.CIF_NO}||${r.ENTITY}`;
-    if (mmIsInPresentation(cifKey)) return;
     for (const b of MM_KPI_BUCKETS) {
       if (b.match(r)) { totals[b.key] += (r.ECL_PNL_FTM || 0); break; }
     }
@@ -2102,304 +2057,6 @@ function buildMajMovDataKpis() {
   });
   if (!cards.length) return '';
   return `<div class="ptb-grid" style="grid-template-columns:repeat(4,1fr);">${cards.join('')}</div>`;
-}
-
-/** Compute the effective presentation rows for the current month, applying hide/add overrides */
-function mmEffectivePresRows(entityCode) {
-  const pres = majMovState.presentation || { mbs: [], msl: [] };
-  const baseRows = entityCode === '001' ? pres.mbs : pres.msl;
-  const mk = majMovState.month || '';
-  const hiddenSet = majMovState.hidden[mk] || new Set();
-  const addedSet = majMovState.added[mk] || new Set();
-  // Start with default rows, drop hidden ones
-  const out = baseRows.filter(r => !hiddenSet.has(`${r.CIF_NO}||${r.ENTITY}`));
-  // Append added rows (that aren't already in out)
-  const inOut = new Set(out.map(r => `${r.CIF_NO}||${r.ENTITY}`));
-  const allMap = majMovState.allWithBreakdown || {};
-  addedSet.forEach(k => {
-    if (inOut.has(k)) return;
-    const [cif, ent] = k.split('||');
-    if (ent !== entityCode) return;
-    const row = allMap[k];
-    if (row) out.push(row);
-  });
-  // Sort by |ECL P&L FTM| desc for a stable display order
-  return out.sort((a,b) => Math.abs(b.ECL_PNL_FTM) - Math.abs(a.ECL_PNL_FTM));
-}
-
-/** Hide a CIF from the presentation for the current month */
-function mmHidePresRow(cifKey) {
-  const mk = majMovState.month; if (!mk) return;
-  if (!majMovState.hidden[mk]) majMovState.hidden[mk] = new Set();
-  majMovState.hidden[mk].add(cifKey);
-  // If it was also manually added, remove from added set (user is reversing their own add)
-  if (majMovState.added[mk]) majMovState.added[mk].delete(cifKey);
-  renderMajMovResults(document.getElementById('view-majmov'));
-}
-
-/** Toggle a CIF's inclusion in presentation from the data tab (adds if out, removes if in) */
-function mmTogglePresFromData(cifKey) {
-  const mk = majMovState.month; if (!mk) return;
-  if (!majMovState.hidden[mk]) majMovState.hidden[mk] = new Set();
-  if (!majMovState.added[mk]) majMovState.added[mk] = new Set();
-  const allMap = majMovState.allWithBreakdown || {};
-  const row = allMap[cifKey]; if (!row) return;
-  const aboveThreshold = Math.abs(row.ECL_PNL_FTM) > 1000000;
-  // Determine current membership: it's "in" if (above threshold AND not hidden) OR (manually added)
-  const isHidden = majMovState.hidden[mk].has(cifKey);
-  const isAdded = majMovState.added[mk].has(cifKey);
-  const isIn = (aboveThreshold && !isHidden) || isAdded;
-  if (isIn) {
-    // Remove: if above-threshold → mark hidden; if manually added → remove from added
-    if (isAdded) majMovState.added[mk].delete(cifKey);
-    else majMovState.hidden[mk].add(cifKey);
-  } else {
-    // Add back: if above-threshold (hidden) → remove from hidden; else add to added
-    if (isHidden) majMovState.hidden[mk].delete(cifKey);
-    else majMovState.added[mk].add(cifKey);
-  }
-  renderMajMovResults(document.getElementById('view-majmov'));
-}
-
-/** Tell whether a CIF is currently in the presentation (for data-tab indicator) */
-function mmIsInPresentation(cifKey) {
-  const mk = majMovState.month; if (!mk) return false;
-  const allMap = majMovState.allWithBreakdown || {};
-  const row = allMap[cifKey]; if (!row) return false;
-  const aboveThreshold = Math.abs(row.ECL_PNL_FTM) > 1000000;
-  const isHidden = (majMovState.hidden[mk] || new Set()).has(cifKey);
-  const isAdded = (majMovState.added[mk] || new Set()).has(cifKey);
-  return (aboveThreshold && !isHidden) || isAdded;
-}
-
-function buildMajMovPresTab() {
-  const allResults = majMovState.results || [];
-  const isMillion = majMovState.unit === 'million';
-
-  // Display unit conversion — returns a number rounded to display precision
-  const toDisplay = (v) => {
-    if (v === null || v === undefined || isNaN(v)) return 0;
-    if (isMillion) return parseFloat((v / 1000000).toFixed(2));
-    return parseFloat((v).toFixed(2));
-  };
-  // Format for rendering
-  const fmtAmt = (v) => {
-    if (v === null || v === undefined || isNaN(v)) return '';
-    const d = toDisplay(v);
-    return (d < 0 ? '-' : '') + fmtN2(Math.abs(d));
-  };
-  // Tolerance for reconciliation in display unit
-  const reconTol = 0.005;  // half a display-cent
-
-  // Grand total for an entity: sum of ECL_PNL_FTM across ALL rows for that entity
-  const grandTotalForEntity = (entityCode) => allResults.filter(r => r.ENTITY === entityCode).reduce((s,r) => s + (r.ECL_PNL_FTM||0), 0);
-
-  // Split the "other" (non-visible) MSL rows by MKT_SUB_SEG_DESC into three buckets
-  const mslOtherBreakdown = (visibleKeys) => {
-    let sme = 0, ind = 0, rest = 0;
-    let smeMaxAbs = 0, indMaxAbs = 0;
-    allResults.forEach(r => {
-      if (r.ENTITY !== '003') return;
-      if (visibleKeys.has(`${r.CIF_NO}||${r.ENTITY}`)) return;
-      const seg = String(r.MKT_SUB_SEG_DESC||'').trim().toUpperCase();
-      const v = r.ECL_PNL_FTM || 0;
-      const av = Math.abs(v);
-      if (seg === 'CFS-SME') { sme += v; if (av > smeMaxAbs) smeMaxAbs = av; }
-      else if (seg === 'CFS-IND') { ind += v; if (av > indMaxAbs) indMaxAbs = av; }
-      else rest += v;
-    });
-    return { sme, ind, rest, smeMaxAbs, indMaxAbs };
-  };
-
-  // Ceiling (not round) so "individually below S$XXXk" holds even when max is 135k etc.
-  const fmtIndividuallyBelow = (maxAbs) => {
-    if (!maxAbs || maxAbs <= 0) return '';
-    const thresholdK = Math.ceil(maxAbs / 100000) * 100;
-    return `Individually below S$${thresholdK}k`;
-  };
-
-  // Shared colgroup so MBS & MSL column widths are aligned. Extra narrow first column for the remove button.
-  const colgroup = `<colgroup>
-    <col style="width:32px">
-    <col style="width:100px">
-    <col style="width:240px">
-    <col style="width:115px">
-    <col style="width:115px">
-    <col style="width:125px">
-    <col style="width:125px">
-    <col style="width:125px">
-    <col style="width:85px">
-    <col style="width:85px">
-    <col style="width:105px">
-    <col style="width:105px">
-  </colgroup>`;
-
-  const buildEntityTable = (title, rows, entityCode) => {
-    const grandTotal = grandTotalForEntity(entityCode);
-    const grandTotalDisp = toDisplay(grandTotal);
-
-    if (!rows.length) {
-      return `<div style="padding:16px 20px"><div style="font-size:12px;font-weight:700;color:var(--ink);margin-bottom:8px;">${title}</div><div style="font-size:11px;color:var(--ink3)">No CIFs to show — use the + button in the Data tab to add borrowers.</div></div>`;
-    }
-    const thHtml = `<tr>
-      <th></th>
-      <th>CIF NO</th><th>CIF NAME</th>
-      <th style="text-align:right">CURRENT ECL</th><th style="text-align:right">PREVIOUS ECL</th>
-      <th style="text-align:right">ECL P&L FTM</th>
-      <th style="text-align:right">CURRENT EAD</th><th style="text-align:right">PREVIOUS EAD</th>
-      <th>CURR RATING</th><th>PREV RATING</th>
-      <th>CURR STAGE</th><th>PREV STAGE</th>
-    </tr>`;
-    const bodyHtml = rows.map(r => {
-      const maxSubs = Math.max(r.currSubs.length, r.prevSubs.length, 1);
-      const pnlColor = Math.abs(r.ECL_PNL_FTM) > 0 ? (r.ECL_PNL_FTM < 0 ? 'color:var(--green)' : 'color:var(--red)') : '';
-      // Reconciliation check in displayed unit: does (CURR_ECL - PREV_ECL) == ECL_PNL_FTM ?
-      const currDisp = toDisplay(r.CURR_ECL||0);
-      const prevDisp = toDisplay(r.PREV_ECL||0);
-      const pnlDisp = toDisplay(r.ECL_PNL_FTM||0);
-      const computed = parseFloat((currDisp - prevDisp).toFixed(2));
-      const reconOk = Math.abs(computed - pnlDisp) < reconTol;
-      const reconIcon = !reconOk
-        ? `<span style="display:inline-block;margin-left:4px;color:var(--amber);font-size:11px;cursor:help;" title="Rounding mismatch: ${fmtN2(currDisp)} − ${fmtN2(prevDisp)} = ${fmtN2(computed)}, but ECL P&L FTM shown as ${fmtN2(pnlDisp)}">⚠</span>`
-        : '';
-      const cifKey = `${r.CIF_NO}||${r.ENTITY}`;
-      let rowsOut = '';
-      for (let i = 0; i < maxSubs; i++) {
-        const curr = r.currSubs[i];
-        const prev = r.prevSubs[i];
-        const isFirst = i === 0;
-        const removeCell = isFirst
-          ? `<td style="text-align:center;vertical-align:top;padding:6px 4px;"><span onclick="mmHidePresRow('${cifKey}')" title="Remove this borrower from presentation" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:3px;background:transparent;color:var(--ink3);cursor:pointer;font-size:12px;font-weight:600;line-height:1;" onmouseover="this.style.background='var(--red-bg)';this.style.color='var(--red)'" onmouseout="this.style.background='transparent';this.style.color='var(--ink3)'">✕</span></td>`
-          : `<td></td>`;
-        rowsOut += `<tr${isFirst?' style="border-top:2px solid var(--border)"':''}>
-          ${removeCell}
-          <td style="white-space:nowrap;vertical-align:top;${isFirst?'font-weight:600':'color:transparent'}">${isFirst ? (r.CIF_NO||'—') : ''}</td>
-          <td style="white-space:nowrap;vertical-align:top;${isFirst?'font-weight:600':'color:transparent'};overflow:hidden;text-overflow:ellipsis;">${isFirst ? (r.CIF_NAME||'—') : ''}</td>
-          <td class="mono-val" style="text-align:right;vertical-align:top;">${curr ? fmtAmt(curr.ecl) : ''}</td>
-          <td class="mono-val" style="text-align:right;vertical-align:top;">${prev ? fmtAmt(prev.ecl) : ''}</td>
-          <td class="mono-val" style="text-align:right;vertical-align:top;font-weight:${isFirst?'600':'400'};${isFirst?pnlColor:''}">${isFirst ? (fmtAmt(r.ECL_PNL_FTM) + reconIcon) : ''}</td>
-          <td class="mono-val" style="text-align:right;vertical-align:top;">${curr ? fmtAmt(curr.ead) : ''}</td>
-          <td class="mono-val" style="text-align:right;vertical-align:top;">${prev ? fmtAmt(prev.ead) : ''}</td>
-          <td style="white-space:nowrap;vertical-align:top;">${curr ? (curr.rating||'—') : ''}</td>
-          <td style="white-space:nowrap;vertical-align:top;">${prev ? (prev.rating||'—') : ''}</td>
-          <td style="white-space:nowrap;vertical-align:top;">${curr ? (curr.stage||'—') : ''}</td>
-          <td style="white-space:nowrap;vertical-align:top;">${prev ? (prev.stage||'—') : ''}</td>
-        </tr>`;
-      }
-      return rowsOut;
-    }).join('');
-
-    // Subtotal = sum of DISPLAYED values of visible borrowers' ECL P&L FTM (for Million view: sum of rounded millions — so Subtotal + Other = Grand exactly)
-    const subtotalDisp = rows.reduce((s,r) => s + toDisplay(r.ECL_PNL_FTM||0), 0);
-    const subtotalDispRounded = parseFloat(subtotalDisp.toFixed(2));
-    const fmtDisp = (d) => (d < 0 ? '-' : '') + fmtN2(Math.abs(d));
-    const colorFor = (d) => Math.abs(d) > 0 ? (d < 0 ? 'color:var(--green)' : 'color:var(--red)') : '';
-    const subtotalColor = colorFor(subtotalDispRounded);
-    const grandColor = colorFor(grandTotalDisp);
-
-    let footerHtml;
-    if (entityCode === '003') {
-      // MSL: split "other" into 3 rows by MKT_SUB_SEG_DESC
-      const visibleKeys = new Set(rows.map(r => `${r.CIF_NO}||${r.ENTITY}`));
-      const { sme, ind, rest, smeMaxAbs, indMaxAbs } = mslOtherBreakdown(visibleKeys);
-      const smeDisp = toDisplay(sme);
-      const indDisp = toDisplay(ind);
-      // "Other non-retail" is the balancing figure in Million view; in Whole view use computed value
-      const restDisp = isMillion
-        ? parseFloat((grandTotalDisp - subtotalDispRounded - smeDisp - indDisp).toFixed(2))
-        : toDisplay(rest);
-      const smeColor = colorFor(smeDisp), indColor = colorFor(indDisp), restColor = colorFor(restDisp);
-      const smeRemark = fmtIndividuallyBelow(smeMaxAbs);
-      const indRemark = fmtIndividuallyBelow(indMaxAbs);
-      const remarkCell = (text) => `<td style="padding:6px 10px;font-size:10px;color:var(--ink3);font-style:italic;white-space:nowrap">${text || ''}</td>`;
-      footerHtml = `
-        <tr style="border-top:2px solid var(--border);background:var(--paper2);">
-          <td></td>
-          <td colspan="4" style="padding:6px 10px;font-weight:600;font-size:11px">Subtotal (above borrowers)</td>
-          <td class="mono-val" style="padding:6px 10px;text-align:right;font-weight:700;${subtotalColor}">${fmtDisp(subtotalDispRounded)}</td>
-          <td colspan="6"></td>
-        </tr>
-        <tr style="background:var(--paper);">
-          <td></td>
-          <td colspan="4" style="padding:6px 10px;font-size:11px;color:var(--ink2)">Movement from RSME borrowers</td>
-          <td class="mono-val" style="padding:6px 10px;text-align:right;font-weight:500;${smeColor}">${fmtDisp(smeDisp)}</td>
-          ${remarkCell(smeRemark)}
-          <td colspan="5"></td>
-        </tr>
-        <tr style="background:var(--paper);">
-          <td></td>
-          <td colspan="4" style="padding:6px 10px;font-size:11px;color:var(--ink2)">Movement from individual borrowers</td>
-          <td class="mono-val" style="padding:6px 10px;text-align:right;font-weight:500;${indColor}">${fmtDisp(indDisp)}</td>
-          ${remarkCell(indRemark)}
-          <td colspan="5"></td>
-        </tr>
-        <tr style="background:var(--paper);">
-          <td></td>
-          <td colspan="4" style="padding:6px 10px;font-size:11px;color:var(--ink2)">Movement from other non-retail borrowers${isMillion?' <span style="font-size:9px;color:var(--ink4);font-style:italic">(balancing)</span>':''}</td>
-          <td class="mono-val" style="padding:6px 10px;text-align:right;font-weight:500;${restColor}">${fmtDisp(restDisp)}</td>
-          <td colspan="6"></td>
-        </tr>
-        <tr style="border-top:2px solid var(--ink);background:var(--paper2);">
-          <td></td>
-          <td colspan="4" style="padding:7px 10px;font-weight:700;font-size:11px">Grand Total</td>
-          <td class="mono-val" style="padding:7px 10px;text-align:right;font-weight:700;${grandColor}">${fmtDisp(grandTotalDisp)}</td>
-          <td colspan="6"></td>
-        </tr>`;
-    } else {
-      // MBS: single "other" balancing row
-      const otherDisp = parseFloat((grandTotalDisp - subtotalDispRounded).toFixed(2));
-      const otherColor = colorFor(otherDisp);
-      footerHtml = `
-        <tr style="border-top:2px solid var(--border);background:var(--paper2);">
-          <td></td>
-          <td colspan="4" style="padding:6px 10px;font-weight:600;font-size:11px">Subtotal (above borrowers)</td>
-          <td class="mono-val" style="padding:6px 10px;text-align:right;font-weight:700;${subtotalColor}">${fmtDisp(subtotalDispRounded)}</td>
-          <td colspan="6"></td>
-        </tr>
-        <tr style="background:var(--paper);">
-          <td></td>
-          <td colspan="4" style="padding:6px 10px;font-size:11px;color:var(--ink2)">Movement from other borrowers${isMillion?' <span style="font-size:9px;color:var(--ink4);font-style:italic">(balancing)</span>':''}</td>
-          <td class="mono-val" style="padding:6px 10px;text-align:right;font-weight:500;${otherColor}">${fmtDisp(otherDisp)}</td>
-          <td colspan="6"></td>
-        </tr>
-        <tr style="border-top:2px solid var(--ink);background:var(--paper2);">
-          <td></td>
-          <td colspan="4" style="padding:7px 10px;font-weight:700;font-size:11px">Grand Total</td>
-          <td class="mono-val" style="padding:7px 10px;text-align:right;font-weight:700;${grandColor}">${fmtDisp(grandTotalDisp)}</td>
-          <td colspan="6"></td>
-        </tr>`;
-    }
-
-    return `<div style="padding:12px 20px 6px;font-size:12px;font-weight:700;color:var(--ink);">${title}</div>
-      <table class="data-table dt-modern" style="font-size:11px;table-layout:fixed;width:100%;">
-        ${colgroup}
-        <thead>${thHtml}</thead>
-        <tbody>${bodyHtml}${footerHtml}</tbody>
-      </table>`;
-  };
-
-  const mbsRows = mmEffectivePresRows('001');
-  const mslRows = mmEffectivePresRows('003');
-
-  const isWhole = !isMillion;
-  const unitToggleHtml = `<div class="ptb-table-toolbar">
-    <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--d-ink-3);">
-      <span>Units:</span>
-      <div class="ptb-seg" title="Toggle with M">
-        <button class="${isWhole?'active':''}" onclick="majMovState.unit='whole';renderMajMovResults(document.getElementById('view-majmov'))">Whole Number</button>
-        <button class="${isMillion?'active':''}" onclick="majMovState.unit='million';renderMajMovResults(document.getElementById('view-majmov'))">Million</button>
-      </div>
-    </div>
-  </div>`;
-
-  return `<div class="ptb-card ptb-table-card">
-    ${unitToggleHtml}
-    <div style="padding:4px 0 12px;">
-      ${buildEntityTable('MBS', mbsRows, '001')}
-      <div style="height:12px"></div>
-      ${buildEntityTable('MSL', mslRows, '003')}
-    </div>
-  </div>`;
 }
 
 function openMajMovFilter(colId, triggerEl) {
@@ -2437,101 +2094,22 @@ function exportMajMov() {
   if (!results || !results.length) return;
   const wb = XLSX.utils.book_new();
   const mk = majMovState.month || 'export';
-  const isPresentation = majMovState.tab === 'presentation';
-
-  if (isPresentation) {
-    // Presentation view: export MBS and MSL presentation tables (two sheets), respecting user hide/add overrides
-    const isMillion = majMovState.unit === 'million';
-    // Convert number to display precision (millions with 2dp, or whole with 2dp)
-    const toDisplay = (v) => {
-      if (v === null || v === undefined || isNaN(v) || v === '') return 0;
-      const n = parseFloat(v);
-      if (isNaN(n)) return 0;
-      return isMillion ? parseFloat((n / 1000000).toFixed(2)) : parseFloat(n.toFixed(2));
-    };
-    const grandTotalForEntity = (entityCode) => results.filter(r => r.ENTITY === entityCode).reduce((s,r) => s + (r.ECL_PNL_FTM||0), 0);
-    const buildPresSheet = (rows, entityCode) => {
-      const out = [];
-      rows.forEach(r => {
-        const maxSubs = Math.max(r.currSubs.length, r.prevSubs.length, 1);
-        for (let i = 0; i < maxSubs; i++) {
-          const curr = r.currSubs[i], prev = r.prevSubs[i], isFirst = i === 0;
-          out.push({
-            'CIF NO': isFirst ? r.CIF_NO : '',
-            'CIF NAME': isFirst ? r.CIF_NAME : '',
-            'CURRENT ECL': curr ? toDisplay(curr.ecl) : '',
-            'PREVIOUS ECL': prev ? toDisplay(prev.ecl) : '',
-            'ECL P&L FTM': isFirst ? toDisplay(r.ECL_PNL_FTM) : '',
-            'CURRENT EAD': curr ? toDisplay(curr.ead) : '',
-            'PREVIOUS EAD': prev ? toDisplay(prev.ead) : '',
-            'CURR RATING': curr ? curr.rating : '',
-            'PREV RATING': prev ? prev.rating : '',
-            'CURR STAGE': curr ? curr.stage : '',
-            'PREV STAGE': prev ? prev.stage : ''
-          });
-        }
-      });
-      // Balancing math matches what the UI shows
-      const subtotalDisp = parseFloat(rows.reduce((s,r) => s + toDisplay(r.ECL_PNL_FTM||0), 0).toFixed(2));
-      const grandTotalDisp = toDisplay(grandTotalForEntity(entityCode));
-      out.push({ 'CIF NO': '', 'CIF NAME': 'Subtotal (above borrowers)', 'ECL P&L FTM': subtotalDisp });
-      if (entityCode === '003') {
-        // MSL: split "other" into 3 rows by MKT_SUB_SEG_DESC
-        const visibleKeys = new Set(rows.map(r => `${r.CIF_NO}||${r.ENTITY}`));
-        let smeRaw = 0, indRaw = 0, restRaw = 0;
-        let smeMaxAbs = 0, indMaxAbs = 0;
-        results.forEach(r => {
-          if (r.ENTITY !== '003') return;
-          if (visibleKeys.has(`${r.CIF_NO}||${r.ENTITY}`)) return;
-          const seg = String(r.MKT_SUB_SEG_DESC||'').trim().toUpperCase();
-          const v = r.ECL_PNL_FTM || 0;
-          const av = Math.abs(v);
-          if (seg === 'CFS-SME') { smeRaw += v; if (av > smeMaxAbs) smeMaxAbs = av; }
-          else if (seg === 'CFS-IND') { indRaw += v; if (av > indMaxAbs) indMaxAbs = av; }
-          else restRaw += v;
-        });
-        const smeDisp = toDisplay(smeRaw);
-        const indDisp = toDisplay(indRaw);
-        const restDisp = isMillion
-          ? parseFloat((grandTotalDisp - subtotalDisp - smeDisp - indDisp).toFixed(2))
-          : toDisplay(restRaw);
-        const fmtIndBelow = (maxAbs) => (!maxAbs || maxAbs <= 0) ? '' : `Individually below S$${Math.ceil(maxAbs / 100000) * 100}k`;
-        out.push({ 'CIF NO': '', 'CIF NAME': 'Movement from RSME borrowers', 'ECL P&L FTM': smeDisp, 'REMARK': fmtIndBelow(smeMaxAbs) });
-        out.push({ 'CIF NO': '', 'CIF NAME': 'Movement from individual borrowers', 'ECL P&L FTM': indDisp, 'REMARK': fmtIndBelow(indMaxAbs) });
-        out.push({ 'CIF NO': '', 'CIF NAME': isMillion ? 'Movement from other non-retail borrowers (balancing)' : 'Movement from other non-retail borrowers', 'ECL P&L FTM': restDisp });
-      } else {
-        const otherDisp = parseFloat((grandTotalDisp - subtotalDisp).toFixed(2));
-        out.push({ 'CIF NO': '', 'CIF NAME': isMillion ? 'Movement from other borrowers (balancing)' : 'Movement from other borrowers', 'ECL P&L FTM': otherDisp });
-      }
-      out.push({ 'CIF NO': '', 'CIF NAME': 'Grand Total', 'ECL P&L FTM': grandTotalDisp });
-      return out;
-    };
-    const mbsRows = mmEffectivePresRows('001');
-    const mslRows = mmEffectivePresRows('003');
-    if (mbsRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildPresSheet(mbsRows, '001')), 'MBS');
-    if (mslRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildPresSheet(mslRows, '003')), 'MSL');
-    if (!mbsRows.length && !mslRows.length) { alert('No presentation rows to export.'); return; }
-    const suffix = isMillion ? '_million' : '';
-    XLSX.writeFile(wb, `major_movement_presentation_${mk}${suffix}.xlsx`);
-  } else {
-    // Data view: export full data only (apply current filters)
-    const filters = majMovState.filters || {};
-    const filtered = results.filter(r => {
-      for (const c of MM_COLS) {
-        const f = filters[c.id];
-        if (fdIsActive(f) && !fdMatch(c.type === 'number' ? fmtN2(r[c.id]) : String(r[c.id]||''), f)) return false;
-      }
-      return true;
-    });
-    const dataRows = filtered.map(r => ({
-      'CIF NO': r.CIF_NO, 'CIF NAME': r.CIF_NAME, 'ENTITY': r.ENTITY,
-      'MKT SUB SEG DESC': r.MKT_SUB_SEG_DESC || '',
-      'CURRENT ECL': r.CURR_ECL, 'PREVIOUS ECL': r.PREV_ECL,
-      'ECL P&L FTM': r.ECL_PNL_FTM
-    }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataRows), 'Data');
-    XLSX.writeFile(wb, `major_movement_data_${mk}.xlsx`);
-  }
+  const filters = majMovState.filters || {};
+  const filtered = results.filter(r => {
+    for (const c of MM_COLS) {
+      const f = filters[c.id];
+      if (fdIsActive(f) && !fdMatch(c.type === 'number' ? fmtN2(r[c.id]) : String(r[c.id]||''), f)) return false;
+    }
+    return true;
+  });
+  const dataRows = filtered.map(r => ({
+    'CIF NO': r.CIF_NO, 'CIF NAME': r.CIF_NAME, 'ENTITY': r.ENTITY,
+    'MKT SUB SEG DESC': r.MKT_SUB_SEG_DESC || '',
+    'CURRENT ECL': r.CURR_ECL, 'PREVIOUS ECL': r.PREV_ECL,
+    'ECL P&L FTM': r.ECL_PNL_FTM
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataRows), 'Data');
+  XLSX.writeFile(wb, `major_movement_data_${mk}.xlsx`);
 }
 
 // ============================================================
@@ -2917,14 +2495,18 @@ function runQuery() {
   let rows='';
   pts.forEach(p => {
     [{g:p.drGL,s:'DR',t:p.drType},{g:p.crGL,s:'CR',t:p.crType}].forEach(k => {
-      rows+=`<tr><td><span class="tag ${dim.ent==='128'?'tag-mbs':'tag-msl'}">${dim.ent}</span></td><td>${dim.rc}</td><td class="mono-val">${k.g||'–'}</td><td>${p.nature}</td><td><span style="font-size:10px;padding:2px 7px;border-radius:3px;background:${k.t==='BS'?'var(--blue-bg)':'var(--amber-bg)'};color:${k.t==='BS'?'var(--blue)':'var(--amber)'};font-weight:500">${k.t}</span></td><td>${dim.prod}</td><td>${dim.interco}</td><td>${dim.islamic}</td><td>${dim.cur}</td><td><b>${k.s}</b></td><td class="mono-val" style="text-align:right">${fmtN2(p.amount)}</td></tr>`;
+      rows+=`<tr><td>${dim.ent}</td><td>${dim.rc}</td><td>${k.g||'–'}</td><td>${p.nature}</td><td>${k.t}</td><td>${dim.prod}</td><td>${dim.interco}</td><td>${dim.islamic}</td><td>${dim.cur}</td><td>${k.s}</td><td class="num">${fmtN2(p.amount)}</td></tr>`;
     });
   });
   area.innerHTML=`
-    <div class="query-result-header"><div class="qrh-id">${accN}</div><div class="qrh-meta"><span><b>Entity:</b> ${dim.ent}</span><span><b>Currency:</b> ${dim.cur}</span><span><b>Level 3:</b> ${l3}</span><span><b>SEC CLS:</b> ${acc.SEC_CLS_CD}</span><span><b>Product:</b> ${dim.prod}</span><span><b>Islamic:</b> ${acc.V_FINANCING_CODE==='I'?'Yes':'No'}</span></div></div>
-    <div class="journal-entries"><div class="je-header">Expected Journal Entries</div>
-    <div class="table-wrap" style="max-height:400px;overflow:auto;"><table class="data-table dt-modern"><thead><tr><th>Entity</th><th>RC</th><th>GL Number</th><th>GL Nature</th><th>BS/PL</th><th>Product</th><th>Interco</th><th>Islamic</th><th>Currency</th><th>DR/CR</th><th style="text-align:right">Amount</th></tr></thead>
-    <tbody>${rows||'<tr><td colspan="11" style="text-align:center;color:var(--ink3);padding:20px">No entries with non-zero amounts found.</td></tr>'}</tbody></table></div></div>`;
+    <div class="ptb-card ptb-table-card">
+      <div class="ptb-scroll">
+        <table class="ptb-data">
+          <thead><tr><th>Entity</th><th>RC</th><th>GL Number</th><th>GL Nature</th><th>BS/PL</th><th>Product</th><th>Interco</th><th>Islamic</th><th>Currency</th><th>DR/CR</th><th class="num">Amount</th></tr></thead>
+          <tbody>${rows||'<tr><td colspan="11" style="text-align:center;color:var(--d-ink-4);padding:40px">No entries with non-zero amounts found.</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>`;
 }
 
 // ============================================================
@@ -5841,7 +5423,7 @@ let _mtmSimIdx = null;
 function openMtmSim(idx) {
   const row = mtmState.results[idx]; if (!row) return; _mtmSimIdx = idx;
   document.getElementById('mtm-sim-title').textContent = 'MTM Simulator';
-  document.getElementById('mtm-sim-ac').textContent = `${row.AC_CODE}  ·  ${row.CIF_NAME||''}  ·  ${row.CURCY_CODE}`;
+  document.getElementById('mtm-sim-ac').textContent = row.AC_CODE;
   document.getElementById('mtm-sim-intrt').value = parseFloat(row.CURR_INT_RT||0);
   document.getElementById('mtm-sim-wair').value = typeof row.WAIR === 'number' ? row.WAIR.toFixed(6) : row.WAIR;
   runMtmSim(); document.getElementById('mtm-sim-bg').classList.add('show');
