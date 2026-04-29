@@ -5281,6 +5281,7 @@ async function runMtmFvoci() {
 }
 
 let _mtmTab = 'listing';
+let _mtmListGrouped = false;
 const mtmFilters = {};
 let mtmOnlyBreaks = false;
 let mtmStatusFilter = 'all';
@@ -5382,16 +5383,18 @@ function renderMtmResults(container) {
   const mtmProcDate = parseSasDate(mtmProcRaw);
   const period = mtmProcDate ? fmtMMMyyyy(mtmProcDate) : null;
 
-  const isListing = _mtmTab === 'listing', isJournal = _mtmTab === 'journal', isWair = _mtmTab === 'wair';
+  const isJournal = _mtmTab === 'journal';
+  const isListing = _mtmTab === 'listing';
+  const isWair = isListing && _mtmListGrouped;
 
   // ===== Page head (Title + period, view-mode seg + Export XLSX) =====
   const tabBtn = (k, label) => {
     const active = _mtmTab === k;
-    return `<button class="${active?'active':''}" onclick="_mtmTab='${k}';_mtmPage=1;renderMtmResults(document.getElementById('view-mtmfvoci'))">${label}</button>`;
+    return `<button class="${active?'active':''}" onclick="mtmSetTab('${k}')">${label}</button>`;
   };
   const groupBtnClass = isWair ? 'ptb-btn ptb-btn-active' : 'ptb-btn';
   const groupBtnLabel = isWair ? 'Grouped · WAIR' : 'Group by';
-  const groupBtnHtml = `<button class="${groupBtnClass}" onclick="mtmToggleWairGroup()" title="Group by WAIR">
+  const groupBtnHtml = isJournal ? '' : `<button class="${groupBtnClass}" onclick="mtmToggleWairGroup()" title="Group by WAIR">
     <svg><use href="#i-layers"/></svg>${groupBtnLabel}
   </button>`;
   const pageHeadHtml = `
@@ -5451,9 +5454,9 @@ function renderMtmResults(container) {
     </div>`;
 
   let bodyHtml;
-  if (isListing)      bodyHtml = buildMtmListingCard(rows, filtered, tableCols, dataCols, isNumRight, formatCell, aboveThresholdCount, belowThresholdCount, groupBtnHtml);
-  else if (isJournal) bodyHtml = buildMtmJournalCards(rows, groupBtnHtml);
-  else                bodyHtml = buildMtmWairCard(groupBtnHtml);
+  if (isWair)         bodyHtml = buildMtmWairCard(groupBtnHtml);
+  else if (isListing) bodyHtml = buildMtmListingCard(rows, filtered, tableCols, dataCols, isNumRight, formatCell, aboveThresholdCount, belowThresholdCount, groupBtnHtml);
+  else                bodyHtml = buildMtmJournalCards(rows, groupBtnHtml);
 
   container.innerHTML = `<div class="ptb-v2">${pageHeadHtml}${kpiHtml}${bodyHtml}</div>`;
 }
@@ -5661,6 +5664,7 @@ function mtmSetFilter(onlyBreaks) {
     Object.keys(mtmFilters).forEach(k => delete mtmFilters[k]);
     mtmStatusFilter = 'all';
     _mtmTab = 'listing';
+    _mtmListGrouped = false;
   }
   _mtmPage = 1;
   renderMtmResults(document.getElementById('view-mtmfvoci'));
@@ -5672,8 +5676,16 @@ function mtmSetStatusFilter(f) {
   renderMtmResults(document.getElementById('view-mtmfvoci'));
 }
 
+function mtmSetTab(tab) {
+  _mtmTab = tab;
+  if (tab === 'journal') _mtmListGrouped = false;
+  _mtmPage = 1;
+  renderMtmResults(document.getElementById('view-mtmfvoci'));
+}
+
 function mtmToggleWairGroup() {
-  _mtmTab = (_mtmTab === 'wair') ? 'listing' : 'wair';
+  _mtmTab = 'listing';
+  _mtmListGrouped = !_mtmListGrouped;
   _mtmPage = 1;
   renderMtmResults(document.getElementById('view-mtmfvoci'));
 }
