@@ -1910,7 +1910,7 @@ function renderMajMovResults(container) {
   const prevLabel = MONTH_NAMES[pm-1]+' '+py;
   const reportingMonth = fmtMMMyyyy(new Date(y, m-1, 1));
 
-  const pageHeadHtml = `<div class="ptb-v2"><div class="ptb-page-head">
+  const pageHeadHtml = `<div class="ptb-v2" style="padding:16px 16px 8px;flex:none;overflow:visible;"><div class="ptb-page-head" style="margin-bottom:0;">
     <div class="ptb-page-title">
       <h1>Major Movement</h1>
       <div class="ptb-meta"><span>Period <b>${reportingMonth}</b></span></div>
