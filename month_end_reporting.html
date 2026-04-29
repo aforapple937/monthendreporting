@@ -1903,52 +1903,42 @@ async function runMajorMovement() {
 function renderMajMovResults(container) {
   const results = majMovState.results;
   if (!results) return;
-  const avail = mmAvailableMonths();
   const mk = majMovState.month;
   const [y,m] = mk.split('-').map(Number);
-  const pm = m===1?12:m-1, py = m===1?y-1:y;
-  const prevLabel = MONTH_NAMES[pm-1]+' '+py;
   const reportingMonth = fmtMMMyyyy(new Date(y, m-1, 1));
 
-  const pageHeadHtml = `<div style="flex:none;padding:16px 20px 10px;">
-    <h1 style="margin:0 0 4px;font-size:24px;letter-spacing:-0.02em;font-weight:600;color:#0A0A0A;font-family:'Inter','IBM Plex Sans',system-ui,sans-serif;">Major Movement</h1>
-    <div style="font-size:12px;color:#6B6B68;">Period <b style="font-family:'JetBrains Mono','IBM Plex Mono',ui-monospace,monospace;color:#3A3A38;font-weight:500;">${reportingMonth}</b></div>
-  </div>`;
-
   const isData = majMovState.tab === 'data', isPres = majMovState.tab === 'presentation';
-  const activeStyle = 'background:var(--ink);color:#fff;border-color:var(--ink)';
-
-  const tabsHtml = `<div style="display:flex;gap:4px;">
-    <button class="btn btn-sm" style="${isPres?activeStyle:''}" onclick="majMovState.tab='presentation';renderMajMovResults(document.getElementById('view-majmov'))">Presentation</button>
-    <button class="btn btn-sm" style="${isData?activeStyle:''}" onclick="majMovState.tab='data';renderMajMovResults(document.getElementById('view-majmov'))">Data</button>
-  </div>`;
-
-  const toolbarHtml = `<div class="table-toolbar">
-    ${tabsHtml}
-    <div style="margin-left:auto;display:flex;gap:6px;">
-      ${isData ? `<button class="btn btn-sm" onclick="majMovState.filters={};majMovState.page=0;renderMajMovResults(document.getElementById('view-majmov'))" title="Reset filters (F)">Reset filters</button>` : ''}
-      <button class="btn btn-sm" onclick="exportMajMov()" title="Export (E)">Export XLSX</button>
-    </div>
-  </div>`;
-
-  // Unit toggle row — only for Presentation view
   if (!majMovState.unit) majMovState.unit = 'whole';
-  const isWhole = majMovState.unit === 'whole', isMillion = majMovState.unit === 'million';
-  const unitToggleHtml = isPres ? `<div class="table-toolbar" style="border-top:none;padding-top:4px;">
-    <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--ink3);">
-      <span>Units:</span>
-      <div style="display:inline-flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;" title="Toggle with M">
-        <button style="border:none;padding:4px 12px;font-size:11px;font-family:var(--sans);cursor:pointer;background:${isWhole?'var(--ink)':'#fff'};color:${isWhole?'#fff':'var(--ink2)'};" onclick="majMovState.unit='whole';renderMajMovResults(document.getElementById('view-majmov'))">Whole Number</button>
-        <button style="border:none;border-left:1px solid var(--border);padding:4px 12px;font-size:11px;font-family:var(--sans);cursor:pointer;background:${isMillion?'var(--ink)':'#fff'};color:${isMillion?'#fff':'var(--ink2)'};" onclick="majMovState.unit='million';renderMajMovResults(document.getElementById('view-majmov'))">Million</button>
+
+  const tabBtn = (k, label, active) => `<button class="${active?'active':''}" onclick="majMovState.tab='${k}';renderMajMovResults(document.getElementById('view-majmov'))">${label}</button>`;
+
+  const pageHeadHtml = `
+    <div class="ptb-page-head">
+      <div class="ptb-page-title">
+        <h1>Major Movement</h1>
+        <div class="ptb-meta">
+          <span>Period <b>${reportingMonth}</b></span>
+        </div>
       </div>
-    </div>
-  </div>` : '';
+      <div class="ptb-page-actions">
+        <div class="ptb-seg">
+          ${tabBtn('presentation', 'Presentation', isPres)}
+          ${tabBtn('data', 'Data', isData)}
+        </div>
+        <button class="ptb-btn primary" onclick="exportMajMov()" title="Export (E)">
+          <svg><use href="#i-download"/></svg>Export
+        </button>
+      </div>
+    </div>`;
 
   const bodyHtml = isData ? buildMajMovDataTab() : buildMajMovPresTab();
 
-  container.innerHTML = `<div class="results-view" style="display:flex;flex-direction:column;overflow:hidden;">
-    ${pageHeadHtml}${toolbarHtml}${unitToggleHtml}${bodyHtml}
-  </div>`;
+  container.innerHTML = `<div class="ptb-v2">${pageHeadHtml}${bodyHtml}</div>`;
+}
+
+function mmrSetPage(p) {
+  majMovState.page = p - 1;
+  renderMajMovResults(document.getElementById('view-majmov'));
 }
 
 function buildMajMovDataTab() {
@@ -1974,41 +1964,41 @@ function buildMajMovDataTab() {
   const pageStart = majMovState.page * ps + 1;
   const pageEnd = Math.min((majMovState.page + 1) * ps, filtered.length);
 
-  const thHtml = '<th style="width:32px;text-align:center"></th>' + MM_COLS.map(c => {
+  const thHtml = '<th style="width:32px"></th>' + MM_COLS.map(c => {
     const cf = majMovState.filters[c.id]; const active = fdIsActive(cf);
-    return `<th class="th-filterable ${active?'th-filtered':''}" style="${c.type==='number'?'text-align:right':''}" onclick="openMajMovFilter('${c.id}',this)">${c.label}<span class="th-caret">▾</span></th>`;
+    const numCls = c.type === 'number' ? ' num' : '';
+    return `<th class="${active?'filtered':''}${numCls}" data-col="${c.id}" onclick="openMajMovFilter('${c.id}',this)">${c.label}<span class="fcol"></span></th>`;
   }).join('');
   const rowsHtml = pageRows.map(r => {
     const cifKey = `${r.CIF_NO}||${r.ENTITY}`;
     const inPres = mmIsInPresentation(cifKey);
     const toggleCell = inPres
-      ? `<td style="text-align:center;padding:4px 2px;"><span title="In presentation" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:3px;background:var(--paper2);color:var(--ink2);font-size:13px;font-weight:600;line-height:1;border:1px solid var(--border);">✓</span></td>`
-      : `<td style="text-align:center;padding:4px 2px;"><span onclick="mmTogglePresFromData('${cifKey}')" title="Add to presentation" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:3px;background:transparent;color:var(--gold);cursor:pointer;font-size:13px;font-weight:600;line-height:1;border:1px solid var(--gold);" onmouseover="this.style.background='var(--gold)';this.style.color='#fff'" onmouseout="this.style.background='transparent';this.style.color='var(--gold)'">+</span></td>`;
+      ? `<td style="text-align:center"><span title="In presentation" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:3px;background:var(--d-line-2);color:var(--d-ink-2);font-size:13px;font-weight:600;line-height:1;border:1px solid var(--d-line);">✓</span></td>`
+      : `<td style="text-align:center"><span onclick="event.stopPropagation();mmTogglePresFromData('${cifKey}')" title="Add to presentation" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:3px;background:transparent;color:var(--d-accent-ink);cursor:pointer;font-size:13px;font-weight:600;line-height:1;border:1px solid var(--d-accent);" onmouseover="this.style.background='var(--d-accent)'" onmouseout="this.style.background='transparent'">+</span></td>`;
     return `<tr>${toggleCell}${MM_COLS.map(c => {
       if (c.type === 'number') {
         const v = r[c.id];
-        const color = c.id === 'ECL_PNL_FTM' && Math.abs(v) > 0 ? (v < 0 ? 'color:var(--green)' : 'color:var(--red)') : '';
-        return `<td class="mono-val" style="text-align:right;${color}">${v<0?'-':''}${fmtN2(Math.abs(v))}</td>`;
+        const color = c.id === 'ECL_PNL_FTM' && Math.abs(v) > 0 ? (v < 0 ? 'color:var(--d-pos)' : 'color:var(--d-neg)') : '';
+        return `<td class="num" style="${color}">${v<0?'-':''}${fmtN2(Math.abs(v))}</td>`;
       }
-      return `<td style="white-space:nowrap">${r[c.id]||'—'}</td>`;
+      return `<td>${r[c.id]||'—'}</td>`;
     }).join('')}</tr>`;
   }).join('');
-  const paginationHtml = filtered.length > ps ? `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--ink3);flex-shrink:0;">
-    <div>${fmtShowingLabel(pageStart, pageEnd, filtered.length, '', false)}</div>
-    <div style="display:flex;gap:4px;">
-      <button class="btn btn-sm" ${majMovState.page===0?'disabled':''} onclick="majMovState.page=0;renderMajMovResults(document.getElementById('view-majmov'))">First</button>
-      <button class="btn btn-sm" ${majMovState.page===0?'disabled':''} onclick="majMovState.page--;renderMajMovResults(document.getElementById('view-majmov'))">Prev</button>
-      <span style="padding:4px 8px;font-family:var(--mono)">Page ${majMovState.page+1} of ${totalPages}</span>
-      <button class="btn btn-sm" ${majMovState.page>=totalPages-1?'disabled':''} onclick="majMovState.page++;renderMajMovResults(document.getElementById('view-majmov'))">Next</button>
-      <button class="btn btn-sm" ${majMovState.page>=totalPages-1?'disabled':''} onclick="majMovState.page=${totalPages-1};renderMajMovResults(document.getElementById('view-majmov'))">Last</button>
-    </div>
-  </div>` : '';
-  return `<div class="table-wrap" style="flex:1;overflow:auto;">
-      <table class="data-table dt-modern" style="font-size:12px">
+  const showingFrom = filtered.length === 0 ? 0 : pageStart;
+  const footerHtml = `
+    <div class="ptb-table-foot">
+      <span>${fmtShowingLabel(showingFrom, pageEnd, filtered.length, 'rows')}</span>
+      ${stationPagerHtml(totalPages, majMovState.page + 1, 'mmrSetPage')}
+    </div>`;
+  return `<div class="ptb-card ptb-table-card">
+    <div class="ptb-scroll">
+      <table class="ptb-data">
         <thead><tr>${thHtml}</tr></thead>
-        <tbody>${rowsHtml}</tbody>
+        <tbody>${rowsHtml || `<tr><td colspan="${MM_COLS.length+1}" style="text-align:center;padding:40px;color:var(--d-ink-4)">No rows match the current filters</td></tr>`}</tbody>
       </table>
-    </div>${paginationHtml}`;
+    </div>
+    ${footerHtml}
+  </div>`;
 }
 
 /** Compute the effective presentation rows for the current month, applying hide/add overrides */
@@ -2288,10 +2278,24 @@ function buildMajMovPresTab() {
   const mbsRows = mmEffectivePresRows('001');
   const mslRows = mmEffectivePresRows('003');
 
-  return `<div class="table-wrap" style="flex:1;overflow:auto;">
-    ${buildEntityTable('MBS', mbsRows, '001')}
-    <div style="height:12px"></div>
-    ${buildEntityTable('MSL', mslRows, '003')}
+  const isWhole = !isMillion;
+  const unitToggleHtml = `<div class="ptb-table-toolbar">
+    <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--d-ink-3);">
+      <span>Units:</span>
+      <div class="ptb-seg" title="Toggle with M">
+        <button class="${isWhole?'active':''}" onclick="majMovState.unit='whole';renderMajMovResults(document.getElementById('view-majmov'))">Whole Number</button>
+        <button class="${isMillion?'active':''}" onclick="majMovState.unit='million';renderMajMovResults(document.getElementById('view-majmov'))">Million</button>
+      </div>
+    </div>
+  </div>`;
+
+  return `<div class="ptb-card ptb-table-card">
+    ${unitToggleHtml}
+    <div style="padding:4px 0 12px;">
+      ${buildEntityTable('MBS', mbsRows, '001')}
+      <div style="height:12px"></div>
+      ${buildEntityTable('MSL', mslRows, '003')}
+    </div>
   </div>`;
 }
 
