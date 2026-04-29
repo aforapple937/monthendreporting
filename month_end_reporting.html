@@ -1843,6 +1843,9 @@ async function runMajorMovement() {
     const k = `${cif}||${ent}`;
     const ecl = parseFloat(r.LCY_ECL_CLOSING_FY || 0);
     const pnl = parseFloat(r.LCY_ECL_CHARGE_FTM || 0) + parseFloat(r.LCY_ECL_WRITEBACK_FTM || 0);
+    // Drop accounts whose ECL P&L FTM is exactly 0 or blank (account-level
+    // filter — applied here only, the shared RDL is left untouched).
+    if (pnl === 0) return;
     const ead = parseFloat(r.LCY_EAD_AMT || 0);
     if (!cifMap.has(k)) cifMap.set(k, { CIF_NO: cif, CIF_NAME: cifName, ENTITY: ent, MKT_SUB_SEG_DESC: seg, CURR_ECL: 0, PREV_ECL: 0, ECL_PNL_FTM: 0, CURR_EAD: 0, PREV_EAD: 0 });
     const agg = cifMap.get(k);
@@ -1867,11 +1870,8 @@ async function runMajorMovement() {
   });
 
   // Sort aggregated rows by descending |ECL P&L FTM|
-  let results = [...cifMap.values()].sort((a,b) => Math.abs(b.ECL_PNL_FTM) - Math.abs(a.ECL_PNL_FTM));
+  const results = [...cifMap.values()].sort((a,b) => Math.abs(b.ECL_PNL_FTM) - Math.abs(a.ECL_PNL_FTM));
   results.forEach(r => { r.CURR_ECL = roundCents(r.CURR_ECL); r.PREV_ECL = roundCents(r.PREV_ECL); r.ECL_PNL_FTM = roundCents(r.ECL_PNL_FTM); r.CURR_EAD = roundCents(r.CURR_EAD); r.PREV_EAD = roundCents(r.PREV_EAD); });
-  // Drop CIFs whose net ECL P&L FTM rounds to zero (or is blank). Done in-memory
-  // here only — the source RDL is shared with other pipelines and is left untouched.
-  results = results.filter(r => Math.abs(r.ECL_PNL_FTM || 0) >= 0.005);
 
   // Build Presentation data — filter |ECL P&L FTM| > 1M, split by entity, attach breakdowns
   const THRESHOLD = 1000000;
