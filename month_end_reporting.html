@@ -5389,6 +5389,8 @@ function renderMtmResults(container) {
     const active = _mtmTab === k;
     return `<button class="${active?'active':''}" onclick="_mtmTab='${k}';_mtmPage=1;renderMtmResults(document.getElementById('view-mtmfvoci'))">${label}</button>`;
   };
+  const groupBtnClass = isWair ? 'ptb-btn ptb-btn-active' : 'ptb-btn';
+  const groupBtnLabel = isWair ? 'Grouped · WAIR' : 'Group by';
   const pageHeadHtml = `
     <div class="ptb-page-head">
       <div class="ptb-page-title">
@@ -5398,13 +5400,15 @@ function renderMtmResults(container) {
         </div>
       </div>
       <div class="ptb-page-actions">
-        <div class="ptb-seg" id="mtm-view-seg">
+        ${isWair ? '' : `<div class="ptb-seg" id="mtm-view-seg">
           ${tabBtn('listing', 'List')}
           ${tabBtn('journal', 'Journal entries')}
-          ${tabBtn('wair', 'WAIR')}
-        </div>
+        </div>`}
+        <button class="${groupBtnClass}" onclick="mtmToggleWairGroup()" title="Group by WAIR">
+          <svg><use href="#i-layers"/></svg>${groupBtnLabel}
+        </button>
         <button class="ptb-btn primary" onclick="exportMtmXlsx()" title="Export (E)">
-          <svg><use href="#i-download"/></svg>Export XLSX
+          <svg><use href="#i-download"/></svg>Export
         </button>
       </div>
     </div>`;
@@ -5663,6 +5667,12 @@ function mtmSetStatusFilter(f) {
   renderMtmResults(document.getElementById('view-mtmfvoci'));
 }
 
+function mtmToggleWairGroup() {
+  _mtmTab = (_mtmTab === 'wair') ? 'listing' : 'wair';
+  _mtmPage = 1;
+  renderMtmResults(document.getElementById('view-mtmfvoci'));
+}
+
 function openMtmFilter(colId, triggerEl) {
   const rows = mtmState.results; if (!rows || !rows.length) return;
   const dataCols = Object.keys(rows[0]);
@@ -5895,6 +5905,25 @@ function moaGetMissingFields(e) {
   if (Object.keys(e.lobAlloc||{}).length && Math.abs(lobSum - total) > 0.01) missing.push('LOB allocation does not sum to total');
   if (Object.keys(e.rcAlloc ||{}).length && Math.abs(rcSum  - total) > 0.01) missing.push('RC allocation does not sum to total');
   return missing;
+}
+
+function moaSetPrimary(p) {
+  if (p === 'journal') {
+    moaState.mode = 'single';
+    moaState.dashView = 'journal';
+  } else {
+    moaState.mode = p;
+    if (moaState.dashView === 'journal') moaState.dashView = 'type';
+  }
+  renderMoa();
+}
+
+function moaCycleGroupBy() {
+  if (moaState.dashView === 'journal') return;
+  var cycle = ['type', 'rcMgt', 'rcTb'];
+  var idx = cycle.indexOf(moaState.dashView);
+  moaState.dashView = cycle[(idx + 1) % cycle.length];
+  renderMoa();
 }
 
 function moaSetView(v) {
@@ -6651,48 +6680,34 @@ function renderMoa() {
     else mainHtml = buildMoaComparePivotHtml(entries, mA, mB, view === 'rcMgt' ? 'lob' : 'rc');
   }
 
-  // ===== View-mode buttons (moved up to page-head, next to Roll-forward) =====
-  // Journal entries is single-month only, so disable it when the user is in Compare.
-  var isCompare = moaState.mode === 'compare';
-  var viewBtn = function(k, label) {
-    var active = (view === k);
-    var disabled = (k === 'journal' && isCompare);
-    var cls = 'ptb-btn' + (active?' ptb-btn-active':'') + (disabled?' ptb-btn-disabled':'');
-    var onclick = disabled ? '' : ' onclick="moaSetView(\'' + k + '\')"';
-    var title = disabled ? ' title="Journal entries is single-month only — switch to Single month mode"' : '';
-    var disAttr = disabled ? ' disabled aria-disabled="true"' : '';
-    return '<button class="' + cls + '"' + disAttr + onclick + title + '>' + label + '</button>';
-  };
-  // Compare mode is only meaningful for List/LOB/RC — disable it when viewing Journal entries.
+  // ===== Primary view buttons — 3 mutually exclusive: Single / Compare / Journal =====
   var isJournal = view === 'journal';
-  var modeBtn = function(k, label) {
-    var active = (moaState.mode === k);
-    var disabled = (k === 'compare' && isJournal);
-    var cls = (active?'active':'') + (disabled?' ptb-btn-disabled':'');
-    var onclick = disabled ? '' : ' onclick="moaSetMode(\'' + k + '\')"';
-    var title = disabled ? ' title="Compare 2 months is not available in Journal entries view"' : '';
-    var disAttr = disabled ? ' disabled aria-disabled="true"' : '';
-    return '<button class="' + cls + '"' + disAttr + onclick + title + '>' + label + '</button>';
+  var primaryBtn = function(action, label, isActive) {
+    var cls = isActive ? 'active' : '';
+    return '<button class="' + cls + '" onclick="' + action + '">' + label + '</button>';
   };
+  // Group by button — only meaningful when not viewing Journal entries.
+  var groupActive = (view === 'rcMgt' || view === 'rcTb');
+  var groupBtnClass = groupActive ? 'ptb-btn ptb-btn-active' : 'ptb-btn' + (isJournal ? ' ptb-btn-disabled' : '');
+  var groupBtnLabel = view === 'rcMgt' ? 'Grouped · LOB' : view === 'rcTb' ? 'Grouped · RC' : 'Group by';
+  var groupBtnAttrs = isJournal
+    ? ' disabled aria-disabled="true" title="Group by is not available in Journal entries view"'
+    : ' onclick="moaCycleGroupBy()" title="Cycle: List → By LOB → By RC"';
 
   // ===== Top panel (design-file layout) =====
   var journalExportBtn = view === 'journal'
-    ? '<button class="ptb-btn" onclick="exportMoaJournalXlsx()" title="Export current view to XLSX (E)"><svg><use href="#i-download"/></svg>Export XLSX</button>'
-    : '<button class="ptb-btn" onclick="exportMoaXlsx()" title="Export current view to XLSX (E)"><svg><use href="#i-download"/></svg>Export XLSX</button>';
+    ? '<button class="ptb-btn" onclick="exportMoaJournalXlsx()" title="Export current view to XLSX (E)"><svg><use href="#i-download"/></svg>Export</button>'
+    : '<button class="ptb-btn" onclick="exportMoaXlsx()" title="Export current view to XLSX (E)"><svg><use href="#i-download"/></svg>Export</button>';
   var pageHeadHtml = ''
     + '<div class="ptb-page-head">'
     +   '<div class="ptb-page-title"><h1>Management Overlay</h1></div>'
     +   '<div class="ptb-page-actions">'
-    +     '<div class="ptb-seg" id="moa-mode-seg">'
-    +       modeBtn('single', 'Single month')
-    +       modeBtn('compare', 'Compare 2 months')
+    +     '<div class="ptb-seg" id="moa-primary-seg">'
+    +       primaryBtn("moaSetPrimary('single')",  'Single month',     moaState.mode === 'single'  && !isJournal)
+    +       primaryBtn("moaSetPrimary('compare')", 'Compare 2 months', moaState.mode === 'compare' && !isJournal)
+    +       primaryBtn("moaSetPrimary('journal')", 'Journal entries',  isJournal)
     +     '</div>'
-    +     '<div class="ptb-seg" id="moa-view-seg">'
-    +       viewBtn('type', 'List')
-    +       viewBtn('rcMgt', 'By LOB')
-    +       viewBtn('rcTb', 'By RC')
-    +       viewBtn('journal', 'Journal entries')
-    +     '</div>'
+    +     '<button class="' + groupBtnClass + '"' + groupBtnAttrs + '><svg><use href="#i-layers"/></svg>' + groupBtnLabel + '</button>'
     +     '<button class="ptb-btn" onclick="openMoaDuplicateModal()" title="Roll-forward overlays from one month to another"><svg><use href="#i-refresh"/></svg>Roll-forward</button>'
     +     journalExportBtn
     +     '<button class="ptb-btn" onclick="exportMoaJson()" title="Save to cache and export JSON (S)"><svg><use href="#i-download"/></svg>Export JSON</button>'
