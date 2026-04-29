@@ -1729,7 +1729,7 @@ const majMovState = {
   month: null,
   filters: {},
   page: 0,
-  pageSize: 200,
+  pageSize: 50,
   tab: 'presentation',  // 'data' or 'presentation'
   unit: 'whole',        // 'whole' or 'million'
   hidden: {},           // { monthKey: Set of CIF||ENTITY keys that were manually hidden from presentation }
@@ -1990,7 +1990,9 @@ function buildMajMovDataTab() {
       <span>${fmtShowingLabel(showingFrom, pageEnd, filtered.length, 'rows')}</span>
       ${stationPagerHtml(totalPages, majMovState.page + 1, 'mmrSetPage')}
     </div>`;
-  return `<div class="ptb-card ptb-table-card">
+  const kpiHtml = buildMajMovDataKpis();
+
+  return `${kpiHtml}<div class="ptb-card ptb-table-card">
     <div class="ptb-scroll">
       <table class="ptb-data">
         <thead><tr>${thHtml}</tr></thead>
@@ -1999,6 +2001,28 @@ function buildMajMovDataTab() {
     </div>
     ${footerHtml}
   </div>`;
+}
+
+const MM_KPI_SEGMENTS = ['GWB-CB','GWB-GM','CFS-CMG','CFS-BB','CFS-SME','CFS-IND'];
+function buildMajMovDataKpis() {
+  const results = majMovState.results || [];
+  const totals = Object.fromEntries(MM_KPI_SEGMENTS.map(s => [s, 0]));
+  results.forEach(r => {
+    const cifKey = `${r.CIF_NO}||${r.ENTITY}`;
+    if (mmIsInPresentation(cifKey)) return;
+    const seg = String(r.MKT_SUB_SEG_DESC||'').trim().toUpperCase();
+    if (seg in totals) totals[seg] += (r.ECL_PNL_FTM || 0);
+  });
+  const cards = MM_KPI_SEGMENTS.map(seg => {
+    const v = totals[seg];
+    const color = Math.abs(v) > 0 ? (v < 0 ? 'var(--d-pos)' : 'var(--d-neg)') : 'var(--d-ink-4)';
+    const disp = (v < 0 ? '-' : '') + fmtN2(Math.abs(v));
+    return `<div class="ptb-card ptb-kpi" style="padding:14px 16px;">
+      <div class="ptb-label">${seg}</div>
+      <div class="ptb-value mono" style="font-size:18px;color:${color};margin:6px 0 0;">${disp}</div>
+    </div>`;
+  }).join('');
+  return `<div class="ptb-grid" style="grid-template-columns:repeat(6,1fr);">${cards}</div>`;
 }
 
 /** Compute the effective presentation rows for the current month, applying hide/add overrides */
@@ -2302,8 +2326,6 @@ function buildMajMovPresTab() {
 function openMajMovFilter(colId, triggerEl) {
   const results = majMovState.results || [];
   const col = MM_COLS.find(c => c.id === colId);
-  // Pre-collect active filters from columns OTHER than this one, so the
-  // cascading filter preview iterates k filters instead of all MM_COLS.
   const activeOther = [];
   for (const c of MM_COLS) {
     if (c.id === colId) continue;
@@ -2316,8 +2338,15 @@ function openMajMovFilter(colId, triggerEl) {
     }
     return true;
   });
-  const allValues = [...new Set(otherFiltered.map(r => col.type==='number' ? fmtN2(r[colId]) : String(r[colId]||'')))].filter(Boolean).sort();
-  fdOpen(triggerEl, allValues, majMovState.filters[colId] || null, (newFilter) => {
+  const counts = new Map();
+  otherFiltered.forEach(r => {
+    const v = col.type==='number' ? fmtN2(r[colId]) : String(r[colId]||'');
+    counts.set(v, (counts.get(v) || 0) + 1);
+  });
+  const allValues = [...counts.keys()].filter(v => v !== '').sort(
+    col.type==='number' ? (a,b) => parseFloat(String(a).replace(/,/g,'')) - parseFloat(String(b).replace(/,/g,'')) : undefined
+  );
+  fdOpenDesign(triggerEl, allValues, majMovState.filters[colId] || null, col.label, counts, (newFilter) => {
     majMovState.filters[colId] = fdIsActive(newFilter) ? newFilter : undefined;
     majMovState.page = 0;
     renderMajMovResults(document.getElementById('view-majmov'));
