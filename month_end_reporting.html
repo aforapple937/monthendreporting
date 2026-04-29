@@ -5403,10 +5403,10 @@ function renderMtmResults(container) {
         </div>
       </div>
       <div class="ptb-page-actions">
-        ${isWair ? '' : `<div class="ptb-seg" id="mtm-view-seg">
+        <div class="ptb-seg" id="mtm-view-seg">
           ${tabBtn('listing', 'List')}
           ${tabBtn('journal', 'Journal entries')}
-        </div>`}
+        </div>
         <button class="ptb-btn primary" onclick="exportMtmXlsx()" title="Export (E)">
           <svg><use href="#i-download"/></svg>Export
         </button>
@@ -5931,32 +5931,51 @@ function moaCycleGroupBy() {
   renderMoa();
 }
 
-function moaCloseExportMenu() {
-  var el = document.getElementById('moa-export-menu');
+function moaClosePopMenu() {
+  var el = document.getElementById('moa-pop-menu');
   if (el) el.remove();
-  document.removeEventListener('mousedown', moaExportMenuOutside, true);
+  document.removeEventListener('mousedown', moaPopMenuOutside, true);
 }
-function moaExportMenuOutside(ev) {
-  var menu = document.getElementById('moa-export-menu');
-  if (menu && !menu.contains(ev.target)) moaCloseExportMenu();
+function moaPopMenuOutside(ev) {
+  var menu = document.getElementById('moa-pop-menu');
+  if (menu && !menu.contains(ev.target)) moaClosePopMenu();
 }
-function moaOpenExportMenu(triggerEl) {
-  if (document.getElementById('moa-export-menu')) { moaCloseExportMenu(); return; }
+function moaOpenPopMenu(triggerEl, items) {
+  if (document.getElementById('moa-pop-menu')) { moaClosePopMenu(); return; }
   var rect = triggerEl.getBoundingClientRect();
   var menu = document.createElement('div');
-  menu.id = 'moa-export-menu';
-  menu.style.cssText = 'position:fixed;top:' + (rect.bottom + 6) + 'px;right:' + (window.innerWidth - rect.right) + 'px;background:var(--d-surface,#fff);border:1px solid var(--d-line,#e5e5e2);border-radius:8px;padding:4px;box-shadow:0 6px 20px rgba(0,0,0,0.12);z-index:9999;display:flex;flex-direction:column;min-width:180px';
-  menu.innerHTML = ''
-    + '<button class="ptb-btn" style="border:0;background:transparent;justify-content:flex-start;padding:8px 12px" onclick="moaPickExport(\'xlsx\')">Excel (.xlsx)</button>'
-    + '<button class="ptb-btn" style="border:0;background:transparent;justify-content:flex-start;padding:8px 12px" onclick="moaPickExport(\'json\')">JSON (.json)</button>';
+  menu.id = 'moa-pop-menu';
+  menu.className = 'moa-pop-menu';
+  menu.style.top = (rect.bottom + 6) + 'px';
+  menu.style.right = (window.innerWidth - rect.right) + 'px';
+  menu.innerHTML = items.map(function(it){
+    return '<button onclick="' + it.action + '">' + it.label + '</button>';
+  }).join('');
   document.body.appendChild(menu);
-  setTimeout(function(){ document.addEventListener('mousedown', moaExportMenuOutside, true); }, 0);
+  setTimeout(function(){ document.addEventListener('mousedown', moaPopMenuOutside, true); }, 0);
+}
+function moaOpenExportMenu(triggerEl) {
+  moaOpenPopMenu(triggerEl, [
+    { label: 'Excel (.xlsx)', action: "moaPickExport('xlsx')" },
+    { label: 'JSON (.json)',  action: "moaPickExport('json')" }
+  ]);
 }
 function moaPickExport(fmt) {
-  moaCloseExportMenu();
+  moaClosePopMenu();
   if (fmt === 'json') { exportMoaJson(); return; }
   if (moaState.dashView === 'journal') exportMoaJournalXlsx();
   else exportMoaXlsx();
+}
+function moaOpenNewMenu(triggerEl) {
+  moaOpenPopMenu(triggerEl, [
+    { label: 'New overlay',  action: "moaPickNew('new')" },
+    { label: 'Roll-forward', action: "moaPickNew('roll')" }
+  ]);
+}
+function moaPickNew(kind) {
+  moaClosePopMenu();
+  if (kind === 'roll') openMoaDuplicateModal();
+  else openMoaModal(null);
 }
 
 function moaSetView(v) {
@@ -6737,9 +6756,8 @@ function renderMoa() {
     +       primaryBtn("moaSetPrimary('compare')", 'Compare 2 months', moaState.mode === 'compare' && !isJournal)
     +       primaryBtn("moaSetPrimary('journal')", 'Journal entries',  isJournal)
     +     '</div>'
-    +     '<button class="ptb-btn" onclick="openMoaDuplicateModal()" title="Roll-forward overlays from one month to another"><svg><use href="#i-refresh"/></svg>Roll-forward</button>'
     +     '<button class="ptb-btn" onclick="moaOpenExportMenu(this)" title="Export current view (E)"><svg><use href="#i-download"/></svg>Export</button>'
-    +     '<button class="ptb-btn primary" onclick="openMoaModal(null)" title="New overlay (N)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>New overlay</button>'
+    +     '<button class="ptb-btn primary" onclick="moaOpenNewMenu(this)" title="New overlay or roll-forward (N)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>New overlay</button>'
     +   '</div>'
     + '</div>';
 
