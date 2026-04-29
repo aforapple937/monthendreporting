@@ -1418,7 +1418,6 @@ function handleGlobalShortcut(e) {
   // Skip if a filter panel or modal is open
   if (_fdPanel) return;
   if (document.querySelector('.modal-bg.show')) return;
-  if (document.getElementById('majmov-month-popup')) return;
 
   const v = currentView;
   const key = e.key;
@@ -1764,7 +1763,7 @@ function renderMajorMovement() {
   if (majMovState.results) { renderMajMovResults(container); return; }
   const avail = mmAvailableMonths();
   if (avail.length && shouldAutoRun('majmov')) {
-    if (!majMovState.month || !avail.includes(majMovState.month)) majMovState.month = avail[0];
+    majMovState.month = avail[0];
     container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:200px;"><div id="prog-majmov" style="text-align:center"><div class="progress-track" style="width:200px;margin-bottom:8px"><div class="progress-bar" id="prog-bar-majmov" style="width:10%"></div></div><div style="font-size:11px;color:var(--ink3)" id="prog-label-majmov">Processing…</div><div style="font-size:10px;color:var(--ink4);margin-top:4px" id="prog-sub-majmov"></div></div></div>`;
     runMajorMovement();
     return;
@@ -1797,7 +1796,7 @@ function renderMajMovUpload(container) {
 
 async function runMajorMovement() {
   const avail = mmAvailableMonths();
-  if (!majMovState.month || !avail.includes(majMovState.month)) majMovState.month = avail[0];
+  majMovState.month = avail[0] || null;
   if (!majMovState.month) return;
   const mk = majMovState.month;
   const [y,m] = mk.split('-').map(Number);
@@ -1908,16 +1907,15 @@ function renderMajMovResults(container) {
   const mk = majMovState.month;
   const [y,m] = mk.split('-').map(Number);
   const pm = m===1?12:m-1, py = m===1?y-1:y;
-  const curLabel = MONTH_NAMES[m-1]+' '+y, prevLabel = MONTH_NAMES[pm-1]+' '+py;
+  const prevLabel = MONTH_NAMES[pm-1]+' '+py;
+  const reportingMonth = fmtMMMyyyy(new Date(y, m-1, 1));
 
-  const monthOpts = avail.map(amk => {
-    const [ay,am] = amk.split('-'); const al = MONTH_NAMES[parseInt(am)-1]+' '+ay;
-    return `<option value="${amk}" ${amk===mk?'selected':''}>${al}</option>`;
-  }).join('');
-
-  const kpiHtml = `<div class="kpi-strip">
-    <div class="kpi-card kpi-clickable" onclick="openMajMovMonthPopup(this)"><div class="kpi-label">Reporting Month</div><div class="kpi-value">${curLabel}</div></div>
-  </div>`;
+  const pageHeadHtml = `<div class="ptb-v2"><div class="ptb-page-head">
+    <div class="ptb-page-title">
+      <h1>Major Movement</h1>
+      <div class="ptb-meta"><span>Period <b>${reportingMonth}</b></span></div>
+    </div>
+  </div></div>`;
 
   const isData = majMovState.tab === 'data', isPres = majMovState.tab === 'presentation';
   const activeStyle = 'background:var(--ink);color:#fff;border-color:var(--ink)';
@@ -1951,7 +1949,7 @@ function renderMajMovResults(container) {
   const bodyHtml = isData ? buildMajMovDataTab() : buildMajMovPresTab();
 
   container.innerHTML = `<div class="results-view" style="display:flex;flex-direction:column;overflow:hidden;">
-    ${kpiHtml}${toolbarHtml}${unitToggleHtml}${bodyHtml}
+    ${pageHeadHtml}${toolbarHtml}${unitToggleHtml}${bodyHtml}
   </div>`;
 }
 
@@ -2297,42 +2295,6 @@ function buildMajMovPresTab() {
     <div style="height:12px"></div>
     ${buildEntityTable('MSL', mslRows, '003')}
   </div>`;
-}
-
-function openMajMovMonthPopup(anchorEl) {
-  const existing = document.getElementById('majmov-month-popup');
-  if (existing) { existing.remove(); return; }
-  const avail = mmAvailableMonths();
-  if (!avail.length) return;
-  const rect = anchorEl.getBoundingClientRect();
-  const opts = avail.map(amk => { const [ay,am] = amk.split('-'); const al = MONTH_NAMES[parseInt(am)-1]+' '+ay; return `<option value="${amk}" ${amk===majMovState.month?'selected':''}>${al}</option>`; }).join('');
-  const popup = document.createElement('div');
-  popup.id = 'majmov-month-popup';
-  popup.style.cssText = `position:fixed;top:${rect.bottom + 4}px;left:${rect.left}px;background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 4px 16px rgba(0,0,0,0.12);padding:14px 16px;z-index:200;min-width:240px;`;
-  popup.innerHTML = `<div style="font-size:11px;font-weight:600;color:var(--ink);margin-bottom:10px;">Select reporting month</div>
-    <select id="majmov-month-select" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius);outline:none;background:#fff;margin-bottom:12px;">${opts}</select>
-    <div style="display:flex;gap:6px;justify-content:flex-end;">
-      <button class="btn btn-sm" onclick="document.getElementById('majmov-month-popup').remove()">Cancel</button>
-      <button class="btn btn-sm btn-primary" onclick="applyMajMovMonth()">Apply</button>
-    </div>`;
-  document.body.appendChild(popup);
-  const selectEl = popup.querySelector('#majmov-month-select'); selectEl.focus();
-  const keyHandler = (e) => {
-    if (e.key === 'Escape') { e.preventDefault(); popup.remove(); document.removeEventListener('keydown', keyHandler, true); }
-    else if (e.key === 'Enter') { e.preventDefault(); applyMajMovMonth(); document.removeEventListener('keydown', keyHandler, true); }
-  };
-  document.addEventListener('keydown', keyHandler, true);
-  setTimeout(() => {
-    const closer = (e) => { if (!popup.contains(e.target) && e.target !== anchorEl && !anchorEl.contains(e.target)) { popup.remove(); document.removeEventListener('mousedown', closer); document.removeEventListener('keydown', keyHandler, true); } };
-    document.addEventListener('mousedown', closer);
-  }, 0);
-}
-
-function applyMajMovMonth() {
-  const sel = document.getElementById('majmov-month-select');
-  if (!sel) return;
-  const popup = document.getElementById('majmov-month-popup'); if (popup) popup.remove();
-  majMovState.month = sel.value; majMovState.results = null; clearAutoRunBlock('majmov'); runMajorMovement();
 }
 
 function openMajMovFilter(colId, triggerEl) {
