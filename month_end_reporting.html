@@ -1973,7 +1973,7 @@ function buildMajMovDataTab() {
     const cifKey = `${r.CIF_NO}||${r.ENTITY}`;
     const inPres = mmIsInPresentation(cifKey);
     const toggleCell = inPres
-      ? `<td style="text-align:center"><span title="In presentation" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:3px;background:var(--d-line-2);color:var(--d-ink-2);font-size:13px;font-weight:600;line-height:1;border:1px solid var(--d-line);">✓</span></td>`
+      ? `<td style="text-align:center"><span onclick="event.stopPropagation();mmTogglePresFromData('${cifKey}')" title="Remove from presentation" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:3px;background:var(--d-accent);color:var(--d-accent-ink);cursor:pointer;font-size:13px;font-weight:600;line-height:1;border:1px solid var(--d-accent);" onmouseover="this.style.background='transparent'" onmouseout="this.style.background='var(--d-accent)'">✓</span></td>`
       : `<td style="text-align:center"><span onclick="event.stopPropagation();mmTogglePresFromData('${cifKey}')" title="Add to presentation" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:3px;background:transparent;color:var(--d-accent-ink);cursor:pointer;font-size:13px;font-weight:600;line-height:1;border:1px solid var(--d-accent);" onmouseover="this.style.background='var(--d-accent)'" onmouseout="this.style.background='transparent'">+</span></td>`;
     return `<tr>${toggleCell}${MM_COLS.map(c => {
       if (c.type === 'number') {
@@ -1991,8 +1991,12 @@ function buildMajMovDataTab() {
       ${stationPagerHtml(totalPages, majMovState.page + 1, 'mmrSetPage')}
     </div>`;
   const kpiHtml = buildMajMovDataKpis();
+  const colIds = MM_COLS.map(c => c.id);
+  const colLabels = Object.fromEntries(MM_COLS.map(c => [c.id, c.label]));
+  const chipsHtml = stationChipsHtml(majMovState.filters, colIds, colLabels, 'mmrClearColFilter', 'mmrClearAllColFilters');
 
   return `${kpiHtml}<div class="ptb-card ptb-table-card">
+    ${chipsHtml}
     <div class="ptb-scroll">
       <table class="ptb-data">
         <thead><tr>${thHtml}</tr></thead>
@@ -2003,26 +2007,48 @@ function buildMajMovDataTab() {
   </div>`;
 }
 
+function mmrClearColFilter(k) {
+  delete majMovState.filters[k];
+  majMovState.page = 0;
+  renderMajMovResults(document.getElementById('view-majmov'));
+}
+function mmrClearAllColFilters() {
+  Object.keys(majMovState.filters).forEach(k => delete majMovState.filters[k]);
+  majMovState.page = 0;
+  renderMajMovResults(document.getElementById('view-majmov'));
+}
+
 const MM_KPI_SEGMENTS = ['GWB-CB','GWB-GM','CFS-CMG','CFS-BB','CFS-SME','CFS-IND'];
+const MM_KPI_ENTITIES = ['001','003'];
 function buildMajMovDataKpis() {
   const results = majMovState.results || [];
-  const totals = Object.fromEntries(MM_KPI_SEGMENTS.map(s => [s, 0]));
+  const totals = {};
+  MM_KPI_ENTITIES.forEach(ent => {
+    totals[ent] = Object.fromEntries(MM_KPI_SEGMENTS.map(s => [s, 0]));
+  });
   results.forEach(r => {
     const cifKey = `${r.CIF_NO}||${r.ENTITY}`;
     if (mmIsInPresentation(cifKey)) return;
+    const ent = String(r.ENTITY||'');
+    if (!totals[ent]) return;
     const seg = String(r.MKT_SUB_SEG_DESC||'').trim().toUpperCase();
-    if (seg in totals) totals[seg] += (r.ECL_PNL_FTM || 0);
+    if (seg in totals[ent]) totals[ent][seg] += (r.ECL_PNL_FTM || 0);
   });
-  const cards = MM_KPI_SEGMENTS.map(seg => {
-    const v = totals[seg];
-    const color = Math.abs(v) > 0 ? (v < 0 ? 'var(--d-pos)' : 'var(--d-neg)') : 'var(--d-ink-4)';
-    const disp = (v < 0 ? '-' : '') + fmtN2(Math.abs(v));
-    return `<div class="ptb-card ptb-kpi" style="padding:14px 16px;">
-      <div class="ptb-label">${seg}</div>
-      <div class="ptb-value mono" style="font-size:18px;color:${color};margin:6px 0 0;">${disp}</div>
-    </div>`;
-  }).join('');
-  return `<div class="ptb-grid" style="grid-template-columns:repeat(6,1fr);">${cards}</div>`;
+  const cards = [];
+  MM_KPI_ENTITIES.forEach(ent => {
+    MM_KPI_SEGMENTS.forEach(seg => {
+      const v = totals[ent][seg];
+      if (Math.abs(v) < 0.005) return;
+      const color = v < 0 ? 'var(--d-pos)' : 'var(--d-neg)';
+      const disp = (v < 0 ? '-' : '') + fmtN2(Math.abs(v));
+      cards.push(`<div class="ptb-card ptb-kpi" style="padding:14px 16px;">
+        <div class="ptb-label">${ent} · ${seg}</div>
+        <div class="ptb-value mono" style="font-size:18px;color:${color};margin:6px 0 0;">${disp}</div>
+      </div>`);
+    });
+  });
+  if (!cards.length) return '';
+  return `<div class="ptb-grid" style="grid-template-columns:repeat(6,1fr);">${cards.join('')}</div>`;
 }
 
 /** Compute the effective presentation rows for the current month, applying hide/add overrides */
